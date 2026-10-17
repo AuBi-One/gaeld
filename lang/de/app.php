@@ -180,6 +180,10 @@ return [
     'vat_amount' => 'MWST-Betrag',
     'vat_rate' => 'MWST-Satz',
     'vat_number' => 'MWST-Nummer',
+    'invoice_phone' => 'Telefonnummer Angebot/Rechnung',
+    'invoice_phone_hint' => 'Wird auf Angeboten, Rechnungen und Lohnabrechnungen angezeigt.',
+    'invoice_email' => 'E-Mail Angebot/Rechnung',
+    'invoice_email_hint' => 'Wird auf Angeboten, Rechnungen und Lohnabrechnungen angezeigt.',
     'no_vat' => 'Ohne MWST',
 
     // Dashboard

@@ -178,6 +178,10 @@ return [
     'vat_amount' => 'VAT Amount',
     'vat_rate' => 'VAT Rate',
     'vat_number' => 'VAT Number',
+    'invoice_phone' => 'Offer/invoice phone number',
+    'invoice_phone_hint' => 'Shown on offers, invoices and salary slips.',
+    'invoice_email' => 'Offer/invoice e-mail',
+    'invoice_email_hint' => 'Shown on offers, invoices and salary slips.',
     'no_vat' => 'No VAT',
 
     // Dashboard

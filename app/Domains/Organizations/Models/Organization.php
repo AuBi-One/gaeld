@@ -37,6 +37,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $canton
  * @property string|null $country
  * @property string|null $vat_number
+ * @property string|null $invoice_phone
+ * @property string|null $invoice_email
  * @property string $currency
  * @property int|null $fiscal_year_start
  * @property array<int, int>|null $closed_fiscal_years
@@ -69,6 +71,8 @@ class Organization extends Model
         'canton',
         'country',
         'vat_number',
+        'invoice_phone',
+        'invoice_email',
         'currency',
         'fiscal_year_start',
         'closed_fiscal_years',

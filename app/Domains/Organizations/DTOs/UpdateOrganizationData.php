@@ -22,6 +22,8 @@ readonly class UpdateOrganizationData
      * @param  string|null  $legalName  Official registered legal name, if different from display name.
      * @param  AddressData|null  $addressData  Structured address (street, city, postal code, country, canton).
      * @param  string|null  $vatNumber  VAT / tax identification number.
+     * @param  string|null  $invoicePhone  Phone number shown on offers and invoices (independent of any user's own phone).
+     * @param  string|null  $invoiceEmail  E-mail shown on offers and invoices.
      * @param  string  $currency  ISO 4217 currency code used as the organization default (e.g. 'CHF').
      * @param  string  $locale  BCP 47 locale tag for UI language and number formatting (e.g. 'en').
      * @param  int  $defaultPaymentTermsDays  Number of days after invoice date before payment is due.
@@ -32,6 +34,8 @@ readonly class UpdateOrganizationData
         public ?string $legalName = null,
         public ?AddressData $addressData = null,
         public ?string $vatNumber = null,
+        public ?string $invoicePhone = null,
+        public ?string $invoiceEmail = null,
         public string $currency = 'CHF',
         public string $locale = 'en',
         public int $defaultPaymentTermsDays = 30,
@@ -59,6 +63,8 @@ readonly class UpdateOrganizationData
             legalName: $data['legal_name'] ?? null,
             addressData: AddressData::fromArray($data, includeCanton: true),
             vatNumber: $data['vat_number'] ?? null,
+            invoicePhone: $data['invoice_phone'] ?? null,
+            invoiceEmail: $data['invoice_email'] ?? null,
             currency: $data['currency'] ?? 'CHF',
             locale: $data['locale'] ?? 'en',
             defaultPaymentTermsDays: (int) ($data['default_payment_terms_days'] ?? 30),
@@ -88,6 +94,8 @@ readonly class UpdateOrganizationData
             'name' => $this->name,
             'legal_name' => $this->legalName,
             'vat_number' => $this->vatNumber,
+            'invoice_phone' => $this->invoicePhone,
+            'invoice_email' => $this->invoiceEmail,
             'currency' => $this->currency,
             'locale' => $this->locale,
             'default_payment_terms_days' => $this->defaultPaymentTermsDays,

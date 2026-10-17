@@ -180,6 +180,10 @@ return [
     'vat_amount' => 'Importo IVA',
     'vat_rate' => 'Aliquota IVA',
     'vat_number' => 'Numero IVA',
+    'invoice_phone' => 'N. di telefono offerta/fattura',
+    'invoice_phone_hint' => 'Mostrato su offerte, fatture e buste paga.',
+    'invoice_email' => 'E-mail offerta/fattura',
+    'invoice_email_hint' => 'Mostrato su offerte, fatture e buste paga.',
     'no_vat' => 'Senza IVA',
 
     // Dashboard

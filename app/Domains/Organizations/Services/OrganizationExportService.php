@@ -202,6 +202,8 @@ class OrganizationExportService
             'canton' => $org->canton,
             'country' => $org->country,
             'vat_number' => $org->vat_number,
+            'invoice_phone' => $org->invoice_phone,
+            'invoice_email' => $org->invoice_email,
             'qr_iban' => $org->qr_iban,
             'currency' => $org->currency,
             'fiscal_year_start' => $org->fiscal_year_start,

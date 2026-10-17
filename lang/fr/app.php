@@ -178,6 +178,10 @@ return [
     'vat_amount' => 'Montant TVA',
     'vat_rate' => 'Taux de TVA',
     'vat_number' => 'Numéro de TVA',
+    'invoice_phone' => 'N° de téléphone offre/facture',
+    'invoice_phone_hint' => 'Affiché sur les offres, les factures et les fiches de salaire.',
+    'invoice_email' => 'E-mail offre/facture',
+    'invoice_email_hint' => 'Affiché sur les offres, les factures et les fiches de salaire.',
     'no_vat' => 'Sans TVA',
 
     // Dashboard

@@ -28,6 +28,8 @@ class UpdateOrganizationSettingsRequest extends FormRequest
             'canton' => 'nullable|string|size:2',
             'country' => 'nullable|string|size:2',
             'vat_number' => 'nullable|string|max:50',
+            'invoice_phone' => 'nullable|string|max:50',
+            'invoice_email' => 'nullable|email|max:255',
             'currency' => 'string|size:3',
             'locale' => ['string', Rule::in(config('accounting.supported_locales'))],
             'business_type' => ['nullable', 'string', Rule::in(BusinessType::values())],

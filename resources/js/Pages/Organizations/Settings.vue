@@ -85,6 +85,8 @@ const generalForm = useForm({
   business_type: props.organization.business_type || '',
   fiscal_year_start: props.organization.fiscal_year_start || '01-01',
   vat_number: props.organization.vat_number || '',
+  invoice_phone: props.organization.invoice_phone || '',
+  invoice_email: props.organization.invoice_email || '',
   currency: props.organization.currency || 'CHF',
   locale: props.organization.locale || 'en',
   require_two_factor: props.organization.require_two_factor || false,
@@ -514,6 +516,28 @@ const businessTypeOptions = [
                   :options="currencyOptions(t)"
                   :error="generalForm.errors.currency"
                 />
+              </div>
+
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <FormInput
+                    id="invoice_phone"
+                    v-model="generalForm.invoice_phone"
+                    :label="t('invoice_phone')"
+                    :error="generalForm.errors.invoice_phone"
+                  />
+                  <p class="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{{ t('invoice_phone_hint') }}</p>
+                </div>
+                <div>
+                  <FormInput
+                    id="invoice_email"
+                    v-model="generalForm.invoice_email"
+                    type="email"
+                    :label="t('invoice_email')"
+                    :error="generalForm.errors.invoice_email"
+                  />
+                  <p class="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{{ t('invoice_email_hint') }}</p>
+                </div>
               </div>
 
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
