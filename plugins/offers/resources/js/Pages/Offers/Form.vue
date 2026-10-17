@@ -14,6 +14,7 @@ import SearchableSelect from '@/Components/UI/SearchableSelect.vue'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import OfferLines from '../../Components/OfferLines.vue'
 import { useTranslations } from '@/lib/useTranslations'
+import { Send } from 'lucide-vue-next'
 
 const { t } = useTranslations()
 
@@ -98,7 +99,7 @@ const vatRate = computed(() => {
   return rate ? Number(rate.rate) : null
 })
 
-function submit() {
+function submit(send = false) {
   form.transform(data => ({
     ...data,
     contact_person_id: data.contact_person_id || null,
@@ -109,6 +110,7 @@ function submit() {
     lines: data.lines.map(l => l.type === 'item'
       ? { type: 'item', label: l.label || null, description: l.description, quantity: String(l.quantity), unit: l.unit || null, unit_price: String(l.unit_price) }
       : { type: 'text', label: l.label || null, description: l.description }),
+    send,
   }))
   if (props.offer) form.put(`/offers/${props.offer.id}`)
   else form.post('/offers')
@@ -125,7 +127,7 @@ function submit() {
       class="mb-4"
     />
 
-    <form class="max-w-5xl space-y-6" @submit.prevent="submit">
+    <form class="max-w-5xl space-y-6" @submit.prevent="submit(false)">
       <Card>
         <CardHeader><CardTitle>{{ offer ? `${t('of_edit_offer')} ${offer.number}` : t('of_new_offer') }}</CardTitle></CardHeader>
         <CardContent class="grid gap-4 sm:grid-cols-2">
@@ -170,7 +172,16 @@ function submit() {
 
       <div class="flex justify-end gap-2">
         <Button as="a" :href="offer ? `/offers/${offer.id}` : '/offers'" variant="outline">{{ t('cancel') }}</Button>
-        <Button type="submit" :loading="form.processing">{{ t('of_save_draft') }}</Button>
+        <Button type="submit" variant="secondary" :loading="form.processing">{{ t('of_save_draft') }}</Button>
+        <Button
+          v-if="!offer"
+          type="button"
+          class="bg-green-600 text-white hover:bg-green-700"
+          :loading="form.processing"
+          @click="submit(true)"
+        >
+          <Send class="mr-2 h-4 w-4" />{{ t('of_action_send') }}
+        </Button>
       </div>
     </form>
   </AppLayout>

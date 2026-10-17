@@ -9,7 +9,7 @@ namespace Plugins\Offers\Support;
 final class Layout
 {
     public const DEFAULT = [
-        'from' => ['logo' => true, 'address' => true, 'email' => false, 'phone' => false],
+        'from' => ['logo' => true, 'address' => true, 'email' => true, 'phone' => true],
         'to' => ['address' => true, 'email' => false, 'phone' => false],
     ];
 

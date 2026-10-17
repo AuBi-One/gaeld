@@ -101,6 +101,9 @@ class OfferController extends PluginController
     {
         $this->authorizeWrite();
         $offer = $this->offers->saveDraft($this->orgId(), $this->validated($request), null, $request->user()?->id);
+        if ($request->boolean('send')) {
+            $this->offers->transition($offer, 'send');
+        }
 
         return redirect("/offers/{$offer->id}")->with('success', __('offers::of.saved'));
     }

@@ -584,7 +584,7 @@ class OffersTest extends OffersTestCase
         $copy = OfferTemplate::query()->where('name', 'Analyse')->firstOrFail();
         $this->assertCount(3, $copy->lines ?? []);
         $this->assertSame(Layout::DEFAULT, $copy->layout);
-        $this->assertSame(['logo' => false, 'address' => true, 'email' => true, 'phone' => false], $template->layout['from']);
+        $this->assertSame(['logo' => false, 'address' => true, 'email' => true, 'phone' => true], $template->layout['from']);
 
         // a new offer from the template copies its layout
         $fromTemplate = $this->offer(['template_id' => $template->id]);
@@ -652,19 +652,24 @@ class OffersTest extends OffersTestCase
         $revision = app(Offers::class)->revise($this->sent());
         $this->assertSame(now()->startOfDay()->addMonthsNoOverflow(3)->toDateString(), $revision->valid_until?->toDateString());
 
-        // the From/To boxes follow the layout
-        $this->org->update(['invoice_email' => 'offres@example.test', 'invoice_phone' => '+41 21 000 00 00']);
+        // the From/To boxes follow the layout: shown by default (D-2026-10-17)...
+        $this->org->update(['invoice_email' => 'offres@example.test', 'invoice_phone' => '+41 21 000 00 00', 'vat_number' => 'CHE-123.456.789']);
         $this->person->update(['phone' => '+41 79 000 00 00']);
         $offer = $this->offer();
-        $html = app(OfferPdf::class)->html($offer);
-        $this->assertStringNotContainsString('offres@example.test', $html);
-        $this->assertStringNotContainsString('+41 79 000 00 00', $html);
         $offer->update(['layout' => ['from' => ['email' => true, 'phone' => true, 'address' => false], 'to' => ['phone' => true, 'address' => false]]]);
         $html = app(OfferPdf::class)->html($offer->fresh());
         $this->assertStringContainsString('offres@example.test', $html);
         $this->assertStringContainsString('+41 21 000 00 00', $html);
         $this->assertStringContainsString('+41 79 000 00 00', $html);
+        $this->assertStringContainsString('CHE-123.456.789 TVA', $html);
         $this->assertStringNotContainsString('Route des Mines 1', substr($html, (int) strpos($html, 'class="recipient"')));
+
+        // ...but each offer may still turn them off.
+        $offer->update(['layout' => ['from' => ['email' => false, 'phone' => false], 'to' => ['phone' => false]]]);
+        $html = app(OfferPdf::class)->html($offer->fresh());
+        $this->assertStringNotContainsString('offres@example.test', $html);
+        $this->assertStringNotContainsString('+41 21 000 00 00', $html);
+        $this->assertStringNotContainsString('+41 79 000 00 00', $html);
     }
 
     #[Test]

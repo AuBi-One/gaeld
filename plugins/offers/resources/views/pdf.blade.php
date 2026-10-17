@@ -12,6 +12,7 @@
         $layout['from']['phone'] ? $organization->invoice_phone : null,
     ]);
     $senderEmail = $layout['from']['email'] ? $organization->invoice_email : null;
+    $vatNumber = \App\Support\Pdf\VatNumber::withSuffix($organization->vat_number, $offer->language);
     $recipientLines = array_filter([
         $recipient['attention'] ?? null,
         ...($layout['to']['address'] ? [
@@ -43,7 +44,7 @@
     table.addresses td { vertical-align: top; padding: 0; }
     td.recipient { width: 71mm; }
     a.mail { color: #1155CC; text-decoration: underline; }
-    table.title { margin-top: 8mm; border-collapse: collapse; }
+    table.title { margin-top: 17.5mm; border-collapse: collapse; }
     table.title td { padding: 0 2mm 0 0; vertical-align: baseline; }
     .offer-number { font-size: 14pt; font-weight: bold; width: 49mm; }
     table.subject { margin-top: 7mm; border-collapse: collapse; font-weight: bold; }
@@ -51,9 +52,9 @@
     table.subject td.label { width: 36mm; }
     .description { margin-top: 1mm; background: #EFEFEF; font-style: italic; font-size: 10pt; padding: 0.8mm 2mm; }
     .description p + p { margin-top: 2mm; }
-    table.items { width: 100%; border-collapse: collapse; margin-top: 5mm; font-size: 8pt; }
+    table.items { width: 100%; border-collapse: collapse; margin-top: 8mm; margin-bottom: 3mm; font-size: 11pt; }
     table.items td, table.items th { border: 0.35mm solid #D9D9D9; padding: 0.9mm 2mm; vertical-align: top; }
-    table.items th { font-size: 11pt; font-weight: bold; text-align: left; }
+    table.items th { font-size: 11pt; font-weight: bold; text-align: left; background: #EFEFEF; }
     table.items .num { text-align: right; }
     table.items tr.total td { font-size: 11pt; font-weight: bold; }
     table.items tr.text td.text { font-style: italic; }
@@ -74,6 +75,7 @@
             <div>{{ $orgName }}</div>
             @foreach($senderLines as $line)<div>{{ $line }}</div>@endforeach
             @if($senderEmail)<div><a class="mail" href="mailto:{{ $senderEmail }}">{{ $senderEmail }}</a></div>@endif
+            @if($vatNumber)<div>{{ $t('pdf_vat_no') }} : {{ $vatNumber }}</div>@endif
         </td>
         <td class="recipient">
             <div>{{ $recipient['company'] ?? '' }}</div>

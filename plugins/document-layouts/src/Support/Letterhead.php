@@ -3,6 +3,7 @@
 namespace Plugins\DocumentLayouts\Support;
 
 use App\Domains\Organizations\Models\Organization;
+use App\Support\Pdf\VatNumber;
 use Illuminate\Support\Facades\Storage;
 use Plugins\Offers\Support\ImageBox;
 
@@ -81,14 +82,7 @@ final class Letterhead
     /** Swiss VAT number with its suffix (CHE-123.456.789 TVA / MWST / IVA). */
     public function vatNumberWithSuffix(string $language): ?string
     {
-        if ($this->vatNumber === null) {
-            return null;
-        }
-        if (preg_match('/\b(TVA|MWST|IVA|VAT)\s*$/i', $this->vatNumber) === 1) {
-            return $this->vatNumber;
-        }
-
-        return $this->vatNumber.' '.(['de' => 'MWST', 'it' => 'IVA', 'en' => 'VAT'][$language] ?? 'TVA');
+        return VatNumber::withSuffix($this->vatNumber, $language);
     }
 
     private static function blankToNull(?string $value): ?string
