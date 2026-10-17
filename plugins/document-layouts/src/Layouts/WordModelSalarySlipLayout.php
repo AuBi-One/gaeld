@@ -5,7 +5,6 @@ namespace Plugins\DocumentLayouts\Layouts;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Contracts\SalarySlipPdfLayoutInterface;
 use App\Domains\Payroll\Models\DeductionRate;
-use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
 use App\Support\Money;
 use App\Support\Pdf\PdfFooter;
@@ -97,7 +96,7 @@ final class WordModelSalarySlipLayout implements SalarySlipPdfLayoutInterface
             'sourceTax' => $this->sourceTax($slip),
             'other' => $this->other($slip, $t),
             'net' => Format::money((string) $slip->net_salary),
-            'iban' => $this->iban($slip),
+            'iban' => $this->iban($employee),
             't' => $t,
             'fonts' => 'file://'.Carlito::ttfPath(),
         ])->render();
@@ -251,12 +250,12 @@ final class WordModelSalarySlipLayout implements SalarySlipPdfLayoutInterface
         return $rows;
     }
 
-    private function iban(SalarySlip $slip): ?string
+    /**
+     * @param  array{iban: string|null, ...}  $employee
+     */
+    private function iban(array $employee): ?string
     {
-        $employee = Employee::withTrashed()->withoutGlobalScopes()
-            ->where('organization_id', $slip->organization_id)
-            ->find($slip->employee_id);
-        $iban = $employee?->iban;
+        $iban = $employee['iban'];
 
         return is_string($iban) && trim($iban) !== '' ? Format::iban($iban) : null;
     }
