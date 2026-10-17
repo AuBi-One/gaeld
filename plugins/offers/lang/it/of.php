@@ -119,8 +119,6 @@ return [
     'settings_title' => 'Impostazioni delle offerte',
     'settings_intro' => 'Ripreso in ogni nuova offerta; il riquadro Mittente può mostrare l’e-mail e il telefono qui sotto.',
     'validity_months' => 'Validità (mesi)',
-    'sender_email' => 'E-mail del mittente',
-    'sender_phone' => 'Telefono del mittente',
     'settings_saved' => 'Impostazioni salvate.',
     'layout' => 'Riquadri indirizzo',
     'layout_hint' => 'I nomi sono sempre mostrati. Mittente = la vostra organizzazione, Destinatario = il cliente o la persona di contatto.',

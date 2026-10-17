@@ -119,8 +119,6 @@ return [
     'settings_title' => 'Offerteinstellungen',
     'settings_intro' => 'Wird in jede neue Offerte übernommen; das Absenderfeld kann die untenstehende E-Mail und Telefonnummer zeigen.',
     'validity_months' => 'Gültigkeit (Monate)',
-    'sender_email' => 'Absender-E-Mail',
-    'sender_phone' => 'Absender-Telefon',
     'settings_saved' => 'Einstellungen gespeichert.',
     'layout' => 'Adressfelder',
     'layout_hint' => 'Namen werden immer angezeigt. Absender = Ihre Organisation, Empfänger = der Kunde oder die Kontaktperson.',

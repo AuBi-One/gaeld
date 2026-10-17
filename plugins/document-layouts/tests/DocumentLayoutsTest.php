@@ -18,7 +18,6 @@ use App\Support\Pdf\PdfLayouts;
 use Plugins\DocumentLayouts\Layouts\WordModelSalarySlipLayout;
 use Plugins\DocumentLayouts\Support\Format;
 use Plugins\DocumentLayouts\Support\Letterhead;
-use Plugins\Offers\Models\OfferSetting;
 
 class DocumentLayoutsTest extends DocumentLayoutsTestCase
 {
@@ -33,10 +32,9 @@ class DocumentLayoutsTest extends DocumentLayoutsTestCase
         }
     }
 
-    public function test_the_letterhead_takes_e_mail_and_phone_from_the_offer_settings(): void
+    public function test_the_letterhead_takes_e_mail_and_phone_from_the_organisation(): void
     {
-        $this->org->update(['legal_name' => 'Exemple SA', 'address' => 'Rue du Test 1', 'postal_code' => '1000', 'city' => 'Lausanne', 'country' => 'CH', 'vat_number' => 'CHE-123.456.789']);
-        OfferSetting::query()->create(['organization_id' => $this->org->id, 'validity_months' => 2, 'sender_email' => 'info@exemple.test', 'sender_phone' => '+41 21 000 00 00']);
+        $this->org->update(['legal_name' => 'Exemple SA', 'address' => 'Rue du Test 1', 'postal_code' => '1000', 'city' => 'Lausanne', 'country' => 'CH', 'vat_number' => 'CHE-123.456.789', 'invoice_email' => 'info@exemple.test', 'invoice_phone' => '+41 21 000 00 00']);
 
         $letterhead = Letterhead::for($this->org->fresh());
 

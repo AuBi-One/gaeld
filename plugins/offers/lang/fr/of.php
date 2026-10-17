@@ -119,8 +119,6 @@ return [
     'settings_title' => 'Paramètres des offres',
     'settings_intro' => 'Repris dans chaque nouvelle offre ; la case Expéditeur peut afficher l’e-mail et le téléphone ci-dessous.',
     'validity_months' => 'Validité (mois)',
-    'sender_email' => 'E-mail de l’expéditeur',
-    'sender_phone' => 'Téléphone de l’expéditeur',
     'settings_saved' => 'Paramètres enregistrés.',
     'layout' => 'Cases d’adresse',
     'layout_hint' => 'Les noms sont toujours affichés. Expéditeur = votre organisation, Destinataire = le client ou la personne de contact.',

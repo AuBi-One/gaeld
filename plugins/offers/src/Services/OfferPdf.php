@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Plugins\Offers\Models\Offer;
-use Plugins\Offers\Models\OfferSetting;
 use Plugins\Offers\Support\ImageBox;
 use Plugins\Offers\Support\Layout;
 
@@ -69,7 +68,6 @@ class OfferPdf
             'layout' => $layout = Layout::normalize($offer->layout),
             'logo' => $layout['from']['logo'] ? $this->logo($organization) : null,
             'logoSize' => $this->logoSize($organization),
-            'settings' => OfferSetting::for($offer->organization_id),
             'intro' => $this->markdown($offer->intro, $placeholders),
             'closing' => $this->markdown($offer->closing, $placeholders),
             't' => fn (string $key, array $replace = []): string => (string) trans('offers::of.'.$key, $replace, $lang),

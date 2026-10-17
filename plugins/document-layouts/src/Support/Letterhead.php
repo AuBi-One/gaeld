@@ -4,13 +4,12 @@ namespace Plugins\DocumentLayouts\Support;
 
 use App\Domains\Organizations\Models\Organization;
 use Illuminate\Support\Facades\Storage;
-use Plugins\Offers\Models\OfferSetting;
 use Plugins\Offers\Support\ImageBox;
 
 /**
- * The sender block of the Word models: the organisation's name and address,
- * and the e-mail and phone of the offer settings (the organisation record has
- * neither), so offers, invoices and salary slips share one letterhead.
+ * The sender block of the Word models: the organisation's name, address,
+ * invoice phone/e-mail and VAT number, so offers, invoices and salary slips
+ * share one letterhead.
  */
 final class Letterhead
 {
@@ -28,7 +27,6 @@ final class Letterhead
 
     public static function for(Organization $organization): self
     {
-        $settings = OfferSetting::for($organization->id);
         $country = $organization->country ?? 'CH';
 
         return new self(
@@ -38,8 +36,8 @@ final class Letterhead
                 trim(($organization->postal_code ?? '').' '.($organization->city ?? '')),
                 $country !== 'CH' ? $country : null,
             ], fn (?string $line): bool => $line !== null && trim($line) !== '')),
-            phone: self::blankToNull($settings->sender_phone),
-            email: self::blankToNull($settings->sender_email),
+            phone: self::blankToNull($organization->invoice_phone),
+            email: self::blankToNull($organization->invoice_email),
             vatNumber: self::blankToNull($organization->vat_number),
             logoPath: $organization->logo_path,
         );

@@ -121,8 +121,6 @@ return [
     'settings_title' => 'Offer settings',
     'settings_intro' => 'Prefilled on every new offer; the From box can show the e-mail and phone below.',
     'validity_months' => 'Validity (months)',
-    'sender_email' => 'Sender e-mail',
-    'sender_phone' => 'Sender phone',
     'settings_saved' => 'Settings saved.',
     'layout' => 'Address boxes',
     'layout_hint' => 'Names are always shown. From = your organisation, To = the client or contact person.',

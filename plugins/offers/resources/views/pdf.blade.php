@@ -9,9 +9,9 @@
             $organization->address,
             trim(($organization->postal_code ?? '').' '.($organization->city ?? '')),
         ] : []),
-        $layout['from']['phone'] ? $settings->sender_phone : null,
+        $layout['from']['phone'] ? $organization->invoice_phone : null,
     ]);
-    $senderEmail = $layout['from']['email'] ? $settings->sender_email : null;
+    $senderEmail = $layout['from']['email'] ? $organization->invoice_email : null;
     $recipientLines = array_filter([
         $recipient['attention'] ?? null,
         ...($layout['to']['address'] ? [

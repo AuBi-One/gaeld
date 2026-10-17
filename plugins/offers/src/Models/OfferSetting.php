@@ -7,14 +7,11 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Offer settings of an organisation: default validity and the sender's e-mail
- * and phone for the From box (the organisation record has neither).
+ * Offer settings of an organisation: default validity of a new offer.
  *
  * @property string $id
  * @property string $organization_id
  * @property int $validity_months
- * @property string|null $sender_email
- * @property string|null $sender_phone
  */
 class OfferSetting extends Model
 {
@@ -22,7 +19,7 @@ class OfferSetting extends Model
 
     protected $table = 'of_settings';
 
-    protected $fillable = ['organization_id', 'validity_months', 'sender_email', 'sender_phone'];
+    protected $fillable = ['organization_id', 'validity_months'];
 
     protected function casts(): array
     {

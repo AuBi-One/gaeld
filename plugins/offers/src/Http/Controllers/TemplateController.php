@@ -30,7 +30,7 @@ class TemplateController extends PluginController
                     'is_default' => $t->is_default,
                     'used' => (int) ($used[$t->id] ?? 0),
                 ]),
-            'settings' => OfferSetting::for($this->orgId())->only(['validity_months', 'sender_email', 'sender_phone']),
+            'settings' => OfferSetting::for($this->orgId())->only(['validity_months']),
         ]);
     }
 
@@ -40,8 +40,6 @@ class TemplateController extends PluginController
         $this->authorizeWrite();
         $data = $request->validate([
             'validity_months' => ['required', 'integer', 'min:1', 'max:24'],
-            'sender_email' => ['nullable', 'email', 'max:255'],
-            'sender_phone' => ['nullable', 'string', 'max:50'],
         ]);
         OfferSetting::query()->updateOrCreate(['organization_id' => $this->orgId()], $data);
 

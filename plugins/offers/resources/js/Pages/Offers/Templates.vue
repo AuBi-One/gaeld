@@ -25,8 +25,6 @@ const props = defineProps({
 
 const settingsForm = useForm({
   validity_months: props.settings.validity_months ?? 2,
-  sender_email: props.settings.sender_email ?? '',
-  sender_phone: props.settings.sender_phone ?? '',
 })
 
 function saveSettings() {
@@ -55,10 +53,8 @@ function destroy() {
         <p class="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{{ t('of_settings_intro') }}</p>
       </CardHeader>
       <CardContent>
-        <form class="grid gap-4 sm:grid-cols-[10rem_1fr_1fr_auto] sm:items-end" @submit.prevent="saveSettings">
+        <form class="grid gap-4 sm:grid-cols-[10rem_auto] sm:items-end" @submit.prevent="saveSettings">
           <FormInput v-model="settingsForm.validity_months" id="of-set-validity" type="number" min="1" max="24" :label="t('of_validity_months')" :error="settingsForm.errors.validity_months" :disabled="!canManage" required />
-          <FormInput v-model="settingsForm.sender_email" id="of-set-email" type="email" :label="t('of_sender_email')" :error="settingsForm.errors.sender_email" :disabled="!canManage" />
-          <FormInput v-model="settingsForm.sender_phone" id="of-set-phone" :label="t('of_sender_phone')" :error="settingsForm.errors.sender_phone" :disabled="!canManage" />
           <Button v-if="canManage" type="submit" :loading="settingsForm.processing">{{ t('save') }}</Button>
         </form>
       </CardContent>

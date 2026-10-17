@@ -640,20 +640,20 @@ class OffersTest extends OffersTestCase
     }
 
     #[Test]
-    public function validity_and_sender_come_from_the_organisation_settings(): void
+    public function validity_comes_from_the_organisation_settings(): void
     {
         $this->actAsOrg()->get('/offers/create')->assertInertia(fn ($page) => $page->where('defaults.validity_months', 2));
         $this->actAsOrg()->put('/offer-templates/settings', ['validity_months' => 25])->assertSessionHasErrors('validity_months');
-        $this->actAsOrg()->put('/offer-templates/settings', ['validity_months' => 3, 'sender_email' => 'offres@example.test', 'sender_phone' => '+41 21 000 00 00'])
+        $this->actAsOrg()->put('/offer-templates/settings', ['validity_months' => 3])
             ->assertRedirect('/offer-templates');
         $this->actAsOrg()->get('/offers/create')->assertInertia(fn ($page) => $page->where('defaults.validity_months', 3));
-        $this->actAsOrg()->get('/offer-templates')->assertInertia(fn ($page) => $page->where('settings.sender_email', 'offres@example.test'));
 
         // a revision is valid for the organisation's months from today
         $revision = app(Offers::class)->revise($this->sent());
         $this->assertSame(now()->startOfDay()->addMonthsNoOverflow(3)->toDateString(), $revision->valid_until?->toDateString());
 
         // the From/To boxes follow the layout
+        $this->org->update(['invoice_email' => 'offres@example.test', 'invoice_phone' => '+41 21 000 00 00']);
         $this->person->update(['phone' => '+41 79 000 00 00']);
         $offer = $this->offer();
         $html = app(OfferPdf::class)->html($offer);
