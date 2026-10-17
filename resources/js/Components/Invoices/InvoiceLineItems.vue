@@ -288,7 +288,7 @@ defineExpose({ subtotal, vatTotal, total })
               required
             />
           </div>
-          <div class="min-w-0 sm:col-span-1 xl:col-span-1">
+          <div class="relative min-w-0 sm:col-span-1 xl:col-span-1">
             <FormInput
               :id="`line-price-${i}`"
               v-model="line.unit_price"
@@ -296,9 +296,13 @@ defineExpose({ subtotal, vatTotal, total })
               :label="line.type === 'discount' ? (line.discount_type === 'percentage' ? t('discount_percentage') : t('line_type_discount')) : t('unit_price')"
               label-class="xl:sr-only"
               :error="errors[`lines.${i}.unit_price`]"
-              :hint="line.type === 'item' ? t('negative_price_hint') : undefined"
               required
             />
+            <div v-if="line.type === 'item'" class="absolute right-0 top-0">
+              <Tooltip :content="t('negative_price_hint')" side="top">
+                <HelpCircle class="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+              </Tooltip>
+            </div>
           </div>
           <div class="relative min-w-0 sm:col-span-1 xl:col-span-1">
             <FormSelect
