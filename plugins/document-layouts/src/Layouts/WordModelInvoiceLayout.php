@@ -103,7 +103,7 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
 
     private function addresses(Letterhead $letterhead, Invoice $invoice): void
     {
-        $customer = $invoice->customer_snapshot ?? $invoice->customer?->toInvoiceSnapshot() ?? [];
+        $customer = $invoice->customer_snapshot ?? $invoice->customer?->toInvoiceSnapshot($invoice->contactPerson) ?? [];
         $sender = [$letterhead->name, ...$letterhead->addressLines];
         if ($letterhead->phone !== null) {
             $sender[] = $letterhead->phone;
@@ -112,6 +112,7 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
         $country = (string) data_get($customer, 'country', 'CH');
         $recipient = array_values(array_filter([
             data_get($customer, 'name'),
+            data_get($customer, 'attention'),
             data_get($customer, 'address'),
             trim(data_get($customer, 'postal_code', '').' '.data_get($customer, 'city', '')),
             $country !== 'CH' ? $country : null,
@@ -148,6 +149,7 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
 
     private function title(Invoice $invoice): void
     {
+        $this->y += 2 * self::LINE;
         $title = ($invoice->type === InvoiceType::CreditNote ? $this->t('credit_note') : $this->t('invoice')).' '.($invoice->number ?? '');
         $this->font('B', 14);
         $x = self::LEFT + self::PAD;
@@ -162,11 +164,9 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
     {
         $introduction = trim((string) $invoice->introduction);
         if ($introduction !== '') {
-            // The model's "Concerne" box: grey, as wide as its text (autofit table), at most the text width.
+            // The model's "Concerne" box: grey, as wide as the table below it.
             $this->font('I', 11);
-            $longest = max(array_map(fn (string $line): float => $this->pdf->GetStringWidth($line), explode("\n", $introduction)));
-            $width = min(self::WIDTH, $longest + 2 * self::PAD + 1);
-            $this->multi(self::LEFT, $width, $introduction, 'L', self::SHADE, 0.3);
+            $this->multi(self::LEFT, self::WIDTH, $introduction, 'L', self::SHADE, 0.3);
             $this->y += 3;
         }
         $header = trim((string) $organization->invoice_header_text);
@@ -180,13 +180,14 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
 
     private function lines(Invoice $invoice): void
     {
+        $this->y += 3;
         $this->tableHeader();
         $position = 0;
         foreach ($invoice->lines as $line) {
             [$quantity, $price, $total] = $this->amounts($line);
             $isText = $line->type === InvoiceLineType::Text;
             // A description taller than a page continues in further rows.
-            $this->font($isText ? 'I' : '', 8);
+            $this->font($isText ? 'I' : '', 11);
             $this->pdf->setCellPaddings(self::PAD, 0.9, self::PAD, 0.9);
             $parts = $this->split(str_replace(["\r\n", "\r"], "\n", (string) $line->description), self::COLUMNS[1], self::BOTTOM - self::TOP - 7.7 - 1);
             foreach ($parts as $i => $part) {
@@ -197,18 +198,19 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
                     $first ? $quantity : '',
                     $first ? $price : '',
                     $first ? $total : '',
-                ], 8, 5.3, $isText ? [1 => 'I'] : []);
+                ], 11, 7.7, $isText ? [1 => 'I'] : []);
             }
         }
 
         foreach ($this->vatRows($invoice) as [$rate, $amount]) {
-            $this->row(['', $this->t('vat'), $rate, '', $amount], 10, 7.7, [], [2 => 9]);
+            $this->row(['', $this->t('vat'), $rate, '', $amount], 11, 7.7, [], [2 => 10]);
         }
         $hasVat = Money::compare((string) $invoice->vat_amount, '0') !== 0;
         $this->row(
             ['', $hasVat ? $this->t('total_incl_vat') : $this->t('total'), '', '', ($invoice->currency ?? 'CHF').' '.Format::money((string) $invoice->total)],
-            10, 7.7, [1 => 'B', 4 => 'B'],
+            11, 7.7, [1 => 'B', 4 => 'B'],
         );
+        $this->y += 3;
 
         if (($invoice->tax_treatment ?? InvoiceTaxTreatment::Standard) === InvoiceTaxTreatment::ReverseCharge) {
             $this->y += 2;
@@ -222,7 +224,7 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
     {
         $this->row(
             [$this->t('pos'), $this->t('designation'), $this->t('quantity'), $this->t('unit_price'), $this->t('total')],
-            11, 7.7, array_fill(0, 5, 'B'), [2 => 10, 3 => 10], repeatHeader: false,
+            11, 7.7, array_fill(0, 5, 'B'), [2 => 10, 3 => 10], repeatHeader: false, fill: self::SHADE,
         );
     }
 
@@ -371,7 +373,13 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
      * @param  array<int, string>  $styles  column => B / I
      * @param  array<int, float>  $sizes  column => font size other than $size
      */
-    private function row(array $cells, float $size, float $minHeight, array $styles = [], array $sizes = [], bool $repeatHeader = true): void
+    /**
+     * @param  array<int, string>  $cells
+     * @param  array<int, string>  $styles
+     * @param  array<int, float>  $sizes
+     * @param  list<int>|null  $fill  RGB
+     */
+    private function row(array $cells, float $size, float $minHeight, array $styles = [], array $sizes = [], bool $repeatHeader = true, ?array $fill = null): void
     {
         $pad = 0.9;
         $height = $minHeight;
@@ -392,13 +400,16 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
         // fill at the start of the page, under core's white page background.
         $this->pdf->SetDrawColor(...self::BORDER);
         $this->pdf->SetLineWidth(0.35);
+        if ($fill !== null) {
+            $this->pdf->SetFillColor(...$fill);
+        }
         $x = self::LEFT;
         foreach ($cells as $i => $text) {
-            $this->pdf->Rect($x, $this->y, self::COLUMNS[$i], $height, 'D');
+            $this->pdf->Rect($x, $this->y, self::COLUMNS[$i], $height, $fill !== null ? 'DF' : 'D');
             $this->font($styles[$i] ?? '', $sizes[$i] ?? $size);
             $this->pdf->setCellPaddings(self::PAD, $pad, self::PAD, $pad);
             $align = $i >= 2 ? 'R' : 'L';
-            $this->pdf->MultiCell(self::COLUMNS[$i], $height, $text, 0, $align, false, 0, $x, $this->y, true, 0, false, false, $height, 'T');
+            $this->pdf->MultiCell(self::COLUMNS[$i], $height, $text, 0, $align, false, 0, $x, $this->y, true, 0, false, false, $height, 'M');
             $x += self::COLUMNS[$i];
         }
         $this->y += $height;
