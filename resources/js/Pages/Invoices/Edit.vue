@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
@@ -28,6 +28,7 @@ import { Plus } from 'lucide-vue-next'
 const props = defineProps({
   invoice: Object,
   customers: { type: Array, default: () => [] },
+  contactPersons: { type: Object, default: () => ({}) },
   vatRates: { type: Array, default: () => [] },
   catalogItems: { type: Array, default: () => [] },
   justificatifUrl: { type: String, default: null },
@@ -44,6 +45,7 @@ const { isClosed: isIssueDateClosed, closedYear } = useClosedFiscalYear(() => fo
 
 const form = useForm({
   customer_id: props.invoice.customer_id != null ? String(props.invoice.customer_id) : '',
+  contact_person_id: props.invoice.contact_person_id ?? '',
   number: props.invoice.number ?? '',
   issue_date: props.invoice.issue_date?.slice(0, 10) ?? '',
   due_date: props.invoice.due_date?.slice(0, 10) ?? '',
@@ -116,6 +118,19 @@ function onCustomerCreated(customer) {
   clientOptions.value = customerList.map(c => ({ value: String(c.id), label: c.name }))
   form.customer_id = String(customer.id)
 }
+
+// The contact person offered depends on the chosen customer; keep a valid
+// selection (or the customer's primary/only person) as that choice changes.
+const personOptions = computed(() => [
+  { value: '', label: t('no_contact_person') },
+  ...(props.contactPersons[form.customer_id] ?? []).map(p => ({ value: p.id, label: p.email ? `${p.name} — ${p.email}` : p.name })),
+])
+watch(() => form.customer_id, () => {
+  const persons = props.contactPersons[form.customer_id] ?? []
+  if (!persons.some(p => p.id === form.contact_person_id)) {
+    form.contact_person_id = persons.find(p => p.is_primary)?.id ?? (persons.length === 1 ? persons[0].id : '')
+  }
+})
 </script>
 
 <template>
@@ -155,6 +170,13 @@ function onCustomerCreated(customer) {
                   <Plus class="h-4 w-4" />
                 </Button>
               </div>
+              <FormSelect
+                id="contact_person_id"
+                v-model="form.contact_person_id"
+                :label="t('contact_person')"
+                :options="personOptions"
+                :error="form.errors.contact_person_id"
+              />
               <p class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('required_to_finalize') }}</p>
             </div>
             <FormInput

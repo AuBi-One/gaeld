@@ -3,6 +3,7 @@
 namespace App\Domains\Invoicing\Requests\Concerns;
 
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Models\InvoiceLine;
@@ -98,6 +99,21 @@ trait InvoiceValidationRules
             'customer_id' => [
                 $finalize ? 'required' : 'nullable',
                 Rule::exists('contacts', 'id')->where('organization_id', $orgId),
+            ],
+            'contact_person_id' => [
+                'nullable',
+                'uuid',
+                function (string $attribute, mixed $value, \Closure $fail) use ($orgId): void {
+                    $belongsToCustomer = ContactPerson::query()
+                        ->whereKey($value)
+                        ->where('contactable_type', Contact::class)
+                        ->where('contactable_id', $this->input('customer_id'))
+                        ->whereHas('contactable', fn ($q) => $q->where('organization_id', $orgId))
+                        ->exists();
+                    if (! $belongsToCustomer) {
+                        $fail(__('validation.exists', ['attribute' => $attribute]));
+                    }
+                },
             ],
             'lines.*.vat_rate_id' => [
                 'nullable',

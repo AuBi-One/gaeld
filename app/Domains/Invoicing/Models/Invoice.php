@@ -4,6 +4,7 @@ namespace App\Domains\Invoicing\Models;
 
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Enums\InvoiceType;
@@ -35,7 +36,8 @@ use Laravel\Scout\Searchable;
  * @property InvoiceStatus $status
  * @property InvoiceTaxTreatment $tax_treatment
  * @property InvoiceType $type
- * @property array{name: string, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, vat_number: string|null}|null $customer_snapshot
+ * @property string|null $contact_person_id
+ * @property array{name: string, attention: string|null, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, vat_number: string|null}|null $customer_snapshot
  * @property Carbon $issue_date
  * @property Carbon $due_date
  * @property string $subtotal
@@ -55,6 +57,7 @@ use Laravel\Scout\Searchable;
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
  * @property-read Contact|null $customer
+ * @property-read ContactPerson|null $contactPerson
  * @property-read Organization $organization
  * @property-read Collection<int, InvoiceLine> $lines
  * @property-read Collection<int, InvoicePayment> $payments
@@ -70,7 +73,7 @@ class Invoice extends Model
      *
      * @var list<string>
      */
-    protected $with = ['customer'];
+    protected $with = ['customer', 'contactPerson'];
 
     protected $attributes = [
         'tax_treatment' => InvoiceTaxTreatment::Standard->value,
@@ -79,6 +82,7 @@ class Invoice extends Model
     protected $fillable = [
         'organization_id',
         'customer_id',
+        'contact_person_id',
         'customer_snapshot',
         'journal_entry_id',
         'number',
@@ -134,6 +138,12 @@ class Invoice extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Contact::class);
+    }
+
+    /** @return BelongsTo<ContactPerson, $this> */
+    public function contactPerson(): BelongsTo
+    {
+        return $this->belongsTo(ContactPerson::class);
     }
 
     /** @return BelongsTo<JournalEntry, $this> */

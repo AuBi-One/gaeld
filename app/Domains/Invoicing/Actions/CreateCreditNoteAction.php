@@ -33,6 +33,7 @@ class CreateCreditNoteAction
             $creditNote = Invoice::create([
                 'organization_id' => $invoice->organization_id,
                 'customer_id' => $invoice->customer_id,
+                'contact_person_id' => $invoice->contact_person_id,
                 'number' => $this->numberGenerator->next($invoice->organization_id, 'CN'),
                 'status' => InvoiceStatus::Draft,
                 'type' => InvoiceType::CreditNote,

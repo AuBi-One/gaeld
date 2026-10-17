@@ -25,6 +25,7 @@ class UpdateInvoiceAction
 
         $invoiceData = [
             'customer_id' => $data->customerId,
+            'contact_person_id' => $data->contactPersonId,
             'number' => $data->number,
             'issue_date' => $data->issueDate,
             'due_date' => $data->dueDate,
@@ -48,7 +49,10 @@ class UpdateInvoiceAction
                     ->where('organization_id', $organizationId)
                     ->findOrFail($data->customerId);
             $data->taxTreatment->validateCustomer($customer);
-            $invoiceData['customer_snapshot'] = $customer?->toInvoiceSnapshot();
+            $person = $customer !== null && $data->contactPersonId !== null
+                ? $customer->contactPersons()->whereKey($data->contactPersonId)->first()
+                : null;
+            $invoiceData['customer_snapshot'] = $customer?->toInvoiceSnapshot($person);
         }
 
         $invoice->update($invoiceData);

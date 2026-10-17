@@ -1125,6 +1125,7 @@ return [
     // Contact persons
     'contact_persons' => 'Kontaktpersonen',
     'contact_person' => 'Kontaktperson',
+    'no_contact_person' => '(keine)',
     'add_contact_person' => 'Kontaktperson hinzufügen',
     'edit_contact_person' => 'Kontaktperson bearbeiten',
     'delete_contact_person' => 'Kontaktperson löschen',

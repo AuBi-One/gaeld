@@ -8,6 +8,7 @@ use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Invoicing\Actions\CancelInvoiceAction;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
 use App\Domains\Invoicing\Actions\DuplicateInvoiceAction;
@@ -99,6 +100,7 @@ class InvoiceFlowTest extends TestCase
         return $action->execute(new CreateInvoiceData(
             organizationId: $this->org->id,
             customerId: $data['customer_id'],
+            contactPersonId: $data['contact_person_id'] ?? null,
             number: $data['number'],
             issueDate: $data['issue_date'],
             dueDate: $data['due_date'],
@@ -219,6 +221,26 @@ class InvoiceFlowTest extends TestCase
         $this->assertSame('Old Street 1', $invoice->customer_snapshot['address']);
         $this->assertSame('1000', $invoice->customer_snapshot['postal_code']);
         $this->assertSame('Lausanne', $invoice->customer_snapshot['city']);
+    }
+
+    public function test_invoice_remembers_its_contact_person_and_snapshots_their_name(): void
+    {
+        $person = ContactPerson::query()->create([
+            'contactable_type' => Contact::class,
+            'contactable_id' => $this->customer->id,
+            'first_name' => 'Jean',
+            'last_name' => 'Dupont',
+        ]);
+
+        $invoice = $this->createInvoice(['contact_person_id' => $person->id]);
+
+        $this->assertSame($person->id, $invoice->contact_person_id);
+        $this->assertSame('Jean Dupont', $invoice->customer_snapshot['attention']);
+
+        $person->update(['first_name' => 'Marie']);
+        $invoice->refresh();
+
+        $this->assertSame('Jean Dupont', $invoice->customer_snapshot['attention'], 'the snapshot does not follow later changes, like the rest of the snapshot');
     }
 
     public function test_partial_payment_flow(): void

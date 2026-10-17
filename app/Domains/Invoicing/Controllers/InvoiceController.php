@@ -4,6 +4,8 @@ namespace App\Domains\Invoicing\Controllers;
 
 use App\Domains\Accounting\Queries\VatRateQuery;
 use App\Domains\Banking\Models\BankAccount;
+use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Contacts\Queries\ContactQuery;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
 use App\Domains\Invoicing\Actions\DeleteInvoiceAction;
@@ -80,6 +82,7 @@ class InvoiceController extends Controller
 
         return Inertia::render('Invoices/Create', [
             'customers' => ContactQuery::forSelect(),
+            'contactPersons' => $this->contactPersonsByCustomer(),
             'vatRates' => VatRateQuery::active(),
             'suggestedNumber' => $numberGenerator->next($currentOrg->id(), null, $forYear),
             'defaultNotes' => $currentOrg->get()->default_invoice_notes ?? '',
@@ -219,6 +222,7 @@ class InvoiceController extends Controller
         return Inertia::render('Invoices/Edit', [
             'invoice' => $invoice->load('lines.vatRate'),
             'customers' => ContactQuery::forSelect(),
+            'contactPersons' => $this->contactPersonsByCustomer(),
             'vatRates' => VatRateQuery::active(),
             'justificatifUrl' => $invoice->justificatif_path
                 ? route('invoices.justificatif.download', $invoice)
@@ -312,5 +316,25 @@ class InvoiceController extends Controller
 
         return redirect()->route('invoices.index')
             ->with('success', __('app.invoice_deleted'));
+    }
+
+    /**
+     * Contact persons grouped by their customer, for the "Attention: ..."
+     * selector on the Create/Edit forms. Not cached (unlike ContactQuery::
+     * forSelect(), used elsewhere for the plain customer list): a person
+     * added or edited must show up immediately.
+     *
+     * @return array<int, array<int, array{id: string, name: string, email: string|null, is_primary: bool}>>
+     */
+    private function contactPersonsByCustomer(): array
+    {
+        return Contact::query()->with('contactPersons')->get()
+            ->mapWithKeys(fn (Contact $c): array => [$c->id => $c->contactPersons
+                ->sortByDesc('is_primary')
+                ->map(fn (ContactPerson $p): array => ['id' => $p->id, 'name' => $p->full_name, 'email' => $p->email, 'is_primary' => (bool) $p->is_primary])
+                ->values()
+                ->all(),
+            ])
+            ->all();
     }
 }

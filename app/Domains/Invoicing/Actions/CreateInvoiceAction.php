@@ -60,11 +60,15 @@ class CreateInvoiceAction
                     ->where('organization_id', $data->organizationId)
                     ->findOrFail($data->customerId);
             $data->taxTreatment->validateCustomer($customer);
-            $customerSnapshot = $customer?->toInvoiceSnapshot();
+            $person = $customer !== null && $data->contactPersonId !== null
+                ? $customer->contactPersons()->whereKey($data->contactPersonId)->first()
+                : null;
+            $customerSnapshot = $customer?->toInvoiceSnapshot($person);
 
             $invoice = Invoice::create([
                 'organization_id' => $data->organizationId,
                 'customer_id' => $data->customerId,
+                'contact_person_id' => $person?->id,
                 'customer_snapshot' => $customerSnapshot,
                 'number' => $number,
                 'status' => InvoiceStatus::Draft,

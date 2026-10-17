@@ -117,12 +117,13 @@ class Contact extends Model
     }
 
     /**
-     * @return array{name: string, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, vat_number: string|null}
+     * @return array{name: string, attention: string|null, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, vat_number: string|null}
      */
-    public function toInvoiceSnapshot(): array
+    public function toInvoiceSnapshot(?ContactPerson $person = null): array
     {
         return [
             'name' => $this->name,
+            'attention' => $person?->full_name,
             'email' => $this->email,
             'address' => $this->address,
             'postal_code' => $this->postal_code,

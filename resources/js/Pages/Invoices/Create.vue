@@ -28,6 +28,7 @@ import { Plus } from 'lucide-vue-next'
 
 const props = defineProps({
   customers: { type: Array, default: () => [] },
+  contactPersons: { type: Object, default: () => ({}) },
   vatRates: { type: Array, default: () => [] },
   catalogItems: { type: Array, default: () => [] },
   suggestedNumber: { type: String, default: '' },
@@ -45,6 +46,7 @@ const { isClosed: isIssueDateClosed, closedYear } = useClosedFiscalYear(() => fo
 
 const form = useForm({
   customer_id: '',
+  contact_person_id: '',
   issue_date: new Date().toISOString().slice(0, 10),
   due_date: '',
   currency: 'CHF',
@@ -160,6 +162,19 @@ function applyPaymentTerms() {
 watch(() => form.customer_id, applyPaymentTerms)
 watch(() => form.issue_date, applyPaymentTerms)
 
+// The contact person offered depends on the chosen customer; keep a valid
+// selection (or the customer's primary/only person) as that choice changes.
+const personOptions = computed(() => [
+  { value: '', label: t('no_contact_person') },
+  ...(props.contactPersons[form.customer_id] ?? []).map(p => ({ value: p.id, label: p.email ? `${p.name} — ${p.email}` : p.name })),
+])
+watch(() => form.customer_id, () => {
+  const persons = props.contactPersons[form.customer_id] ?? []
+  if (!persons.some(p => p.id === form.contact_person_id)) {
+    form.contact_person_id = persons.find(p => p.is_primary)?.id ?? (persons.length === 1 ? persons[0].id : '')
+  }
+})
+
 // When the user manually changes payment_terms, recompute due_date too
 // (unless they previously edited the due_date by hand).
 watch(() => form.payment_terms, (days) => {
@@ -218,6 +233,14 @@ function onDueDateManualEdit() {
                   <Plus class="h-4 w-4" />
                 </Button>
               </div>
+              <FormSelect
+                id="contact_person_id"
+                v-model="form.contact_person_id"
+                :label="t('contact_person')"
+                :options="personOptions"
+                :error="form.errors.contact_person_id"
+                class="mt-2"
+              />
             </div>
             <div class="lg:col-span-2">
               <label class="text-sm font-medium leading-none">{{ t('invoice_number') }}</label>

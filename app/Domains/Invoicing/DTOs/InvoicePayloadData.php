@@ -29,6 +29,7 @@ abstract readonly class InvoicePayloadData
         public array $lines,
         public InvoiceTaxTreatment $taxTreatment = InvoiceTaxTreatment::Standard,
         public ?string $introduction = null,
+        public ?string $contactPersonId = null,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -39,6 +40,7 @@ abstract readonly class InvoicePayloadData
         return new static(
             organizationId: $data['organization_id'],
             customerId: $data['customer_id'] ?? null,
+            contactPersonId: $data['contact_person_id'] ?? null,
             number: $data['number'],
             issueDate: $data['issue_date'],
             dueDate: $data['due_date'] ?? null,
@@ -58,6 +60,7 @@ abstract readonly class InvoicePayloadData
         return [
             'organization_id' => $this->organizationId,
             'customer_id' => $this->customerId,
+            'contact_person_id' => $this->contactPersonId,
             'number' => $this->number,
             'issue_date' => $this->issueDate,
             'due_date' => $this->dueDate,

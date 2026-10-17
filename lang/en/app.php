@@ -1202,6 +1202,7 @@ return [
     // Contact persons
     'contact_persons' => 'Contact Persons',
     'contact_person' => 'Contact Person',
+    'no_contact_person' => '(none)',
     'add_contact_person' => 'Add Contact Person',
     'edit_contact_person' => 'Edit Contact Person',
     'delete_contact_person' => 'Delete Contact Person',

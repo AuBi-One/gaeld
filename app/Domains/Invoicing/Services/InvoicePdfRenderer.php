@@ -133,13 +133,19 @@ class InvoicePdfRenderer
         $customer = $invoice->customer;
         $customerDetails = $invoice->customer_snapshot;
         if ($customerDetails === null && $customer !== null) {
-            $customerDetails = $customer->toInvoiceSnapshot();
+            $customerDetails = $customer->toInvoiceSnapshot($invoice->contactPerson);
         }
 
         if ($customerDetails !== null) {
             $tcpdf->SetXY(InvoicePdfStyle::CUSTOMER_X, InvoicePdfStyle::CUSTOMER_INFO_Y);
             $tcpdf->SetFont('Helvetica', 'B', 10);
             $tcpdf->Cell(InvoicePdfStyle::CUSTOMER_WIDTH, 5, $customerDetails['name'], 0, 1, 'L');
+
+            if (! empty($customerDetails['attention'])) {
+                $tcpdf->SetFont('Helvetica', '', 9);
+                $tcpdf->SetX(InvoicePdfStyle::CUSTOMER_X);
+                $tcpdf->Cell(InvoicePdfStyle::CUSTOMER_WIDTH, 4, $customerDetails['attention'], 0, 1, 'L');
+            }
 
             $tcpdf->SetFont('Helvetica', '', 9);
             $customerAddress = array_filter([
