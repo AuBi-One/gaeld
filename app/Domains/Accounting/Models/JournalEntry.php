@@ -26,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $date
  * @property string $reference
  * @property string|null $description
+ * @property string|null $justificatif_path
  * @property bool $is_posted
  * @property string|null $type
  * @property Carbon|null $vat_period_start
@@ -46,6 +47,7 @@ class JournalEntry extends Model
         'date',
         'reference',
         'description',
+        'justificatif_path',
         'is_posted',
         'type',
         'vat_period_start',

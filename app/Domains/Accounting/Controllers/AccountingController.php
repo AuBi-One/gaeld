@@ -15,11 +15,13 @@ use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Organizations\Services\OrganizationDocumentStorageService;
 use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
 use App\Http\Controllers\Controller;
 use App\Support\CsvExportService;
 use App\Support\Exceptions\DomainException;
 use App\Support\PdfExportService;
+use App\Support\Services\FileUploadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +29,7 @@ use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
+use Throwable;
 
 /**
  * Journal entry management: listing, creating, posting, and reversing entries.
@@ -34,6 +37,11 @@ use Symfony\Component\HttpFoundation\Response as HttpResponse;
 class AccountingController extends Controller
 {
     use HandlesFlashErrorResponses;
+
+    public function __construct(
+        private FileUploadService $uploadService,
+        private OrganizationDocumentStorageService $documentStorage,
+    ) {}
 
     public function chartOfAccounts(Request $request): Response
     {
@@ -121,13 +129,17 @@ class AccountingController extends Controller
         ]);
     }
 
-    public function showJournalEntry(JournalEntry $journalEntry): Response
+    public function showJournalEntry(Request $request, JournalEntry $journalEntry): Response
     {
         $this->authorize('view', $journalEntry);
 
         return Inertia::render('Accounting/JournalEntryShow', [
             'entry' => $journalEntry->load('lines.account'),
             'source' => app(JournalEntryReferences::class)->for($journalEntry)?->toArray(),
+            'justificatifUrl' => $journalEntry->justificatif_path
+                ? route('accounting.journal-entries.justificatif.download', $journalEntry)
+                : null,
+            'canEditJustificatif' => $request->user()?->can('update', $journalEntry) ?? false,
         ]);
     }
 
@@ -176,11 +188,35 @@ class AccountingController extends Controller
             lines: $lines,
         );
 
+        $justificatifPath = null;
+        if ($request->hasFile('justificatif')) {
+            $organization = $currentOrg->get();
+            $document = $request->file('justificatif');
+            $documentBytes = (int) $document->getSize();
+            $this->documentStorage->reserve($organization, $documentBytes);
+
+            try {
+                $justificatifPath = $this->uploadService->store($document, "justificatifs/{$currentOrg->id()}");
+            } catch (Throwable $exception) {
+                $this->documentStorage->release($organization, $documentBytes);
+
+                throw $exception;
+            }
+        }
+
         try {
-            $isPosted
+            $entry = $isPosted
                 ? $ledger->postEntry($currentOrg->id(), $entryData)
                 : $ledger->createDraft($currentOrg->id(), $entryData);
+
+            if ($justificatifPath !== null) {
+                $entry->update(['justificatif_path' => $justificatifPath]);
+            }
         } catch (DomainException $e) {
+            if ($justificatifPath !== null) {
+                $this->documentStorage->delete($currentOrg->get(), $justificatifPath);
+            }
+
             return $this->backWithError($e);
         }
 
@@ -219,14 +255,33 @@ class AccountingController extends Controller
             lines: $lines,
         );
 
+        $newJustificatifPath = null;
+        $oldJustificatifPath = null;
+        if ($request->hasFile('justificatif')) {
+            $organization = $journalEntry->organization;
+            $document = $request->file('justificatif');
+            $documentBytes = (int) $document->getSize();
+            $this->documentStorage->reserve($organization, $documentBytes);
+
+            try {
+                $newJustificatifPath = $this->uploadService->store($document, "justificatifs/{$journalEntry->organization_id}");
+                $oldJustificatifPath = $journalEntry->justificatif_path;
+            } catch (Throwable $exception) {
+                $this->documentStorage->release($organization, $documentBytes);
+
+                throw $exception;
+            }
+        }
+
         try {
             // Delete old lines and update entry in a transaction
-            DB::transaction(function () use ($journalEntry, $entryData) {
+            DB::transaction(function () use ($journalEntry, $entryData, $newJustificatifPath) {
                 $journalEntry->lines()->delete();
                 $journalEntry->update([
                     'date' => $entryData->date,
                     'reference' => $entryData->reference,
                     'description' => $entryData->description,
+                    ...($newJustificatifPath !== null ? ['justificatif_path' => $newJustificatifPath] : []),
                 ]);
 
                 // Recreate lines
@@ -242,7 +297,15 @@ class AccountingController extends Controller
             });
 
             $journalEntry->load('lines.account');
+
+            if ($newJustificatifPath !== null && $oldJustificatifPath !== null) {
+                $this->documentStorage->delete($journalEntry->organization, $oldJustificatifPath);
+            }
         } catch (DomainException $e) {
+            if ($newJustificatifPath !== null) {
+                $this->documentStorage->delete($journalEntry->organization, $newJustificatifPath);
+            }
+
             return $this->backWithError($e);
         }
 

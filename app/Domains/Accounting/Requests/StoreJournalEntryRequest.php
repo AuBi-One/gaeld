@@ -27,6 +27,7 @@ class StoreJournalEntryRequest extends FormRequest
             'lines.*.debit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
             'lines.*.credit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
             'lines.*.description' => ['nullable', 'string', 'max:500'],
+            'justificatif' => ['nullable', 'file', 'mimes:'.config('uploads.allowed_mimes.document'), 'max:'.config('uploads.max_size.document')],
         ];
     }
 }

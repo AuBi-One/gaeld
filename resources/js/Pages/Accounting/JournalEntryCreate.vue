@@ -7,6 +7,7 @@ import CardContent from '@/Components/UI/CardContent.vue'
 import Button from '@/Components/UI/Button.vue'
 import FormInput from '@/Components/UI/FormInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
+import FileUpload from '@/Components/UI/FileUpload.vue'
 import HelpText from '@/Components/HelpText.vue'
 import { useForm, Link } from '@inertiajs/vue3'
 import { useTranslations } from '@/lib/useTranslations'
@@ -36,7 +37,12 @@ const form = useForm({
     { account_id: '', debit: '0.00', credit: '0.00', description: '' },
     { account_id: '', debit: '0.00', credit: '0.00', description: '' },
   ],
+  justificatif: null,
 })
+
+function onJustificatifChange(file) {
+  form.justificatif = file ?? null
+}
 
 function addLine() {
   form.lines.push({ account_id: '', debit: '0.00', credit: '0.00', description: '' })
@@ -58,7 +64,7 @@ const isBalanced = computed(() => difference.value === 0 && totalDebit.value > 0
 
 function submit(post = true) {
   form.is_posted = post
-  form.post('/accounting/journal-entries', { preserveScroll: true })
+  form.post('/accounting/journal-entries', { preserveScroll: true, forceFormData: true })
 }
 
 function lineError(index, field) {
@@ -99,6 +105,13 @@ function lineError(index, field) {
               :error="form.errors.description"
             />
           </div>
+          <FileUpload
+            size="compact"
+            class="mt-4"
+            :label="t('justificatif')"
+            :error="form.errors.justificatif"
+            @change="onJustificatifChange"
+          />
         </CardContent>
       </Card>
 

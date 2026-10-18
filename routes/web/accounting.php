@@ -7,6 +7,7 @@ use App\Domains\Accounting\Controllers\ConsolidationController;
 use App\Domains\Accounting\Controllers\CostCenterController;
 use App\Domains\Accounting\Controllers\ExchangeRateController;
 use App\Domains\Accounting\Controllers\FiscalYearsController;
+use App\Domains\Accounting\Controllers\JournalEntryDocumentController;
 use App\Domains\Accounting\Controllers\LegalArchiveController;
 use App\Domains\Accounting\Controllers\LettrageController;
 use App\Domains\Accounting\Controllers\OpeningBalancesController;
@@ -102,6 +103,8 @@ Route::put('/accounting/journal-entries/{journalEntry}', [AccountingController::
 Route::post('/accounting/journal-entries/{journalEntry}/post', [AccountingController::class, 'postJournalEntry'])->name('accounting.journal-entries.post');
 Route::post('/accounting/journal-entries/{journalEntry}/reverse', [AccountingController::class, 'reverseJournalEntry'])->name('accounting.journal-entries.reverse');
 Route::delete('/accounting/journal-entries/{journalEntry}', [AccountingController::class, 'destroyJournalEntry'])->name('accounting.journal-entries.destroy');
+Route::delete('/accounting/journal-entries/{journalEntry}/justificatif', [JournalEntryDocumentController::class, 'removeJustificatif'])->name('accounting.journal-entries.justificatif.remove');
+Route::get('/accounting/journal-entries/{journalEntry}/justificatif', [JournalEntryDocumentController::class, 'downloadJustificatif'])->middleware('throttle:30,1')->name('accounting.journal-entries.justificatif.download');
 
 // Opening balances (PR #30)
 Route::get('/accounting/opening-balances', [OpeningBalancesController::class, 'index'])->name('accounting.opening-balances.index');
