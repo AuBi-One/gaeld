@@ -11,13 +11,14 @@ final readonly class JournalEntryReference
     public function __construct(
         public string $label,
         public ?string $url = null,
+        public ?string $documentUrl = null,
     ) {}
 
     /**
-     * @return array{label: string, url: ?string}
+     * @return array{label: string, url: ?string, documentUrl: ?string}
      */
     public function toArray(): array
     {
-        return ['label' => $this->label, 'url' => $this->url];
+        return ['label' => $this->label, 'url' => $this->url, 'documentUrl' => $this->documentUrl];
     }
 }

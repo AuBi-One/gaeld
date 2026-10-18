@@ -206,26 +206,27 @@ class SalarySlipController extends Controller
             ->with('success', __('app.salary_slip_deleted'));
     }
 
-    public function downloadPdf(SalarySlip $slip, PdfExportService $pdf, PdfLayouts $layouts): HttpResponse
+    public function downloadPdf(SalarySlip $slip, Request $request, PdfExportService $pdf, PdfLayouts $layouts): HttpResponse
     {
         $this->authorize('view', $slip);
 
         $employeeData = $slip->employeeDocumentData();
         $slip->loadMissing('organization');
         $filename = "salary-slip-{$employeeData['last_name']}-{$slip->period_year}-{$slip->period_month}.pdf";
+        $disposition = $request->boolean('inline') ? HeaderUtils::DISPOSITION_INLINE : HeaderUtils::DISPOSITION_ATTACHMENT;
 
         $layout = $layouts->salarySlip($slip->organization);
         if ($layout !== null) {
             return new HttpResponse($layout->renderSalarySlip($slip, $slip->organization), 200, [
                 'Content-Type' => 'application/pdf',
-                'Content-Disposition' => HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, $filename, Str::ascii($filename)),
+                'Content-Disposition' => HeaderUtils::makeDisposition($disposition, $filename, Str::ascii($filename)),
             ]);
         }
 
-        return $pdf->download(
-            'exports.salary-slip',
-            ['slip' => $slip, 'employeeData' => $employeeData, 'organization' => $slip->organization],
-            $filename,
-        );
+        $data = ['slip' => $slip, 'employeeData' => $employeeData, 'organization' => $slip->organization];
+
+        return $request->boolean('inline')
+            ? $pdf->stream('exports.salary-slip', $data, $filename)
+            : $pdf->download('exports.salary-slip', $data, $filename);
     }
 }

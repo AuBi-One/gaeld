@@ -103,14 +103,17 @@ class AppServiceProvider extends ServiceProvider
             ->registerColumn(SalarySlip::class, 'journal_entry_id', fn (SalarySlip $slip): JournalEntryReference => new JournalEntryReference(
                 __('app.journal_source_salary_slip', ['period' => $slip->month_label, 'employee' => $slip->employee_name]),
                 route('payroll.salarySlips.show', $slip),
+                route('payroll.salarySlips.pdf', [$slip, 'inline' => 1]),
             ), ['employee' => fn ($query) => $query->withTrashed()])
             ->registerColumn(Invoice::class, 'journal_entry_id', fn (Invoice $invoice): JournalEntryReference => new JournalEntryReference(
                 __('app.journal_source_invoice', ['number' => $invoice->number]),
                 route('invoices.show', $invoice),
+                $invoice->justificatif_path ? route('invoices.justificatif.download', [$invoice, 'inline' => 1]) : null,
             ))
             ->registerColumn(InvoicePayment::class, 'journal_entry_id', fn (InvoicePayment $payment): JournalEntryReference => new JournalEntryReference(
                 __('app.journal_source_invoice_payment', ['number' => $payment->invoice->number ?? $payment->reference]),
                 $payment->invoice->trashed() ? null : route('invoices.show', $payment->invoice_id),
+                $payment->invoice->justificatif_path && ! $payment->invoice->trashed() ? route('invoices.justificatif.download', [$payment->invoice_id, 'inline' => 1]) : null,
             ), ['invoice' => fn ($query) => $query->withTrashed()]));
         $this->app->singleton(
             ReceiptOcrInterface::class,

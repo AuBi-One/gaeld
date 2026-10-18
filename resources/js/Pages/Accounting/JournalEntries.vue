@@ -243,6 +243,13 @@ function lineError(index, field) {
   return form.errors[`lines.${index}.${field}`]
 }
 
+// The entry's own justificatif, or — when it belongs to an invoice/salary slip — that record's document.
+function justificatifUrl(entry) {
+  if (entry.source?.documentUrl) return entry.source.documentUrl
+  if (!entry.source && entry.justificatif_path) return `/accounting/journal-entries/${entry.id}/justificatif?inline=1`
+  return null
+}
+
 // Post action
 const postingEntry = ref(null)
 
@@ -400,6 +407,11 @@ function doDelete() {
           </template>
           <template #cell-actions="{ row }">
             <div class="flex justify-end gap-1">
+              <Tooltip v-if="justificatifUrl(row)" :content="t('view_justificatif')" side="left">
+                <Button variant="ghost" size="icon" as="a" :href="justificatifUrl(row)" target="_blank">
+                  <Paperclip class="h-4 w-4" />
+                </Button>
+              </Tooltip>
               <!-- Draft entry actions -->
               <template v-if="!row.is_posted">
                 <Tooltip v-if="can.edit && !row.source" :content="t('edit')" side="left">
