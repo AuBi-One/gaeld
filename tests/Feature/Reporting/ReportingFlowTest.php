@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Reporting;
 
+use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\VatRate;
@@ -48,7 +49,7 @@ class ReportingFlowTest extends TestCase
         ]);
         Account::create([
             'organization_id' => $this->organization->id,
-            'code' => '3000',
+            'code' => AccountCode::REVENUE,
             'name' => 'Revenue',
             'type' => AccountType::Revenue->value,
         ]);

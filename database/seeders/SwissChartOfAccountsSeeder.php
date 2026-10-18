@@ -58,9 +58,9 @@ class SwissChartOfAccountsSeeder extends Seeder
             ['code' => '2970', 'name' => 'Owner Drawings', 'type' => AccountType::Equity->value],
 
             // Class 3: Revenue (Ertrag)
-            ['code' => '3000', 'name' => 'Revenue from Services', 'type' => AccountType::Revenue->value],
+            ['code' => '3000', 'name' => 'Revenue from Manufactured Goods', 'type' => AccountType::Revenue->value],
             ['code' => '3200', 'name' => 'Revenue from Products', 'type' => AccountType::Revenue->value],
-            ['code' => '3400', 'name' => 'Other Revenue', 'type' => AccountType::Revenue->value],
+            ['code' => '3400', 'name' => 'Revenue from Services', 'type' => AccountType::Revenue->value],
             ['code' => '3800', 'name' => 'Discounts Given', 'type' => AccountType::Revenue->value],
             ['code' => '3900', 'name' => 'Revenue Corrections', 'type' => AccountType::Revenue->value],
 

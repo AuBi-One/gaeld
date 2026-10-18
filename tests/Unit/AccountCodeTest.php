@@ -11,7 +11,7 @@ class AccountCodeTest extends TestCase
     {
         $this->assertSame('1100', AccountCode::ACCOUNTS_RECEIVABLE);
         $this->assertSame('1020', AccountCode::BANK_CASH);
-        $this->assertSame('3000', AccountCode::REVENUE);
+        $this->assertSame('3400', AccountCode::REVENUE);
         $this->assertSame('6530', AccountCode::GENERAL_EXPENSE);
         $this->assertSame('3', AccountCode::REVENUE_PREFIX);
         $this->assertSame(['4', '5', '6'], AccountCode::EXPENSE_PREFIXES);

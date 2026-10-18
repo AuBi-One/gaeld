@@ -438,7 +438,7 @@ class DemoDataSeeder extends Seeder
             'reference' => 'BNK-2026-001',
         ]);
 
-        $this->bankingService->postBankTransaction($bnkTx1, '3000');
+        $this->bankingService->postBankTransaction($bnkTx1, '3400');
 
         $bnkTx2 = BankTransaction::create([
             'bank_account_id' => $bankAccount->id,
@@ -547,6 +547,6 @@ class DemoDataSeeder extends Seeder
             'reference' => 'ALP-BNK-001',
         ]);
 
-        $this->bankingService->postBankTransaction($bnkTx1, '3000');
+        $this->bankingService->postBankTransaction($bnkTx1, '3400');
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Invoicing;
 
+use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\AccountType;
@@ -48,7 +49,7 @@ class InvoiceJournalEntryDeletionTest extends TestCase
     {
         parent::setUp();
         $this->setUpOrganization();
-        foreach (['1100' => AccountType::Asset, '3000' => AccountType::Revenue, '1020' => AccountType::Asset, '2200' => AccountType::Liability] as $code => $type) {
+        foreach (['1100' => AccountType::Asset, AccountCode::REVENUE => AccountType::Revenue, '1020' => AccountType::Asset, '2200' => AccountType::Liability] as $code => $type) {
             $this->accounts[$code] = Account::create(['organization_id' => $this->org->id, 'code' => $code, 'name' => "Account {$code}", 'type' => $type->value]);
         }
         $this->vatRate = VatRate::create(['organization_id' => $this->org->id, 'name' => 'Standard', 'rate' => 8.10, 'code' => 'NORMAL', 'is_default' => true]);
@@ -82,7 +83,7 @@ class InvoiceJournalEntryDeletionTest extends TestCase
         $invoice = $this->createInvoice();
         $entry = app(LedgerService::class)->postEntry($this->org->id, new JournalEntryData('2026-03-16', 'AT-42', 'Imported invoice', [
             new JournalLineData((string) $this->accounts['1100']->id, '1621.50', '0'),
-            new JournalLineData((string) $this->accounts['3000']->id, '0', '1500.00'),
+            new JournalLineData((string) $this->accounts[AccountCode::REVENUE]->id, '0', '1500.00'),
             new JournalLineData((string) $this->accounts['2200']->id, '0', '121.50'),
         ]));
         $invoice->update(['status' => InvoiceStatus::Sent, 'journal_entry_id' => $entry->id]);

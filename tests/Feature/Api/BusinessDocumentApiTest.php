@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\VatRate;
@@ -121,7 +122,7 @@ class BusinessDocumentApiTest extends SecurityTestCase
         ]);
         Account::create([
             'organization_id' => $this->orgA->id,
-            'code' => '3000',
+            'code' => AccountCode::REVENUE,
             'name' => 'Revenue',
             'type' => AccountType::Revenue->value,
         ]);
@@ -175,7 +176,7 @@ class BusinessDocumentApiTest extends SecurityTestCase
         ]);
         Account::create([
             'organization_id' => $this->orgA->id,
-            'code' => '3000',
+            'code' => AccountCode::REVENUE,
             'name' => 'Revenue',
             'type' => AccountType::Revenue->value,
         ]);
@@ -403,7 +404,7 @@ class BusinessDocumentApiTest extends SecurityTestCase
         ]);
         Account::create([
             'organization_id' => $this->orgA->id,
-            'code' => '3000',
+            'code' => AccountCode::REVENUE,
             'name' => 'Revenue',
             'type' => AccountType::Revenue->value,
         ]);

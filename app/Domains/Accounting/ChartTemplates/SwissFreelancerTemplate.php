@@ -89,10 +89,10 @@ class SwissFreelancerTemplate implements ChartTemplateInterface
 
             // Class 3: Revenue
             ['code' => '3000', 'type' => AccountType::Revenue->value, 'name' => [
-                'en' => 'Revenue from Services', 'fr' => 'Produits des prestations de services', 'de' => 'Dienstleistungserlöse', 'it' => 'Ricavi da prestazioni di servizi', 'rm' => 'Entradas da prestaziuns da servetschs',
+                'en' => 'Revenue from Manufactured Goods', 'fr' => 'Ventes de produits fabriqués', 'de' => 'Produktionserlöse', 'it' => 'Ricavi di produzione', 'rm' => 'Entradas da productura',
             ]],
             ['code' => '3400', 'type' => AccountType::Revenue->value, 'name' => [
-                'en' => 'Other Revenue', 'fr' => 'Autres produits', 'de' => 'Übrige Erlöse', 'it' => 'Altri ricavi', 'rm' => 'Autras entradas',
+                'en' => 'Revenue from Services', 'fr' => 'Vente de prestations', 'de' => 'Dienstleistungserlöse', 'it' => 'Ricavi da prestazioni di servizi', 'rm' => 'Entradas da prestaziuns da servetschs',
             ]],
             ['code' => '3900', 'type' => AccountType::Revenue->value, 'name' => [
                 'en' => 'Revenue Corrections', 'fr' => 'Corrections de produits', 'de' => 'Erlösberichtigungen', 'it' => 'Rettifiche di ricavi', 'rm' => 'Correcturas d\'entradas',

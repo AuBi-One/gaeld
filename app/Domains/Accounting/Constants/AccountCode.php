@@ -10,7 +10,7 @@ final class AccountCode
 
     public const VAT_INPUT = '1170';
 
-    public const REVENUE = '3000';
+    public const REVENUE = '3400';
 
     public const ROUNDING_DIFFERENCE = '3900';
 

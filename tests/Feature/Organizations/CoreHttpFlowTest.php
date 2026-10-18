@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Organizations;
 
+use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\VatRate;
@@ -47,6 +48,12 @@ class CoreHttpFlowTest extends TestCase
             'organization_id' => $this->organization->id,
             'code' => '3000',
             'name' => 'Revenue',
+            'type' => AccountType::Revenue->value,
+        ]);
+        Account::create([
+            'organization_id' => $this->organization->id,
+            'code' => AccountCode::REVENUE,
+            'name' => 'Revenue (Services)',
             'type' => AccountType::Revenue->value,
         ]);
         Account::create([

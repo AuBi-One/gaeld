@@ -118,13 +118,13 @@ class SwissSmeTemplate implements ChartTemplateInterface
 
             // Class 3: Revenue (Ertrag)
             ['code' => '3000', 'type' => AccountType::Revenue->value, 'name' => [
-                'en' => 'Revenue from Services', 'fr' => 'Produits des prestations de services', 'de' => 'Dienstleistungserlöse', 'it' => 'Ricavi da prestazioni di servizi', 'rm' => 'Entradas da prestaziuns da servetschs',
+                'en' => 'Revenue from Manufactured Goods', 'fr' => 'Ventes de produits fabriqués', 'de' => 'Produktionserlöse', 'it' => 'Ricavi di produzione', 'rm' => 'Entradas da productura',
             ]],
             ['code' => '3200', 'type' => AccountType::Revenue->value, 'name' => [
                 'en' => 'Revenue from Products', 'fr' => 'Produits des ventes de marchandises', 'de' => 'Handelserlöse', 'it' => 'Ricavi da vendite di merci', 'rm' => 'Entradas da venditas da products',
             ]],
             ['code' => '3400', 'type' => AccountType::Revenue->value, 'name' => [
-                'en' => 'Other Revenue', 'fr' => 'Autres produits', 'de' => 'Übrige Erlöse', 'it' => 'Altri ricavi', 'rm' => 'Autras entradas',
+                'en' => 'Revenue from Services', 'fr' => 'Vente de prestations', 'de' => 'Dienstleistungserlöse', 'it' => 'Ricavi da prestazioni di servizi', 'rm' => 'Entradas da prestaziuns da servetschs',
             ]],
             ['code' => '3800', 'type' => AccountType::Revenue->value, 'name' => [
                 'en' => 'Discounts Given', 'fr' => 'Escomptes accordés', 'de' => 'Skonti', 'it' => 'Sconti concessi', 'rm' => 'Rabats concedids',

@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\AccountType;
@@ -64,6 +65,10 @@ class LedgerServiceTest extends TestCase
         $this->accounts['revenue'] = Account::create([
             'organization_id' => $this->organization->id,
             'code' => '3000', 'name' => 'Revenue from Services', 'type' => AccountType::Revenue->value,
+        ]);
+        $this->accounts['revenue_services'] = Account::create([
+            'organization_id' => $this->organization->id,
+            'code' => AccountCode::REVENUE, 'name' => 'Revenue from Services', 'type' => AccountType::Revenue->value,
         ]);
         $this->accounts['software'] = Account::create([
             'organization_id' => $this->organization->id,

@@ -5,6 +5,7 @@ namespace Tests\Feature\Accounting;
 use App\Domains\Accounting\Actions\PostSocialChargesAction;
 use App\Domains\Accounting\Actions\PostVatSettlementAction;
 use App\Domains\Accounting\Actions\YearEndClosingAction;
+use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\AccountType;
@@ -602,7 +603,7 @@ class FiscalYearCoherenceTest extends TestCase
             ['2272', 'LPP Payable',                 AccountType::Liability],
             ['2800', 'Share Capital',               AccountType::Equity],
             ['2900', 'Annual Result',               AccountType::Equity],
-            ['3000', 'Revenue – Services',          AccountType::Revenue],
+            [AccountCode::REVENUE, 'Revenue – Services',          AccountType::Revenue],
             ['3900', 'Rounding Difference',         AccountType::Revenue],
             ['5000', 'Salaries',                    AccountType::Expense],
             ['5700', 'Social Security Charges',     AccountType::Expense],
@@ -635,7 +636,7 @@ class FiscalYearCoherenceTest extends TestCase
         $this->lppPayable = $map['2272'];
         $this->shareCapital = $map['2800'];
         $this->annualResult = $map['2900'];
-        $this->revenue = $map['3000'];
+        $this->revenue = $map[AccountCode::REVENUE];
         $this->rounding = $map['3900'];
         $this->salaries = $map['5000'];
         $this->socialCharges = $map['5700'];

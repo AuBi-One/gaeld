@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Invoicing;
 
+use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
@@ -49,7 +50,7 @@ class InvoiceFlowTest extends TestCase
 
         Account::create([
             'organization_id' => $this->org->id,
-            'code' => '3000',
+            'code' => AccountCode::REVENUE,
             'name' => 'Revenue',
             'type' => AccountType::Revenue->value,
         ]);
