@@ -28,8 +28,10 @@ class JournalEntryDocumentController extends Controller
             $journalEntry->update(['justificatif_path' => null]);
         }
 
-        return redirect()->route('accounting.journal-entries.show', $journalEntry)
-            ->with('success', __('app.justificatif_removed'));
+        // Back to wherever the request came from: the entry's own page, or the
+        // list's create/edit modal (a different page component — a redirect to
+        // the show route would navigate away from it and close the modal).
+        return back()->with('success', __('app.justificatif_removed'));
     }
 
     public function downloadJustificatif(JournalEntry $journalEntry, Request $request): StreamedResponse|RedirectResponse

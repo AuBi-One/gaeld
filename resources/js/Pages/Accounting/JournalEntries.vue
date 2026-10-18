@@ -15,13 +15,14 @@ import ConfirmDialog from '@/Components/UI/ConfirmDialog.vue'
 import Button from '@/Components/UI/Button.vue'
 import FormInput from '@/Components/UI/FormInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
+import FileUpload from '@/Components/UI/FileUpload.vue'
 import MultiSelect from '@/Components/UI/MultiSelect.vue'
 import HelpText from '@/Components/HelpText.vue'
 import EmptyState from '@/Components/UI/EmptyState.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
 import { buildAccountOptions } from '@/lib/accountOptions'
-import { BookText, Plus, Check, RotateCcw, Trash2, Pencil, HelpCircle, ChevronsUpDown, ChevronsDownUp, X } from 'lucide-vue-next'
+import { BookText, Plus, Check, RotateCcw, Trash2, Pencil, HelpCircle, ChevronsUpDown, ChevronsDownUp, X, Paperclip, Eye } from 'lucide-vue-next'
 
 const props = defineProps({
   entries: Object,
@@ -153,7 +154,21 @@ const form = useForm({
     { account_id: '', debit: '0.00', credit: '0.00', description: '' },
     { account_id: '', debit: '0.00', credit: '0.00', description: '' },
   ],
+  justificatif: null,
 })
+
+function onJustificatifChange(file) {
+  form.justificatif = file ?? null
+}
+
+function removeExistingJustificatif() {
+  if (!editingEntry.value) return
+  router.delete(`/accounting/journal-entries/${editingEntry.value.id}/justificatif`, {
+    preserveScroll: true,
+    preserveState: true,
+    onSuccess: () => { editingEntry.value.justificatif_path = null },
+  })
+}
 
 function openCreate() {
   editingEntry.value = null
@@ -164,16 +179,17 @@ function openCreate() {
     { account_id: '', debit: '0.00', credit: '0.00', description: '' },
     { account_id: '', debit: '0.00', credit: '0.00', description: '' },
   ]
+  form.justificatif = null
   showForm.value = true
 }
 
 function openEdit(entry) {
   editingEntry.value = entry
-  
+
   // Format date to YYYY-MM-DD for date input (handle both string and object dates)
   const dateStr = typeof entry.date === 'string' ? entry.date : entry.date?.toString()
   form.date = dateStr ? dateStr.split('T')[0].split(' ')[0] : new Date().toISOString().split('T')[0]
-  
+
   form.reference = entry.reference || ''
   form.description = entry.description || ''
   form.is_posted = entry.is_posted
@@ -183,6 +199,7 @@ function openEdit(entry) {
     credit: String(line.credit || '0.00'),
     description: line.description || '',
   }))
+  form.justificatif = null
   showForm.value = true
 }
 
@@ -191,11 +208,13 @@ function submitForm(post = true) {
 
   if (editingEntry.value) {
     form.put(`/accounting/journal-entries/${editingEntry.value.id}`, {
+      forceFormData: true,
       onSuccess: () => { showForm.value = false },
       preserveScroll: true,
     })
   } else {
     form.post('/accounting/journal-entries', {
+      forceFormData: true,
       onSuccess: () => { showForm.value = false },
       preserveScroll: true,
     })
@@ -572,6 +591,47 @@ function doDelete() {
           </div>
 
           <div v-if="form.errors.lines" class="text-xs text-[hsl(var(--destructive))]">{{ form.errors.lines }}</div>
+
+          <!-- Justificatif -->
+          <div>
+            <FileUpload
+              size="compact"
+              :label="t('justificatif')"
+              :error="form.errors.justificatif"
+              @change="onJustificatifChange"
+            >
+              <p v-if="editingEntry?.justificatif_path && !form.justificatif" class="text-xs text-[hsl(var(--muted-foreground))]">
+                {{ t('justificatif_attached') }}
+              </p>
+            </FileUpload>
+            <ul v-if="editingEntry?.justificatif_path" class="mt-2 space-y-1">
+              <li class="flex items-center justify-between rounded-md border border-[hsl(var(--border))] px-3 py-2 text-sm">
+                <span class="flex items-center gap-1.5 text-[hsl(var(--muted-foreground))]">
+                  <Paperclip class="h-4 w-4" />
+                  {{ t('justificatif') }}
+                </span>
+                <span class="flex items-center gap-3">
+                  <a
+                    :href="`/accounting/journal-entries/${editingEntry.id}/justificatif?inline=1`"
+                    target="_blank"
+                    class="inline-flex items-center gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                  >
+                    <Eye class="h-4 w-4" />
+                    {{ t('view_justificatif') }}
+                  </a>
+                  <button
+                    v-if="!editingEntry.is_posted"
+                    type="button"
+                    class="inline-flex items-center gap-1 text-[hsl(var(--destructive))] hover:underline"
+                    @click="removeExistingJustificatif"
+                  >
+                    <Trash2 class="h-4 w-4" />
+                    {{ t('remove') }}
+                  </button>
+                </span>
+              </li>
+            </ul>
+          </div>
 
           <!-- Actions -->
           <div class="flex justify-end gap-2 pt-2">

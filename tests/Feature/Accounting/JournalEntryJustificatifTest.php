@@ -108,8 +108,9 @@ class JournalEntryJustificatifTest extends TestCase
         ]);
 
         $this->actAsOrg()
+            ->from(route('accounting.journal'))
             ->delete(route('accounting.journal-entries.justificatif.remove', $entry))
-            ->assertRedirect(route('accounting.journal-entries.show', $entry));
+            ->assertRedirect(route('accounting.journal'));
 
         $this->assertNull($entry->fresh()->justificatif_path);
         Storage::disk('local')->assertMissing('justificatifs/'.$this->organization->id.'/receipt.pdf');
