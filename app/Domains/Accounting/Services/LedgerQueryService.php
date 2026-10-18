@@ -155,7 +155,12 @@ class LedgerQueryService
             })
             ->groupBy('accounts.id', 'accounts.code', 'accounts.name', 'accounts.type')
             ->orderBy('accounts.code')
-            ->selectRaw('accounts.id, accounts.code, accounts.name, accounts.type, COALESCE(SUM(transaction_lines.debit), 0) as total_debit, COALESCE(SUM(transaction_lines.credit), 0) as total_credit');
+            // journal_entries.id is only set when the second join matched (posted, within asOfDate):
+            // a transaction_lines row from an unposted or later entry must not count, even though
+            // the first (unconditional) join still brings the row in for grouping.
+            ->selectRaw('accounts.id, accounts.code, accounts.name, accounts.type, '
+                .'COALESCE(SUM(CASE WHEN journal_entries.id IS NOT NULL THEN transaction_lines.debit ELSE 0 END), 0) as total_debit, '
+                .'COALESCE(SUM(CASE WHEN journal_entries.id IS NOT NULL THEN transaction_lines.credit ELSE 0 END), 0) as total_credit');
     }
 
     /**
@@ -177,12 +182,18 @@ class LedgerQueryService
                 : bcsub($totalCredit, $totalDebit, 2);
 
             if (bccomp($balance, '0', 2) !== 0) {
+                // A balance on the account's normal side shows there; a balance on the opposite
+                // side (e.g. an overdrawn asset, or migration suspense left in credit) still has
+                // to show somewhere, or the trial balance's own totals stop balancing.
+                $onNormalSide = bccomp($balance, '0', 2) > 0;
+                $amount = $onNormalSide ? $balance : bcmul($balance, '-1', 2);
+                $debitSide = $isDebitNormal === $onNormalSide;
                 $balances[] = [
                     'account_code' => $row->code,
                     'account_name' => $row->name,
                     'account_type' => $row->type,
-                    'debit' => $isDebitNormal && bccomp($balance, '0', 2) > 0 ? $balance : '0',
-                    'credit' => ! $isDebitNormal && bccomp($balance, '0', 2) > 0 ? $balance : '0',
+                    'debit' => $debitSide ? $amount : '0',
+                    'credit' => ! $debitSide ? $amount : '0',
                 ];
             }
         }

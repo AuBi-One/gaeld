@@ -100,6 +100,71 @@ class LedgerInvariantsTest extends TestCase
         $this->assertEquals($totalDebit, $totalCredit, 'Trial balance must have equal debits and credits');
     }
 
+    public function test_trial_balance_excludes_draft_entries(): void
+    {
+        $this->ledgerService->createDraft($this->orgA->id, new JournalEntryData(
+            date: '2026-03-15',
+            reference: 'DRAFT-1',
+            description: 'Not yet posted',
+            lines: [
+                new JournalLineData(accountId: $this->accountsA['ar']->id, debit: '500.00', credit: '0'),
+                new JournalLineData(accountId: $this->accountsA['revenue']->id, debit: '0', credit: '500.00'),
+            ],
+        ));
+
+        $trialBalance = $this->queryService->trialBalance($this->orgA->id);
+
+        $this->assertSame([], $trialBalance, 'A draft entry must not reach the trial balance');
+    }
+
+    /**
+     * An account balance on the opposite of its normal side (e.g. a debit-normal account left in
+     * credit) must still appear — on the other column — instead of being silently dropped, which
+     * would make the trial balance's own totals stop balancing.
+     */
+    public function test_trial_balance_shows_a_balance_on_the_opposite_of_its_normal_side(): void
+    {
+        $this->ledgerService->postEntry($this->orgA->id, new JournalEntryData(
+            date: '2026-03-15',
+            reference: 'OPP-1',
+            description: 'Small receivable',
+            lines: [
+                new JournalLineData(accountId: $this->accountsA['ar']->id, debit: '100.00', credit: '0'),
+                new JournalLineData(accountId: $this->accountsA['revenue']->id, debit: '0', credit: '100.00'),
+            ],
+        ));
+        $this->ledgerService->postEntry($this->orgA->id, new JournalEntryData(
+            date: '2026-03-16',
+            reference: 'OPP-2',
+            description: 'A credit note larger than the balance, leaving AR in credit',
+            lines: [
+                new JournalLineData(accountId: $this->accountsA['revenue']->id, debit: '300.00', credit: '0'),
+                new JournalLineData(accountId: $this->accountsA['ar']->id, debit: '0', credit: '300.00'),
+            ],
+        ));
+
+        $trialBalance = $this->queryService->trialBalance($this->orgA->id);
+        $ar = null;
+        $revenue = null;
+        foreach ($trialBalance as $row) {
+            if ($row['account_code'] === '1100') {
+                $ar = $row;
+            } elseif ($row['account_code'] === '3000') {
+                $revenue = $row;
+            }
+        }
+        $this->assertNotNull($ar, 'Accounts Receivable must still appear, in credit');
+        $this->assertNotNull($revenue, 'Revenue must still appear, in debit');
+        $this->assertSame('0', $ar['debit']);
+        $this->assertSame('200.00', $ar['credit']);
+        $this->assertSame('200.00', $revenue['debit']);
+        $this->assertSame('0', $revenue['credit']);
+
+        $totalDebit = array_sum(array_column($trialBalance, 'debit'));
+        $totalCredit = array_sum(array_column($trialBalance, 'credit'));
+        $this->assertEquals($totalDebit, $totalCredit, 'Trial balance must have equal debits and credits');
+    }
+
     public function test_compound_entry_with_multiple_lines_balances(): void
     {
         // Revenue split across multiple accounts
