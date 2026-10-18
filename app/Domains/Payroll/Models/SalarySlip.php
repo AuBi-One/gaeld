@@ -141,7 +141,7 @@ class SalarySlip extends Model
     private const NON_RATE_DEDUCTION_KEYS = [
         'total_employee', 'total_employer', 'net_salary', 'base_salary',
         'thirteenth_salary', 'unpaid_leave_days', 'unpaid_leave_amount',
-        'reimbursement_amount', 'source_tax',
+        'reimbursement_amount', 'source_tax', 'source',
     ];
 
     /**
@@ -170,7 +170,7 @@ class SalarySlip extends Model
             $key = (string) preg_replace('/_(employee|employer)$/', '', (string) $code);
             $rows[$key] ??= ['name' => $names[$code] ?? $key, 'employee' => '0', 'employer' => '0'];
             $side = str_ends_with((string) $code, '_employer') ? 'employer' : 'employee';
-            $rows[$key][$side] = (string) $amount;
+            $rows[$key][$side] = is_numeric($amount) ? (string) $amount : '0';
         }
 
         return array_values($rows);
