@@ -23,20 +23,21 @@
     table.addresses td { vertical-align: top; padding: 0; }
     /* The model places the employee with tabs (12.49 mm stops): 106.5 mm from the page edge. */
     td.employee { width: 84.45mm; }
+    .employee-name { padding-left: 23mm; font-size: 14pt; font-weight: bold; }
     a.mail { color: #1155CC; text-decoration: underline; }
-    table.title { margin-top: 9mm; }
+    table.title { margin-top: 18.5mm; }
     table.title td { padding: 0; vertical-align: baseline; }
     table.title td.label { width: 49.96mm; }   /* the model tabs to the 4th stop (No AVS row); all rows aligned there */
     table.title .big { font-size: 14pt; font-weight: bold; }
-    table.slip { width: 172.5mm; margin-top: 5mm; }
+    table.slip { width: 172.5mm; margin-top: 8mm; margin-bottom: 3mm; font-size: 12pt; }
     table.slip td { border: 0.35mm solid #CCCCCC; padding: 0.9mm 1.76mm; height: 3.5mm; vertical-align: top; }
     table.slip td.num { text-align: right; white-space: nowrap; }
     table.slip tr.head td { background: #EFEFEF; font-weight: bold; }
-    table.slip tr.head td.small { font-size: 8pt; }
+    table.slip tr.head td.small { font-size: 9pt; }
     table.slip tr.bold td { font-weight: bold; }
-    table.slip tr.net td { background: #EFEFEF; font-weight: bold; font-size: 12pt; }
-    table.slip td.insurance { font-size: 10pt; }
-    table.payment { margin-top: 5mm; }
+    table.slip tr.net td { background: #EFEFEF; font-weight: bold; font-size: 13pt; }
+    table.slip td.insurance { font-size: 11pt; }
+    table.payment { margin-top: 5mm; font-size: 13pt; }
     table.payment td { padding: 0; vertical-align: top; }
     table.payment td.label { width: 49.96mm; font-weight: bold; }
 </style>
@@ -55,7 +56,7 @@
             @if($letterhead->email)<div><a class="mail" href="mailto:{{ $letterhead->email }}">{{ $letterhead->email }}</a></div>@endif
         </td>
         <td class="employee">
-            <div>{{ $employeeName }}</div>
+            <div class="employee-name">{{ $employeeName }}</div>
         </td>
     </tr>
 </table>
