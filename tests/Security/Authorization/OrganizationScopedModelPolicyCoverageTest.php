@@ -54,7 +54,7 @@ class OrganizationScopedModelPolicyCoverageTest extends TestCase
         RecurringExpense::class => 'RecurringExpenseController has no dedicated policy yet — tracked as follow-up.',
         InvoicePayment::class => 'Managed exclusively through InvoiceLifecycleController, authorized via the parent Invoice.',
         OrganizationInvitation::class => 'InvitationController authorizes against the parent Organization ("manageUsers" ability), not the invitation itself.',
-        DeductionRate::class => 'No dedicated policy yet — tracked as follow-up.',
+        DeductionRate::class => 'Lines of a DeductionRateSet, authorized via DeductionRateSetPolicy.',
     ];
 
     public function test_every_organization_scoped_model_has_a_resolvable_policy(): void

@@ -234,6 +234,8 @@ function baseNavigation() {
         { key: 'salary_slips', href: '/payroll/salary-slips' },
         ...(can('payroll.create') ? [
           { key: 'run_payroll', href: '/payroll/run' },
+        ] : []),
+        ...(can('payroll.view') ? [
           { key: 'deduction_rates', href: '/payroll/deduction-rates' },
         ] : []),
         ...(features.value.withholding_tax ? [

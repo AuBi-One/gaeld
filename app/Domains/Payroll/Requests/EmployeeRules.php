@@ -3,8 +3,10 @@
 namespace App\Domains\Payroll\Requests;
 
 use App\Domains\Organizations\Services\CurrentOrganization;
+use App\Domains\Payroll\Queries\DeductionRateSetQuery;
 use App\Support\FeatureFlag;
 use App\Support\Rules\Iban;
+use Illuminate\Validation\Rule;
 
 trait EmployeeRules
 {
@@ -13,6 +15,11 @@ trait EmployeeRules
      */
     public function rules(): array
     {
+        $currentOrganization = app(CurrentOrganization::class);
+        // The code must name an existing rate set; once the organization has
+        // one, every employee needs a code (no silent built-in defaults).
+        $rateCodes = $currentOrganization->isBound() ? DeductionRateSetQuery::codes() : [];
+
         $rules = [
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
@@ -23,12 +30,11 @@ trait EmployeeRules
             'exit_date' => ['nullable', 'date', 'after_or_equal:entry_date'],
             'gross_salary' => ['required', 'numeric', 'min:0'],
             'is_active' => ['boolean'],
-            'deduction_rate_code' => ['nullable', 'string', 'max:50'],
+            'deduction_rate_code' => [$rateCodes === [] ? 'nullable' : 'required', 'string', 'max:50', Rule::in($rateCodes)],
             'is_source_tax_subject' => ['boolean'],
             'has_thirteenth_salary' => ['boolean'],
         ];
 
-        $currentOrganization = app(CurrentOrganization::class);
         $withholdingTaxEnabled = $currentOrganization->isBound()
             ? FeatureFlag::enabledForOrg('withholding_tax', $currentOrganization->get())
             : FeatureFlag::enabled('withholding_tax');

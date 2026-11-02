@@ -3,6 +3,7 @@
 namespace App\Domains\Payroll\Actions;
 
 use App\Domains\Organizations\Models\Organization;
+use App\Domains\Payroll\Models\DeductionRate;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
 use App\Support\Money;
@@ -17,10 +18,9 @@ final class GenerateSalaryCertificateAction
      *     year: int,
      *     months_covered: int,
      *     gross_salary: string,
-     *     avs_employee: string,
-     *     ac_employee: string,
-     *     aanp_employee: string,
-     *     lpp_employee: string,
+     *     social_contributions: string,
+     *     pension_contributions: string,
+     *     other_deductions: string,
      *     source_tax: string,
      *     reimbursements: string,
      *     net_salary: string,
@@ -51,6 +51,7 @@ final class GenerateSalaryCertificateAction
         $employeeDeductions = Money::add($employeeDeductions, $sourceTax);
         $netSalary = Money::subtract($grossSalary, $employeeDeductions);
         $totalPaid = Money::add($netSalary, $reimbursements);
+        $boxes = $this->sumEmployeeChargesByBox($slips);
 
         return [
             'employee' => $employee,
@@ -58,16 +59,45 @@ final class GenerateSalaryCertificateAction
             'year' => $year,
             'months_covered' => $slips->pluck('period_month')->unique()->count(),
             'gross_salary' => $grossSalary,
-            'avs_employee' => $this->sumDeduction($slips, 'avs_employee'),
-            'ac_employee' => $this->sumDeduction($slips, 'ac_employee'),
-            'aanp_employee' => $this->sumDeduction($slips, 'aanp_employee'),
-            'lpp_employee' => $this->sumDeduction($slips, 'lpp_employee'),
+            'social_contributions' => $boxes['9'],
+            'pension_contributions' => $boxes['10'],
+            'other_deductions' => $boxes['other'],
             'source_tax' => $sourceTax,
             'reimbursements' => $reimbursements,
             'net_salary' => $netSalary,
             'total_paid' => $totalPaid,
             'employer_charges' => $this->sumDeduction($slips, 'total_employer'),
         ];
+    }
+
+    /**
+     * Every employee charge of the slips, summed by the certificate box its
+     * rate line counts in (9: AVS/AI/APG/AC/AANP, 10: LPP), whatever its code;
+     * charges without a box are "other". The box comes from the slip's
+     * snapshot; codes without a line (e.g. imported slips) use the box of
+     * their legacy prefix.
+     *
+     * @param  Collection<int, SalarySlip>  $slips
+     * @return array{9: string, 10: string, other: string}
+     */
+    private function sumEmployeeChargesByBox(Collection $slips): array
+    {
+        $sums = ['9' => Money::zero(), '10' => Money::zero(), 'other' => Money::zero()];
+        foreach ($slips as $slip) {
+            $lines = $slip->rateLines();
+            foreach ($slip->chargeAmounts() as $code => $amount) {
+                $line = $lines[$code] ?? null;
+                $type = $line['type'] ?? (str_ends_with($code, '_employer') ? 'employer' : 'employee');
+                if ($type !== 'employee') {
+                    continue;
+                }
+                $box = $line !== null ? $line['certificate_box'] : DeductionRate::defaultCertificateBox($code, 'employee');
+                $key = in_array($box, DeductionRate::CERTIFICATE_BOXES, true) ? $box : 'other';
+                $sums[$key] = Money::add($sums[$key], $amount);
+            }
+        }
+
+        return $sums;
     }
 
     /**

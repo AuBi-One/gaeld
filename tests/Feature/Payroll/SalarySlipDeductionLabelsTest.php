@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Payroll;
 
+use App\Domains\Payroll\Actions\GenerateSalaryCertificateAction;
 use App\Domains\Payroll\Models\DeductionRateSet;
 use App\Domains\Payroll\Models\Employee;
+use App\Domains\Payroll\Models\SalarySlip;
 use App\Domains\Payroll\Services\PayrollCalculator;
+use App\Domains\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -61,7 +64,8 @@ class SalarySlipDeductionLabelsTest extends TestCase
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
             ->component('Payroll/SalarySlips/Show')
-            ->where('deductionNames.apgm_employee', 'APGM'));
+            ->where('deductionRows.0.name', 'APGM')
+            ->where('deductionRows.0.employee', $slip->deductions['apgm_employee']));
     }
 
     #[Test]
@@ -99,7 +103,7 @@ class SalarySlipDeductionLabelsTest extends TestCase
         $familyRow = collect($rows)->firstWhere('name', 'Alloc. familiales');
 
         $this->assertNotNull($familyRow, 'expected a row for the employer-only custom charge');
-        $this->assertSame('0', $familyRow['employee']);
+        $this->assertSame('0.00', $familyRow['employee']);
         $this->assertSame($slip->deductions['family_allowance_employer'], $familyRow['employer']);
     }
 
@@ -123,6 +127,128 @@ class SalarySlipDeductionLabelsTest extends TestCase
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
             ->component('Payroll/SalarySlips/Show')
-            ->has('deductionNames.avs_employee'));
+            ->where('deductionRows.0.name', 'AVS/AI/APG (employee)'));
+    }
+
+    #[Test]
+    public function the_slip_page_and_the_pdf_work_for_a_deleted_employee(): void
+    {
+        $employee = $this->employee();
+        $calculated = app(PayrollCalculator::class)->calculate($employee->fresh(), 3, 2026);
+        $calculated->save();
+        // A slip calculated before the rate snapshot existed.
+        $older = app(PayrollCalculator::class)->calculate($employee->fresh(), 4, 2026);
+        $older->deduction_snapshot = null;
+        $older->save();
+
+        $employee->delete();
+
+        foreach ([$calculated, $older] as $slip) {
+            $this->actAsOrg()->get("/payroll/salary-slips/{$slip->id}")
+                ->assertOk()
+                ->assertInertia(fn ($page) => $page->where('deductionRows.0.name', 'AVS/AI/APG (employee)'));
+            $this->actAsOrg()->get(route('payroll.salarySlips.pdf', $slip))->assertOk();
+        }
+    }
+
+    #[Test]
+    public function the_document_iban_falls_back_to_the_employee_when_the_snapshot_predates_it(): void
+    {
+        $employee = $this->employee(['iban' => 'CH9300762011623852957']);
+        $slip = app(PayrollCalculator::class)->calculate($employee->fresh(), 3, 2026);
+        // Snapshot shape before the IBAN was added to it (no `iban` key).
+        $slip->employee_snapshot = ['first_name' => 'Anna', 'last_name' => 'Klein', 'email' => null, 'ahv_number' => null, 'ahv_number_encrypted' => true];
+        $slip->save();
+
+        $this->assertSame('CH9300762011623852957', $slip->fresh()->employeeDocumentData()['iban']);
+
+        // An explicit empty IBAN in the snapshot stays empty.
+        $slip->employee_snapshot = [...$slip->employee_snapshot, 'iban' => null, 'iban_encrypted' => true];
+        $slip->save();
+        $this->assertNull($slip->fresh()->employeeDocumentData()['iban']);
+    }
+
+    #[Test]
+    public function the_annual_summary_sums_every_employee_charge_by_its_certificate_box(): void
+    {
+        $employee = $this->employee(['deduction_rate_code' => 'SPECIAL']);
+        $set = DeductionRateSet::create([
+            'organization_id' => $this->org->id, 'code' => 'SPECIAL', 'title' => 'Spécial', 'date_from' => '2026-01-01', 'date_to' => null,
+        ]);
+        foreach ([
+            // Codes created in the screen, not the four legacy keys.
+            ['name' => 'AVS/AI/APG/AC', 'code' => 'avs_ai_apg_ac_employee', 'rate' => '6.0000', 'type' => 'employee', 'certificate_box' => '9'],
+            ['name' => 'APGM', 'code' => 'apgm_employee', 'rate' => '0.5000', 'type' => 'employee', 'certificate_box' => '9'],
+            ['name' => 'Caisse de pension', 'code' => 'pension_employee', 'rate' => '7.0000', 'type' => 'employee', 'certificate_box' => '10'],
+            ['name' => 'Caisse de pension', 'code' => 'pension_employer', 'rate' => '7.0000', 'type' => 'employer'],
+            ['name' => 'Indemnité maladie', 'code' => 'ktg_employee', 'rate' => '1.0000', 'type' => 'employee'],
+        ] as $line) {
+            $set->rates()->create(['organization_id' => $this->org->id, ...$line]);
+        }
+        foreach ([3, 4] as $month) {
+            $slip = app(PayrollCalculator::class)->calculate($employee->fresh(), $month, 2026);
+            $slip->posted_at = now();
+            $slip->save();
+        }
+
+        $certificate = app(GenerateSalaryCertificateAction::class)->execute($employee->fresh(), 2026);
+
+        // 6000 a month: box 9 = 2 x (360 + 30), box 10 = 2 x 420, other = 2 x 60.
+        $this->assertSame('780.00', $certificate['social_contributions']);
+        $this->assertSame('840.00', $certificate['pension_contributions']);
+        $this->assertSame('120.00', $certificate['other_deductions']);
+        $this->assertSame('10260.00', $certificate['net_salary']);
+    }
+
+    #[Test]
+    public function the_annual_summary_uses_the_legacy_boxes_for_imported_slips(): void
+    {
+        $employee = $this->employee();
+        SalarySlip::create([
+            'organization_id' => $this->org->id, 'employee_id' => $employee->id, 'period_month' => 1, 'period_year' => 2026,
+            'gross_salary' => '6000.00', 'net_salary' => '5300.00', 'posted_at' => now(),
+            'deductions' => ['avs_employee' => '318.00', 'aanp_employee' => '60.00', 'lpp_employee' => '300.00', 'apgm_employee' => '22.00', 'lpp_employer' => '300.00', 'total_employee' => '700.00', 'total_employer' => '300.00', 'net_salary' => '5300.00', 'source' => 'imported'],
+        ]);
+
+        $certificate = app(GenerateSalaryCertificateAction::class)->execute($employee->fresh(), 2026);
+
+        $this->assertSame('378.00', $certificate['social_contributions']);
+        $this->assertSame('300.00', $certificate['pension_contributions']);
+        $this->assertSame('22.00', $certificate['other_deductions']);
+    }
+
+    #[Test]
+    public function an_employee_viewing_their_own_slip_does_not_get_the_rate_snapshot(): void
+    {
+        $user = User::factory()->create(['onboarding_completed_at' => now()]);
+        $this->org->users()->attach($user->id, ['role' => 'employee']);
+        $this->assignOrganizationRole($user, $this->org, 'employee');
+        $employee = $this->employee(['user_id' => $user->id]);
+        $slip = app(PayrollCalculator::class)->calculate($employee->fresh(), 3, 2026);
+        $slip->posted_at = now();
+        $slip->save();
+
+        $this->actingAs($user)->withSession(['current_organization_id' => $this->org->id])
+            ->get("/payroll/salary-slips/{$slip->id}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->missing('slip.deduction_snapshot')->has('deductionRows'));
+
+        // A payroll manager still sees it.
+        $this->actAsOrg()->get("/payroll/salary-slips/{$slip->id}")
+            ->assertInertia(fn ($page) => $page->has('slip.deduction_snapshot'));
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function employee(array $attributes = []): Employee
+    {
+        return Employee::create([
+            'organization_id' => $this->org->id,
+            'first_name' => 'Anna',
+            'last_name' => 'Klein',
+            'entry_date' => '2025-01-01',
+            'gross_salary' => '6000.00',
+            'is_active' => true,
+            ...$attributes,
+        ]);
     }
 }

@@ -178,7 +178,7 @@ class DeductionRateTest extends TestCase
         $response = $this->actAsOrg()->post('/payroll/deduction-rates', [
             'deduction_rate_set_id' => $this->set->id,
             'name' => 'AVS',
-            'code' => 'avs_employee_custom',
+            'code' => 'avs_custom_employee',
             'rate' => '5.3000',
             'type' => 'employee',
             'account_id' => $account->id,
@@ -187,7 +187,7 @@ class DeductionRateTest extends TestCase
         $response->assertRedirect();
         $this->assertDatabaseHas('deduction_rates', [
             'deduction_rate_set_id' => $this->set->id,
-            'code' => 'avs_employee_custom',
+            'code' => 'avs_custom_employee',
             'account_id' => $account->id,
         ]);
     }
@@ -205,14 +205,14 @@ class DeductionRateTest extends TestCase
         $response = $this->actAsOrg()->post('/payroll/deduction-rates', [
             'deduction_rate_set_id' => $this->set->id,
             'name' => 'AVS',
-            'code' => 'avs_employee_custom',
+            'code' => 'avs_custom_employee',
             'rate' => '5.3000',
             'type' => 'employee',
             'account_id' => $foreignAccount->id,
         ]);
 
         $response->assertSessionHasErrors('account_id');
-        $this->assertDatabaseMissing('deduction_rates', ['code' => 'avs_employee_custom']);
+        $this->assertDatabaseMissing('deduction_rates', ['code' => 'avs_custom_employee']);
     }
 
     public function test_it_rejects_a_set_from_another_organization(): void
@@ -289,5 +289,72 @@ class DeductionRateTest extends TestCase
 
         $response->assertNotFound();
         $this->assertDatabaseHas('deduction_rates', ['id' => $foreignRate->id]);
+    }
+
+    public function test_it_rejects_reserved_codes_and_codes_whose_suffix_is_not_the_side(): void
+    {
+        foreach ([
+            ['code' => 'total_employee', 'type' => 'employee'],
+            ['code' => 'net_salary', 'type' => 'employee'],
+            ['code' => 'source_tax', 'type' => 'employee'],
+            ['code' => 'ktg', 'type' => 'employee'],
+            ['code' => 'ktg_employer', 'type' => 'employee'],
+        ] as $line) {
+            $this->actAsOrg()->post('/payroll/deduction-rates', [
+                'deduction_rate_set_id' => $this->set->id, 'name' => 'X', 'rate' => '1', ...$line,
+            ])->assertSessionHasErrors('code');
+        }
+
+        $this->assertSame(0, $this->set->rates()->count());
+    }
+
+    public function test_the_rate_must_fit_the_column(): void
+    {
+        $post = fn (string $rate) => $this->actAsOrg()->post('/payroll/deduction-rates', [
+            'deduction_rate_set_id' => $this->set->id, 'name' => 'AVS', 'code' => 'avs_employee', 'rate' => $rate, 'type' => 'employee',
+        ]);
+
+        $post('100')->assertSessionHasErrors('rate');
+        $post('5.12345')->assertSessionHasErrors('rate');
+        $post('99.9999')->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('deduction_rates', ['code' => 'avs_employee', 'rate' => '99.9999']);
+
+        $rate = $this->set->rates()->sole();
+        $this->actAsOrg()->put("/payroll/deduction-rates/{$rate->id}", ['name' => 'AVS', 'rate' => '100'])
+            ->assertSessionHasErrors('rate');
+    }
+
+    public function test_only_a_liability_account_can_be_mapped(): void
+    {
+        $expense = Account::create(['organization_id' => $this->org->id, 'code' => '5700', 'name' => 'Social charges', 'type' => AccountType::Expense->value]);
+
+        $this->actAsOrg()->post('/payroll/deduction-rates', [
+            'deduction_rate_set_id' => $this->set->id, 'name' => 'AVS', 'code' => 'avs_employer', 'rate' => '5.3', 'type' => 'employer', 'account_id' => $expense->id,
+        ])->assertSessionHasErrors('account_id');
+
+        $rate = DeductionRate::create(['organization_id' => $this->org->id, 'deduction_rate_set_id' => $this->set->id, 'name' => 'AVS', 'code' => 'avs_employer', 'rate' => '5.3000', 'type' => 'employer']);
+        $this->actAsOrg()->put("/payroll/deduction-rates/{$rate->id}", ['name' => 'AVS', 'rate' => '5.3', 'account_id' => $expense->id])
+            ->assertSessionHasErrors('account_id');
+        $this->assertNull($rate->fresh()->account_id);
+
+        $this->actAsOrg()->get('/payroll/deduction-rates')
+            ->assertInertia(fn ($page) => $page->has('deductionRateAccounts', 0));
+    }
+
+    public function test_an_employee_line_keeps_its_certificate_box_and_an_employer_line_has_none(): void
+    {
+        $this->actAsOrg()->post('/payroll/deduction-rates', [
+            'deduction_rate_set_id' => $this->set->id, 'name' => 'LPP plan', 'code' => 'lpp_plan_employee', 'rate' => '6', 'type' => 'employee', 'certificate_box' => '10',
+        ])->assertSessionHasNoErrors();
+        $this->actAsOrg()->post('/payroll/deduction-rates', [
+            'deduction_rate_set_id' => $this->set->id, 'name' => 'LPP plan', 'code' => 'lpp_plan_employer', 'rate' => '6', 'type' => 'employer', 'certificate_box' => '10',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('deduction_rates', ['code' => 'lpp_plan_employee', 'certificate_box' => '10']);
+        $this->assertDatabaseHas('deduction_rates', ['code' => 'lpp_plan_employer', 'certificate_box' => null]);
+
+        $this->actAsOrg()->post('/payroll/deduction-rates', [
+            'deduction_rate_set_id' => $this->set->id, 'name' => 'Bad', 'code' => 'bad_employee', 'rate' => '1', 'type' => 'employee', 'certificate_box' => '15',
+        ])->assertSessionHasErrors('certificate_box');
     }
 }

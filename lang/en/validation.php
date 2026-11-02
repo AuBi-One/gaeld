@@ -295,4 +295,5 @@ return [
     'qr_iban' => 'The :attribute must be a QR-IBAN (IID in range 30000–31999). Your QR-IBAN can be found in your bank\'s e-banking portal.',
     'qr_iban_swiss_only' => 'The :attribute must be a Swiss (CH) or Liechtenstein (LI) IBAN.',
     'deduction_rate_set_overlap' => 'This period overlaps an existing rate set with the same code.',
+    'deduction_rate_code_suffix' => 'The code must end with _employee or _employer, matching the side of the charge.',
 ];

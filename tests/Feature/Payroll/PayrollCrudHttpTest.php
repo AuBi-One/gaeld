@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Payroll;
 
+use App\Domains\Payroll\Models\DeductionRateSet;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
 use App\Domains\Users\Models\User;
@@ -240,6 +241,7 @@ class PayrollCrudHttpTest extends TestCase
 
     public function test_employee_update_saves_the_deduction_rate_code(): void
     {
+        DeductionRateSet::create(['organization_id' => $this->org->id, 'code' => 'STANDARD', 'title' => 'Standard', 'date_from' => '2026-01-01', 'date_to' => null]);
         $employee = Employee::create([
             'organization_id' => $this->org->id,
             'first_name' => 'Old',
@@ -263,6 +265,29 @@ class PayrollCrudHttpTest extends TestCase
             'id' => $employee->id,
             'deduction_rate_code' => 'STANDARD',
         ]);
+    }
+
+    public function test_the_deduction_rate_code_must_name_an_existing_set_and_is_required_once_there_is_one(): void
+    {
+        $employee = Employee::create([
+            'organization_id' => $this->org->id, 'first_name' => 'Old', 'last_name' => 'Name',
+            'entry_date' => '2026-01-01', 'gross_salary' => '5000.00', 'is_active' => true,
+        ]);
+        $put = fn (?string $code) => $this->actingAs($this->user)->put("/payroll/employees/{$employee->id}", [
+            'first_name' => 'Old', 'last_name' => 'Name', 'entry_date' => '2026-01-01', 'gross_salary' => '5000.00',
+            'deduction_rate_code' => $code,
+        ]);
+
+        // No set yet: empty is fine (built-in defaults), an unknown code is not.
+        $put(null)->assertSessionHasNoErrors();
+        $put('STANDRAD')->assertSessionHasErrors('deduction_rate_code');
+
+        DeductionRateSet::create(['organization_id' => $this->org->id, 'code' => 'STANDARD', 'title' => 'Standard', 'date_from' => '2026-01-01', 'date_to' => null]);
+
+        $put(null)->assertSessionHasErrors('deduction_rate_code');
+        $put('STANDRAD')->assertSessionHasErrors('deduction_rate_code');
+        $put('STANDARD')->assertSessionHasNoErrors();
+        $this->assertSame('STANDARD', $employee->fresh()->deduction_rate_code);
     }
 
     public function test_employee_update_without_thirteenth_salary_field_preserves_existing_setting(): void

@@ -29,10 +29,11 @@
         <div class="section-title">{{ __('exports.salary_certificate.employee_totals') }}</div>
         <table>
             <tr><td>{{ __('exports.salary_certificate.gross_salary') }}</td><td class="right">{{ number_format((float) $certificate['gross_salary'], 2, '.', "'") }}</td></tr>
-            <tr><td>{{ __('exports.salary_certificate.avs_employee') }}</td><td class="right">-{{ number_format((float) $certificate['avs_employee'], 2, '.', "'") }}</td></tr>
-            <tr><td>{{ __('exports.salary_certificate.ac_employee') }}</td><td class="right">-{{ number_format((float) $certificate['ac_employee'], 2, '.', "'") }}</td></tr>
-            <tr><td>{{ __('exports.salary_certificate.aanp_employee') }}</td><td class="right">-{{ number_format((float) $certificate['aanp_employee'], 2, '.', "'") }}</td></tr>
-            <tr><td>{{ __('exports.salary_certificate.lpp_employee') }}</td><td class="right">-{{ number_format((float) $certificate['lpp_employee'], 2, '.', "'") }}</td></tr>
+            <tr><td>{{ __('exports.salary_certificate.social_contributions') }}</td><td class="right">-{{ number_format((float) $certificate['social_contributions'], 2, '.', "'") }}</td></tr>
+            <tr><td>{{ __('exports.salary_certificate.pension_contributions') }}</td><td class="right">-{{ number_format((float) $certificate['pension_contributions'], 2, '.', "'") }}</td></tr>
+            @if(bccomp($certificate['other_deductions'], '0', 2) !== 0)
+                <tr><td>{{ __('exports.salary_certificate.other_deductions') }}</td><td class="right">-{{ number_format((float) $certificate['other_deductions'], 2, '.', "'") }}</td></tr>
+            @endif
             <tr><td>{{ __('exports.salary_certificate.source_tax') }}</td><td class="right">-{{ number_format((float) $certificate['source_tax'], 2, '.', "'") }}</td></tr>
             <tr class="total-row"><td>{{ __('exports.salary_certificate.net_salary') }}</td><td class="right">{{ number_format((float) $certificate['net_salary'], 2, '.', "'") }}</td></tr>
         </table>

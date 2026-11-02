@@ -40,6 +40,7 @@ Route::middleware('feature:payroll')->group(function () {
     Route::delete('/payroll/deduction-rates/{deductionRate}', [DeductionRateController::class, 'destroy'])->name('payroll.deduction-rates.lines.destroy');
 
     Route::post('/payroll/deduction-rate-sets', [DeductionRateSetController::class, 'store'])->name('payroll.deduction-rate-sets.store');
+    Route::post('/payroll/deduction-rate-sets/seed', [DeductionRateSetController::class, 'seed'])->name('payroll.deduction-rate-sets.seed');
     Route::put('/payroll/deduction-rate-sets/{deductionRateSet}', [DeductionRateSetController::class, 'update'])->name('payroll.deduction-rate-sets.update');
     Route::delete('/payroll/deduction-rate-sets/{deductionRateSet}', [DeductionRateSetController::class, 'destroy'])->name('payroll.deduction-rate-sets.destroy');
     Route::post('/payroll/deduction-rate-sets/{deductionRateSet}/duplicate', [DeductionRateSetController::class, 'duplicate'])->name('payroll.deduction-rate-sets.duplicate');

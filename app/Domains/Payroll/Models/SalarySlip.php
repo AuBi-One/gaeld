@@ -6,6 +6,7 @@ use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Queries\DeductionRateSetQuery;
 use App\Domains\Payroll\Services\SwissDeductionService;
+use App\Support\Money;
 use App\Support\Traits\Auditable;
 use App\Support\Traits\BelongsToOrganization;
 use Illuminate\Contracts\Encryption\DecryptException;
@@ -31,6 +32,7 @@ use Illuminate\Support\Facades\Crypt;
  * @property array<string, mixed> $deductions
  * @property array{base_salary: string, thirteenth_salary: string, unpaid_leave_days: int, unpaid_leave_amount: string, reimbursement_amount: string, reimbursement_items?: list<array{id: string, date: string, label: string, amount: string, account_code: string}>}|null $adjustments
  * @property array<string, mixed>|null $employee_snapshot
+ * @property array{set_id: int|null, set_code: string|null, lines: array<string, array{name: string, type: string, rate: string, account_id: int|null, certificate_box: string|null}>}|null $deduction_snapshot
  * @property string|null $source_tax_base
  * @property string|null $source_tax_rate
  * @property string|null $source_tax_amount
@@ -59,6 +61,7 @@ class SalarySlip extends Model
         'deductions',
         'adjustments',
         'employee_snapshot',
+        'deduction_snapshot',
         'source_tax_base',
         'source_tax_rate',
         'source_tax_amount',
@@ -77,6 +80,7 @@ class SalarySlip extends Model
             'deductions' => 'array',
             'adjustments' => 'array',
             'employee_snapshot' => 'array',
+            'deduction_snapshot' => 'array',
             'posted_at' => 'datetime',
             'email_sent_at' => 'datetime',
             'archived_at' => 'datetime',
@@ -136,13 +140,68 @@ class SalarySlip extends Model
 
     /**
      * Keys {@see SwissDeductionService::calculateDeductions()} and
-     * the calculator add to `deductions` that are not themselves a per-charge amount.
+     * the calculator add to `deductions` that are not themselves a per-charge
+     * amount. Readers also skip any non-numeric value (e.g. a marker written
+     * by an import).
      */
-    private const NON_RATE_DEDUCTION_KEYS = [
+    public const NON_RATE_DEDUCTION_KEYS = [
         'total_employee', 'total_employer', 'net_salary', 'base_salary',
         'thirteenth_salary', 'unpaid_leave_days', 'unpaid_leave_amount',
-        'reimbursement_amount', 'source_tax', 'source',
+        'reimbursement_amount', 'source_tax',
     ];
+
+    /**
+     * The per-charge amounts of `deductions` (code => amount), without the
+     * totals, adjustments and non-numeric values.
+     *
+     * @return array<string, string>
+     */
+    public function chargeAmounts(): array
+    {
+        $amounts = [];
+        foreach ((array) $this->deductions as $code => $amount) {
+            if (in_array($code, self::NON_RATE_DEDUCTION_KEYS, true) || ! is_numeric($amount)) {
+                continue;
+            }
+            $amounts[(string) $code] = Money::normalize((string) $amount);
+        }
+
+        return $amounts;
+    }
+
+    /**
+     * The rate lines (name, side, rate, credited account, certificate box)
+     * this slip was calculated with, by code: the snapshot taken at
+     * calculation. Slips calculated before the snapshot existed fall back to
+     * the employee's current set for the period (deleted employees included),
+     * completed with the built-in defaults.
+     *
+     * @return array<string, array{name: string, type: string, rate: string, account_id: int|null, certificate_box: string|null}>
+     */
+    public function rateLines(): array
+    {
+        $snapshot = $this->deduction_snapshot;
+        if ($snapshot !== null) {
+            return $snapshot['lines'];
+        }
+
+        // The relation is null for a deleted employee: read it with the trashed ones.
+        $employee = $this->employee ?? Employee::withTrashed()
+            ->withoutGlobalScopes()
+            ->where('organization_id', $this->organization_id)
+            ->find($this->employee_id);
+        $periodDate = Carbon::create($this->period_year, $this->period_month, 1)->toDateString();
+        $set = DeductionRateSetQuery::resolve((string) $this->organization_id, $employee?->deduction_rate_code, $periodDate);
+
+        $lines = [];
+        foreach ($set === null ? [] : $set->rates as $rate) {
+            $line = DeductionRateSetQuery::line($rate);
+            $line['certificate_box'] ??= DeductionRate::defaultCertificateBox($rate->code, $rate->type);
+            $lines[$rate->code] = $line;
+        }
+
+        return $lines + DeductionRateSetQuery::defaultLines();
+    }
 
     /**
      * Every social-charge deduction actually on this slip, one row per
@@ -156,21 +215,15 @@ class SalarySlip extends Model
      */
     public function deductionRows(): array
     {
-        $this->loadMissing('employee');
-        $deductions = $this->deductions;
-        $periodDate = Carbon::create($this->period_year, $this->period_month, 1)->toDateString();
-        $names = DeductionRateSetQuery::namesFor($this->organization_id, $this->employee->deduction_rate_code, $periodDate);
+        $lines = $this->rateLines();
 
         $rows = [];
-        foreach ($deductions as $code => $amount) {
-            if (in_array($code, self::NON_RATE_DEDUCTION_KEYS, true)) {
-                continue;
-            }
-
-            $key = (string) preg_replace('/_(employee|employer)$/', '', (string) $code);
-            $rows[$key] ??= ['name' => $names[$code] ?? $key, 'employee' => '0', 'employer' => '0'];
-            $side = str_ends_with((string) $code, '_employer') ? 'employer' : 'employee';
-            $rows[$key][$side] = is_numeric($amount) ? (string) $amount : '0';
+        foreach ($this->chargeAmounts() as $code => $amount) {
+            $key = (string) preg_replace('/_(employee|employer)$/', '', $code);
+            $rows[$key] ??= ['name' => $lines[$code]['name'] ?? $key, 'employee' => '0.00', 'employer' => '0.00'];
+            $type = $lines[$code]['type'] ?? (str_ends_with($code, '_employer') ? 'employer' : 'employee');
+            $side = $type === 'employer' ? 'employer' : 'employee';
+            $rows[$key][$side] = Money::add($rows[$key][$side], $amount);
         }
 
         return array_values($rows);
@@ -190,20 +243,15 @@ class SalarySlip extends Model
                 'last_name' => (string) $snapshot['last_name'],
                 'email' => isset($snapshot['email']) ? (string) $snapshot['email'] : null,
                 'ahv_number' => $this->decryptSnapshotField($snapshot, 'ahv_number'),
-                'iban' => $this->decryptSnapshotField($snapshot, 'iban'),
+                // Snapshots taken before the IBAN was added to them have no
+                // `iban` key: read it from the employee, as those slips did.
+                'iban' => array_key_exists('iban', $snapshot)
+                    ? $this->decryptSnapshotField($snapshot, 'iban')
+                    : $this->documentEmployee()->iban,
             ];
         }
 
-        $employee = $this->relationLoaded('employee')
-            ? $this->getRelation('employee')
-            : Employee::withTrashed()
-                ->withoutGlobalScopes()
-                ->where('organization_id', $this->organization_id)
-                ->find($this->employee_id);
-
-        if (! $employee instanceof Employee) {
-            throw new \RuntimeException('The employee record for this salary slip is unavailable.');
-        }
+        $employee = $this->documentEmployee();
 
         return [
             'first_name' => (string) $employee->first_name,
@@ -212,6 +260,24 @@ class SalarySlip extends Model
             'ahv_number' => $employee->ahv_number,
             'iban' => $employee->iban,
         ];
+    }
+
+    /**
+     * The slip's employee, deleted ones included.
+     */
+    private function documentEmployee(): Employee
+    {
+        $employee = $this->relationLoaded('employee') ? $this->getRelation('employee') : null;
+        $employee ??= Employee::withTrashed()
+            ->withoutGlobalScopes()
+            ->where('organization_id', $this->organization_id)
+            ->find($this->employee_id);
+
+        if (! $employee instanceof Employee) {
+            throw new \RuntimeException('The employee record for this salary slip is unavailable.');
+        }
+
+        return $employee;
     }
 
     /**

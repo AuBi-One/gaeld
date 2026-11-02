@@ -46,7 +46,7 @@
         <env name="DB_PORT" value="5432"/>
         <env name="DB_DATABASE" value="testing"/>
         <env name="DB_USERNAME" value="gaeld"/>
-        <env name="DB_PASSWORD" value="secret"/>
+        <env name="DB_PASSWORD" value="password"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

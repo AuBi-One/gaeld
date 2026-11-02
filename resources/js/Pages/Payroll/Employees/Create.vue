@@ -21,8 +21,10 @@ const props = defineProps({
   withholdingTaxEnabled: { type: Boolean, default: false },
 })
 
+// Without any rate set the built-in defaults apply; once there is one, every
+// employee needs a code (the server refuses an empty or unknown one).
 const deductionRateCodeOptions = [
-  { value: '', label: t('deduction_rate_code_none') },
+  { value: '', label: props.deductionRateCodes.length ? t('deduction_rate_code_choose') : t('deduction_rate_code_none') },
   ...props.deductionRateCodes.map(code => ({ value: code, label: code })),
 ]
 
@@ -48,7 +50,7 @@ const form = useForm({
   source_tax_tariff: '',
   source_tax_municipality_code: '',
   has_thirteenth_salary: false,
-  deduction_rate_code: '',
+  deduction_rate_code: props.deductionRateCodes.length === 1 ? props.deductionRateCodes[0] : '',
 })
 
 function submit() {

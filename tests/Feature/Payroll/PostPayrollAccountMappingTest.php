@@ -4,9 +4,12 @@ namespace Tests\Feature\Payroll;
 
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Payroll\Actions\GeneratePayrollRunAction;
 use App\Domains\Payroll\Actions\PostPayrollAction;
 use App\Domains\Payroll\Models\DeductionRateSet;
 use App\Domains\Payroll\Models\Employee;
+use App\Domains\Payroll\Models\SalarySlip;
 use App\Domains\Payroll\Services\PayrollCalculator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -190,5 +193,119 @@ class PostPayrollAccountMappingTest extends TestCase
 
         $expected = bcadd($slip->deductions['charge_a_employee'], $slip->deductions['charge_b_employee'], 2);
         $this->assertSame($expected, (string) $sharedLines->first()->credit);
+    }
+
+    #[Test]
+    public function posting_uses_the_lines_of_the_calculation_not_later_changes_to_the_sets(): void
+    {
+        $first = Account::create(['organization_id' => $this->org->id, 'code' => '2274', 'name' => 'APGM Payable', 'type' => AccountType::Liability->value]);
+        $second = Account::create(['organization_id' => $this->org->id, 'code' => '2279', 'name' => 'Other Payable', 'type' => AccountType::Liability->value]);
+        $set = $this->specialSet(['name' => 'APGM', 'code' => 'apgm_employee', 'rate' => '0.6100', 'type' => 'employee', 'account_id' => $first->id]);
+        $this->employee->update(['deduction_rate_code' => 'SPECIAL']);
+
+        $slip = app(PayrollCalculator::class)->calculate($this->employee->fresh(), 3, 2026);
+        $slip->save();
+
+        // After the calculation: the line is remapped and renamed, the
+        // employee's code changes and the set is deleted.
+        $set->rates()->where('code', 'apgm_employee')->update(['account_id' => $second->id, 'name' => 'Renamed']);
+        $this->employee->update(['deduction_rate_code' => 'OTHER']);
+        $set->delete();
+
+        $posted = app(PostPayrollAction::class)->execute($slip->fresh());
+
+        $this->assertTrue($posted->journalEntry->isBalanced());
+        $line = $posted->journalEntry->lines->firstWhere('account_id', $first->id);
+        $this->assertNotNull($line, 'the account mapped at calculation is credited');
+        $this->assertSame($slip->deductions['apgm_employee'], (string) $line->credit);
+        $this->assertStringContainsString('APGM', (string) $line->description);
+        $this->assertNull($posted->journalEntry->lines->firstWhere('account_id', $second->id));
+    }
+
+    #[Test]
+    public function it_refuses_to_credit_a_mapped_account_that_is_not_a_liability(): void
+    {
+        $account = Account::create(['organization_id' => $this->org->id, 'code' => '2274', 'name' => 'APGM Payable', 'type' => AccountType::Liability->value]);
+        $this->specialSet(['name' => 'APGM', 'code' => 'apgm_employee', 'rate' => '0.6100', 'type' => 'employee', 'account_id' => $account->id]);
+        $this->employee->update(['deduction_rate_code' => 'SPECIAL']);
+        $slip = app(PayrollCalculator::class)->calculate($this->employee->fresh(), 3, 2026);
+        $slip->save();
+        $account->update(['type' => AccountType::Expense->value]);
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('apgm_employee');
+
+        app(PostPayrollAction::class)->execute($slip->fresh());
+    }
+
+    #[Test]
+    public function it_posts_an_imported_slip_carrying_a_non_numeric_marker(): void
+    {
+        // The shape the Airtable import writes: no snapshot, a `source` marker.
+        $slip = SalarySlip::create([
+            'organization_id' => $this->org->id,
+            'employee_id' => $this->employee->id,
+            'period_month' => 2,
+            'period_year' => 2026,
+            'gross_salary' => '6000.00',
+            'net_salary' => '5682.00',
+            'deductions' => [
+                'avs_employee' => '318.00', 'avs_employer' => '318.00',
+                'total_employee' => '318.00', 'total_employer' => '318.00',
+                'net_salary' => '5682.00', 'source' => 'imported',
+            ],
+            'adjustments' => ['base_salary' => '6000.00', 'thirteenth_salary' => '0.00', 'unpaid_leave_days' => 0, 'unpaid_leave_amount' => '0.00', 'reimbursement_amount' => '0.00'],
+        ]);
+
+        $posted = app(PostPayrollAction::class)->execute($slip);
+
+        $this->assertTrue($posted->journalEntry->isBalanced());
+        $avs = Account::where('organization_id', $this->org->id)->where('code', '2270')->first();
+        $this->assertSame('636.00', (string) $posted->journalEntry->lines->firstWhere('account_id', $avs->id)->credit);
+    }
+
+    #[Test]
+    public function a_payroll_run_that_fails_to_post_one_slip_leaves_no_slip_and_no_entry(): void
+    {
+        $this->specialSet(['name' => 'AVS bis', 'code' => 'avs_bis_employee', 'rate' => '1.0000', 'type' => 'employee']);
+        $this->employee->update(['deduction_rate_code' => 'SPECIAL']);
+        // Sorted after Muster: posts second, and fails ("meal_" has no account).
+        $failing = DeductionRateSet::create(['organization_id' => $this->org->id, 'code' => 'MEAL', 'title' => 'Meal', 'date_from' => '2026-01-01', 'date_to' => null]);
+        $failing->rates()->create(['organization_id' => $this->org->id, 'name' => 'Repas', 'code' => 'meal_employee', 'rate' => '1.0000', 'type' => 'employee']);
+        Employee::create([
+            'organization_id' => $this->org->id, 'first_name' => 'Zoe', 'last_name' => 'Zimmer', 'entry_date' => '2025-01-01',
+            'gross_salary' => '5000.00', 'is_active' => true, 'deduction_rate_code' => 'MEAL',
+        ]);
+
+        try {
+            app(GeneratePayrollRunAction::class)->execute($this->org->id, 3, 2026, shouldPost: true);
+            $this->fail('expected a DomainException');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('meal_employee', $e->getMessage());
+        }
+
+        $this->assertSame(0, SalarySlip::where('organization_id', $this->org->id)->count());
+        $this->assertSame(0, JournalEntry::where('organization_id', $this->org->id)->count());
+    }
+
+    /** @param array<string, mixed> $extra */
+    private function specialSet(array $extra): DeductionRateSet
+    {
+        $set = DeductionRateSet::create([
+            'organization_id' => $this->org->id,
+            'code' => 'SPECIAL',
+            'title' => 'Spécial',
+            'date_from' => '2026-01-01',
+            'date_to' => null,
+        ]);
+        foreach ([
+            ['name' => 'AVS', 'code' => 'avs_employee', 'rate' => '5.3000', 'type' => 'employee'],
+            ['name' => 'AVS', 'code' => 'avs_employer', 'rate' => '5.3000', 'type' => 'employer'],
+            $extra,
+        ] as $line) {
+            $set->rates()->create(['organization_id' => $this->org->id, ...$line]);
+        }
+
+        return $set;
     }
 }

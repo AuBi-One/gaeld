@@ -75,15 +75,11 @@ class PayrollCalculator
         // The set whose code matches the employee's and whose date range
         // covers this payroll period is resolved automatically — the same
         // code can point to a different set (different rates) each year
-        // without anything changing on the employee record.
-        $set = DeductionRateSetQuery::resolve(
-            $employee->organization_id,
-            $employee->deduction_rate_code,
-            $period->toDateString(),
-        );
-        $rates = $set
-            ? $set->rates()->where('is_active', true)->get()
-            : collect();
+        // without anything changing on the employee record. Throws when the
+        // organization has sets but none applies; null (built-in defaults)
+        // only when it has no set at all.
+        $set = DeductionRateSetQuery::forEmployee($employee, $period->toDateString());
+        $rates = $set?->rates()->where('is_active', true)->get();
 
         $deductions = $this->deductionService->calculateDeductions($grossSalary, $rates);
         $deductions['base_salary'] = $baseSalary;
@@ -101,6 +97,11 @@ class PayrollCalculator
             'gross_salary' => $grossSalary,
             'net_salary' => $deductions['net_salary'],
             'deductions' => $deductions,
+            'deduction_snapshot' => [
+                'set_id' => $set?->id,
+                'set_code' => $set?->code,
+                'lines' => DeductionRateSetQuery::snapshotLines($rates),
+            ],
             'adjustments' => [
                 'base_salary' => $baseSalary,
                 'thirteenth_salary' => $thirteenthSalary,

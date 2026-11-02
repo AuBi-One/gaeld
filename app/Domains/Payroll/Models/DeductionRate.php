@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property string $rate
  * @property string $type
  * @property int|null $account_id
+ * @property string|null $certificate_box
  * @property bool $is_active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -37,8 +38,35 @@ class DeductionRate extends Model
         'rate',
         'type',
         'account_id',
+        'certificate_box',
         'is_active',
     ];
+
+    /**
+     * Boxes of the Swiss salary certificate an employee line can count in:
+     * 9 = AVS/AI/APG/AC/AANP contributions, 10 = occupational pension (LPP).
+     * Null = not a certificate deduction (and always null for employer lines).
+     */
+    public const CERTIFICATE_BOXES = ['9', '10'];
+
+    /**
+     * The box the built-in and legacy codes count in, for lines (and slips)
+     * that carry no explicit box.
+     */
+    public static function defaultCertificateBox(string $code, string $type): ?string
+    {
+        if ($type !== 'employee') {
+            return null;
+        }
+
+        foreach (['avs_' => '9', 'ac_' => '9', 'aanp_' => '9', 'lpp_' => '10'] as $prefix => $box) {
+            if (str_starts_with($code, $prefix)) {
+                return $box;
+            }
+        }
+
+        return null;
+    }
 
     protected function casts(): array
     {

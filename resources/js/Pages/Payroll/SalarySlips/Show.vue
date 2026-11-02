@@ -19,7 +19,9 @@ const { formatCurrency } = useFormatters()
 const props = defineProps({
   slip: Object,
   canManage: { type: Boolean, default: true },
-  deductionNames: { type: Object, default: () => ({}) },
+  // One row per charge ({ name, employee, employer }), built by the server
+  // from the lines the slip was calculated with (SalarySlip::deductionRows).
+  deductionRows: { type: Array, default: () => [] },
 })
 
 const postForm = useForm({})
@@ -53,37 +55,15 @@ function downloadPdf() {
   window.open(`/payroll/salary-slips/${props.slip.id}/pdf`, '_blank')
 }
 
-// Keys the calculator/action add to `deductions` that are not themselves a
-// per-charge amount — never show these as a "charge sociale" row.
-const NON_RATE_DEDUCTION_KEYS = new Set([
-  'total_employee', 'total_employer', 'net_salary', 'base_salary',
-  'thirteenth_salary', 'unpaid_leave_days', 'unpaid_leave_amount',
-  'reimbursement_amount', 'source_tax',
-])
-
-function familyKey(code) {
-  return code.replace(/_(employee|employer)$/, '')
-}
-
-// One row per configured charge (whatever its code), not a fixed list of
-// four — a charge beyond AVS/AC/AANP/LPP (APGM, allocations familiales, ...)
-// must show up here the same way it already counts in the net salary.
-const deductionRows = computed(() => {
-  const groups = new Map()
-  for (const [code, rawAmount] of Object.entries(props.slip.deductions ?? {})) {
-    if (NON_RATE_DEDUCTION_KEYS.has(code)) continue
-    const amount = Number(rawAmount) || 0
-    if (!amount) continue
-    const key = familyKey(code)
-    if (!groups.has(key)) {
-      groups.set(key, { label: props.deductionNames?.[code] ?? key, employee: 0, employer: 0 })
-    }
-    const group = groups.get(key)
-    if (code.endsWith('_employer')) group.employer += amount
-    else group.employee += amount
-  }
-  return Array.from(groups.values()).map(g => ({ ...g, total: g.employee + g.employer }))
-})
+// One row per charge actually on the slip (whatever its code), not a fixed
+// list of four; rows without any amount are left out.
+const deductionRows = computed(() => props.deductionRows
+  .map((row, index) => {
+    const employee = Number(row.employee) || 0
+    const employer = Number(row.employer) || 0
+    return { key: `${index}-${row.name}`, label: row.name, employee, employer, total: employee + employer }
+  })
+  .filter(row => row.employee || row.employer))
 </script>
 
 <template>
@@ -163,7 +143,7 @@ const deductionRows = computed(() => {
                 <td class="py-2.5 text-right font-mono">{{ formatCurrency(slip.gross_salary) }}</td>
               </tr>
               <!-- Deductions -->
-              <tr v-for="d in deductionRows" :key="d.label" class="text-red-700 dark:text-red-400">
+              <tr v-for="d in deductionRows" :key="d.key" class="text-red-700 dark:text-red-400">
                 <td class="py-2">{{ d.label }}</td>
                 <td class="py-2 text-right font-mono">{{ formatCurrency(-d.employee) }}</td>
                 <td class="py-2 text-right font-mono">{{ formatCurrency(-d.employer) }}</td>

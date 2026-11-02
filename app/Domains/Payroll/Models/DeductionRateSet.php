@@ -16,14 +16,15 @@ use Illuminate\Support\Carbon;
  * (Employee::$deduction_rate_code); the set whose date range covers the
  * payroll period being calculated is resolved automatically, so the same
  * code can have a different set (and different rates) each year without
- * changing anything on the employee record.
+ * changing anything on the employee record. An open-ended set (no end
+ * date) keeps applying to later months until a newer set replaces it.
  *
  * @property int $id
  * @property string $organization_id
  * @property string $code
  * @property string $title
  * @property Carbon $date_from
- * @property Carbon $date_to
+ * @property Carbon|null $date_to Null = open-ended (still valid)
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */

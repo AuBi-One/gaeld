@@ -11,7 +11,7 @@ use App\Domains\Invoicing\Actions\GenerateQrInvoicePdfAction;
 use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Models\InvoiceLine;
-use App\Domains\Payroll\Models\DeductionRate;
+use App\Domains\Payroll\Models\DeductionRateSet;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
 use App\Support\Pdf\PdfLayouts;
@@ -79,8 +79,7 @@ class DocumentLayoutsTest extends DocumentLayoutsTestCase
             'lpp_employee' => '200.00', 'lpp_employer' => '200.00',
             'family_allowance_employer' => '120.00',
             'total_employee' => '515.00', 'total_employer' => '610.00',
-        ], net: '4485.00');
-        DeductionRate::query()->create(['organization_id' => $this->org->id, 'name' => 'AVS', 'code' => 'avs_employee', 'rate' => '5.3000', 'type' => 'employee', 'is_active' => true]);
+        ], net: '4485.00', lines: ['avs_employee' => ['name' => 'AVS', 'type' => 'employee', 'rate' => '5.3000', 'account_id' => null, 'certificate_box' => '9']]);
 
         $html = (new WordModelSalarySlipLayout)->html($slip, $this->org->fresh());
 
@@ -97,13 +96,39 @@ class DocumentLayoutsTest extends DocumentLayoutsTestCase
 
     public function test_a_configured_code_without_suffix_is_classified_by_its_type_and_rows_add_up(): void
     {
-        $slip = $this->slip(['avs_employee' => '265.00', 'ktg' => '30.00', 'total_employee' => '295.00'], net: '4705.00');
-        DeductionRate::query()->create(['organization_id' => $this->org->id, 'name' => 'Indemnité maladie', 'code' => 'ktg', 'rate' => '0.6000', 'type' => 'employee', 'is_active' => true]);
+        $slip = $this->slip(['avs_employee' => '265.00', 'ktg' => '30.00', 'total_employee' => '295.00'], net: '4705.00', lines: [
+            'ktg' => ['name' => 'Indemnité maladie', 'type' => 'employee', 'rate' => '0.6000', 'account_id' => null, 'certificate_box' => null],
+        ]);
 
         $html = (new WordModelSalarySlipLayout)->html($slip, $this->org->fresh());
 
         $this->assertMatchesRegularExpression('#Indemnité maladie</td>\s*<td class="num"></td>\s*<td class="num">0.6 %</td>\s*<td class="num">30.00</td>#', $html);
         $this->assertMatchesRegularExpression('#Total charges</td>\s*<td class="num">0 %</td>\s*<td class="num">5.9 %</td>\s*<td class="num">295.00</td>#', $html);
+    }
+
+    public function test_the_salary_slip_reads_names_and_rates_from_the_slip_not_from_other_sets(): void
+    {
+        $slip = $this->slip(['apgm_employee' => '30.00', 'total_employee' => '30.00'], net: '4970.00', lines: [
+            'apgm_employee' => ['name' => 'APGM', 'type' => 'employee', 'rate' => '0.6000', 'account_id' => null, 'certificate_box' => '9'],
+        ]);
+        // Another set of the organisation with the same code and other values.
+        $other = DeductionRateSet::query()->create(['organization_id' => $this->org->id, 'code' => 'OTHER', 'title' => 'Other', 'date_from' => '2020-01-01', 'date_to' => null]);
+        $other->rates()->create(['organization_id' => $this->org->id, 'name' => 'Wrong name', 'code' => 'apgm_employee', 'rate' => '9.0000', 'type' => 'employer', 'is_active' => true]);
+
+        $html = (new WordModelSalarySlipLayout)->html($slip, $this->org->fresh());
+
+        $this->assertStringNotContainsString('Wrong name', $html);
+        $this->assertMatchesRegularExpression('#</td>\s*<td class="num"></td>\s*<td class="num">0.6 %</td>\s*<td class="num">30.00</td>#', $html);
+    }
+
+    public function test_the_salary_slip_reads_the_iban_from_the_employee_when_the_snapshot_predates_it(): void
+    {
+        $slip = $this->slip(['avs_employee' => '265.00', 'total_employee' => '265.00'], net: '4735.00');
+        $slip->update(['employee_snapshot' => ['first_name' => 'Marie', 'last_name' => 'Exemple', 'email' => null, 'ahv_number' => null, 'ahv_number_encrypted' => true]]);
+
+        $html = (new WordModelSalarySlipLayout)->html($slip->fresh(), $this->org->fresh());
+
+        $this->assertStringContainsString('CH93 0076 2011 6238 5295 7', $html);
     }
 
     public function test_a_description_taller_than_a_page_continues_on_the_next_pages(): void
@@ -185,8 +210,9 @@ class DocumentLayoutsTest extends DocumentLayoutsTestCase
     /**
      * @param  array<string, string>  $deductions
      * @param  array<string, mixed>  $adjustments
+     * @param  array<string, array<string, mixed>>|null  $lines  the rate lines snapshotted at calculation
      */
-    private function slip(array $deductions, string $net, array $adjustments = []): SalarySlip
+    private function slip(array $deductions, string $net, array $adjustments = [], ?array $lines = null): SalarySlip
     {
         $this->org->update(['locale' => 'fr']);
         $employee = Employee::query()->create([
@@ -197,6 +223,7 @@ class DocumentLayoutsTest extends DocumentLayoutsTestCase
         return SalarySlip::query()->create([
             'organization_id' => $this->org->id, 'employee_id' => $employee->id, 'period_month' => 3, 'period_year' => 2026,
             'gross_salary' => '5000.00', 'net_salary' => $net, 'deductions' => $deductions,
+            'deduction_snapshot' => $lines === null ? null : ['set_id' => null, 'set_code' => null, 'lines' => $lines],
             'adjustments' => ['base_salary' => '5000.00', 'thirteenth_salary' => '0.00', 'unpaid_leave_days' => 0, 'unpaid_leave_amount' => '0.00', 'reimbursement_amount' => '0.00', ...$adjustments],
         ]);
     }

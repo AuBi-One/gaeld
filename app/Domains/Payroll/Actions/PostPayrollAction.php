@@ -5,14 +5,14 @@ namespace App\Domains\Payroll\Actions;
 use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
+use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Payroll\Contracts\ReimbursementSourceInterface;
 use App\Domains\Payroll\Contracts\SourceTaxServiceInterface;
 use App\Domains\Payroll\Models\SalarySlip;
-use App\Domains\Payroll\Queries\DeductionRateSetQuery;
 use App\Domains\Payroll\Services\NullReimbursementSource;
-use App\Domains\Payroll\Services\SwissDeductionService;
 use App\Support\Money;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -25,27 +25,15 @@ class PostPayrollAction
     /**
      * Deduction-code prefix => fixed account, used when a code has no
      * explicit account mapping on its deduction rate line (none configured,
-     * or the employee has no code / no set covers this period and the
-     * built-in defaults were used, which carry no account at all). Keeps
-     * pre-existing organisations posting exactly where they always did.
+     * or the organisation has no rate set and the built-in defaults were
+     * used, which carry no account at all). Keeps pre-existing organisations
+     * posting exactly where they always did.
      */
     private const LEGACY_ACCOUNT_BY_PREFIX = [
         'avs_' => AccountCode::AVS_PAYABLE,
         'aanp_' => AccountCode::AVS_PAYABLE,
         'ac_' => AccountCode::AC_PAYABLE,
         'lpp_' => AccountCode::LPP_PAYABLE,
-    ];
-
-    /**
-     * Keys {@see SwissDeductionService::calculateDeductions()} and the
-     * calculator add to a slip's `deductions` that are not themselves a
-     * per-line deduction amount, so the account-mapping loop below must
-     * skip them.
-     */
-    private const NON_RATE_DEDUCTION_KEYS = [
-        'total_employee', 'total_employer', 'net_salary', 'base_salary',
-        'thirteenth_salary', 'unpaid_leave_days', 'unpaid_leave_amount',
-        'reimbursement_amount', 'source_tax',
     ];
 
     public function __construct(
@@ -140,7 +128,7 @@ class PostPayrollAction
         // by resolved account, not by code, keeps the entry balanced however
         // many distinct deduction codes or accounts are involved: every code
         // present in `deductions` lands in exactly one credit line here.
-        foreach ($this->creditsByAccount($slip, $deductions) as $accountId => $credit) {
+        foreach ($this->creditsByAccount($slip) as $accountId => $credit) {
             $lines[] = new JournalLineData(
                 accountId: (string) $accountId,
                 debit: '0',
@@ -197,55 +185,33 @@ class PostPayrollAction
 
     /**
      * Every per-line deduction amount on the slip, grouped by the
-     * chart-of-accounts entry it should credit.
+     * chart-of-accounts entry it should credit: the account mapped on the
+     * rate line the slip was calculated with (its snapshot), never the
+     * current sets.
      *
-     * @param  array<string, mixed>  $deductions
      * @return array<int, array{amount: string, description: string}>
      */
-    private function creditsByAccount(SalarySlip $slip, array $deductions): array
+    private function creditsByAccount(SalarySlip $slip): array
     {
-        $employee = $slip->employee;
         $orgId = $slip->organization_id;
-
-        $periodDate = Carbon::create($slip->period_year, $slip->period_month, 1)->toDateString();
-        $rateSet = DeductionRateSetQuery::resolve($orgId, $employee->deduction_rate_code, $periodDate);
-
-        /** @var array<string, int> $accountIdByCode */
-        $accountIdByCode = [];
-        /** @var array<string, string> $nameByCode */
-        $nameByCode = [];
-        if ($rateSet) {
-            foreach ($rateSet->rates as $rate) {
-                $nameByCode[$rate->code] = $rate->name;
-                if ($rate->account_id !== null) {
-                    $accountIdByCode[$rate->code] = $rate->account_id;
-                }
-            }
-        }
-        foreach (SwissDeductionService::defaults() as $default) {
-            $nameByCode[$default['code']] ??= $default['name'];
-        }
+        $lines = $slip->rateLines();
 
         $credits = [];
-        foreach ($deductions as $code => $amount) {
-            if (in_array($code, self::NON_RATE_DEDUCTION_KEYS, true)) {
-                continue;
-            }
-
-            $amount = (string) $amount;
+        foreach ($slip->chargeAmounts() as $code => $amount) {
             if (! Money::isPositive($amount)) {
                 continue;
             }
 
-            $accountId = $accountIdByCode[$code] ?? $this->legacyAccountId($orgId, $code);
+            $replace = ['code' => $code, 'name' => $slip->employee_name, 'period' => "{$slip->period_month}/{$slip->period_year}"];
+            $mappedId = $lines[$code]['account_id'] ?? null;
+            $accountId = $mappedId !== null
+                ? $this->mappedAccountId($orgId, (int) $mappedId, $replace)
+                : $this->legacyAccountId($orgId, $code);
             if ($accountId === null) {
-                throw new \DomainException(
-                    "No chart-of-accounts entry is mapped to the deduction \"{$code}\" (\"{$slip->employee->fullName()}\", "
-                    ."{$slip->period_month}/{$slip->period_year}). Set one for it in Payroll > Charges sociales before posting this slip.",
-                );
+                throw new \DomainException(__('app.deduction_account_not_mapped', $replace));
             }
 
-            $name = $nameByCode[$code] ?? $code;
+            $name = $lines[$code]['name'] ?? $code;
             if (! isset($credits[$accountId])) {
                 $credits[$accountId] = ['amount' => Money::zero(), 'names' => []];
             }
@@ -262,6 +228,26 @@ class PostPayrollAction
             ],
             $credits,
         );
+    }
+
+    /**
+     * A mapped account must still exist in the organisation and be a
+     * liability: it is credited, and the employer share is already debited
+     * to the social charges expense.
+     *
+     * @param  array<string, string>  $replace
+     */
+    private function mappedAccountId(string $organizationId, int $accountId, array $replace): int
+    {
+        $account = Account::withoutGlobalScopes()
+            ->where('organization_id', $organizationId)
+            ->whereKey($accountId)
+            ->first();
+        if ($account === null || $account->type !== AccountType::Liability) {
+            throw new \DomainException(__('app.deduction_account_not_liability', $replace));
+        }
+
+        return (int) $account->id;
     }
 
     /**

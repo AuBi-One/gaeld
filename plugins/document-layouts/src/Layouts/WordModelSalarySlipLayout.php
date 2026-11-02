@@ -4,7 +4,6 @@ namespace Plugins\DocumentLayouts\Layouts;
 
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Contracts\SalarySlipPdfLayoutInterface;
-use App\Domains\Payroll\Models\DeductionRate;
 use App\Domains\Payroll\Models\SalarySlip;
 use App\Support\Money;
 use App\Support\Pdf\PdfFooter;
@@ -36,12 +35,6 @@ final class WordModelSalarySlipLayout implements SalarySlipPdfLayoutInterface
         'lpp' => ['lpp'],
         'apgm' => ['apgm'],
         'family_allowance' => ['family_allowance', 'af'],
-    ];
-
-    /** Slip data that sits next to the deductions and is not a charge. */
-    private const NOT_CHARGES = [
-        'total_employee', 'total_employer', 'net_salary', 'source_tax', 'source',
-        'base_salary', 'thirteenth_salary', 'unpaid_leave_days', 'unpaid_leave_amount', 'reimbursement_amount',
     ];
 
     public function key(): string
@@ -139,32 +132,28 @@ final class WordModelSalarySlipLayout implements SalarySlipPdfLayoutInterface
     private function charges(SalarySlip $slip, callable $t): array
     {
         $gross = (string) $slip->gross_salary;
-        $rates = DeductionRate::query()->withoutGlobalScopes()
-            ->where('organization_id', $slip->organization_id)->where('is_active', true)
-            ->get()->keyBy('code');
+        // The lines the slip was calculated with (its snapshot, or the employee's set of the period).
+        $rates = $slip->rateLines();
 
         $groups = [];
-        foreach ((array) $slip->deductions as $code => $amount) {
-            if (in_array($code, self::NOT_CHARGES, true) || ! is_numeric($amount)) {
-                continue;
-            }
+        // Per-charge amounts only: core skips totals, adjustments and non-numeric markers.
+        foreach ($slip->chargeAmounts() as $code => $amount) {
             // The side is the configured rate's type; the code's suffix for codes without a
             // configured rate (e.g. migrated slips); an employee deduction otherwise.
-            $configured = $rates->get($code);
+            $configured = $rates[$code] ?? null;
             $suffix = preg_match('/\A(.+)_(employee|employer)\z/', $code, $m) === 1 ? $m : null;
-            $side = in_array($configured?->type, ['employee', 'employer'], true) ? $configured->type : ($suffix[2] ?? 'employee');
+            $side = in_array($configured['type'] ?? null, ['employee', 'employer'], true) ? $configured['type'] : ($suffix[2] ?? 'employee');
             $insurance = $suffix[1] ?? $code;
             foreach (self::INSURANCES as $key => $prefixes) {
                 if (in_array($insurance, $prefixes, true)) {
                     $insurance = $key;
                 }
             }
-            $amount = Money::normalize((string) $amount);
-            $rate = $configured !== null && Money::compare(Money::percentage($gross, (string) $configured->rate), $amount) === 0
-                ? (string) $configured->rate
+            $rate = $configured !== null && Money::compare(Money::percentage($gross, $configured['rate']), $amount) === 0
+                ? $configured['rate']
                 : (Money::isZero($gross) ? '0' : (string) round((float) $amount / (float) $gross * 100, 3));
 
-            $groups[$insurance] ??= ['name' => $configured?->name, 'employer' => '0.00', 'employee' => '0.00', 'employer_rate' => '0', 'employee_rate' => '0'];
+            $groups[$insurance] ??= ['name' => $configured['name'] ?? null, 'employer' => '0.00', 'employee' => '0.00', 'employer_rate' => '0', 'employee_rate' => '0'];
             $groups[$insurance][$side] = Money::add($groups[$insurance][$side], $amount);
             $groups[$insurance][$side.'_rate'] = (string) ((float) $groups[$insurance][$side.'_rate'] + (float) $rate);
         }

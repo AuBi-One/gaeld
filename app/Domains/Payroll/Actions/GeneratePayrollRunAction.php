@@ -5,6 +5,7 @@ namespace App\Domains\Payroll\Actions;
 use App\Domains\Payroll\Contracts\ReimbursementSourceInterface;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
+use App\Domains\Payroll\Queries\DeductionRateSetQuery;
 use App\Domains\Payroll\Services\NullReimbursementSource;
 use App\Domains\Payroll\Services\PayrollCalculator;
 use Illuminate\Support\Carbon;
@@ -38,47 +39,54 @@ class GeneratePayrollRunAction
             ->where('period_year', $year)
             ->exists());
 
-        // Resolve every employee's items first, so an invalid item creates no slip at all.
+        // Resolve every employee's rate set and items first, so a missing set
+        // or an invalid item creates no slip at all.
+        $periodDate = Carbon::create($year, $month, 1)->toDateString();
         $items = [];
         foreach ($employees as $employee) {
+            DeductionRateSetQuery::forEmployee($employee, $periodDate);
             $items[$employee->id] = $this->resolveItems($employee, $adjustmentsByEmployee->get($employee->id, []), $month, $year);
         }
 
-        $slips = collect();
-        foreach ($employees as $employee) {
-            $exists = SalarySlip::where('employee_id', $employee->id)
-                ->where('period_month', $month)
-                ->where('period_year', $year)
-                ->exists();
+        // One transaction for the whole run: a calculation or posting error
+        // for any employee leaves no slip and no entry of this run behind.
+        return DB::transaction(function () use ($employees, $month, $year, $shouldPost, $adjustmentsByEmployee, $items): Collection {
+            $slips = collect();
+            foreach ($employees as $employee) {
+                $exists = SalarySlip::where('employee_id', $employee->id)
+                    ->where('period_month', $month)
+                    ->where('period_year', $year)
+                    ->exists();
 
-            if ($exists) {
-                continue;
-            }
-
-            $adjustment = $adjustmentsByEmployee->get($employee->id, []);
-            $resolved = $items[$employee->id];
-            $slip = DB::transaction(function () use ($employee, $month, $year, $shouldPost, $adjustment, $resolved): SalarySlip {
-                $slip = $this->calculator->calculate(
-                    $employee,
-                    $month,
-                    $year,
-                    (int) ($adjustment['unpaid_leave_days'] ?? 0),
-                    (string) ($adjustment['reimbursement_amount'] ?? '0.00'),
-                    $resolved,
-                );
-                $slip->save();
-
-                if ($shouldPost) {
-                    $this->postAction->execute($slip);
+                if ($exists) {
+                    continue;
                 }
 
-                return $slip;
-            });
+                $adjustment = $adjustmentsByEmployee->get($employee->id, []);
+                $resolved = $items[$employee->id];
+                $slip = DB::transaction(function () use ($employee, $month, $year, $shouldPost, $adjustment, $resolved): SalarySlip {
+                    $slip = $this->calculator->calculate(
+                        $employee,
+                        $month,
+                        $year,
+                        (int) ($adjustment['unpaid_leave_days'] ?? 0),
+                        (string) ($adjustment['reimbursement_amount'] ?? '0.00'),
+                        $resolved,
+                    );
+                    $slip->save();
 
-            $slips->push($slip);
-        }
+                    if ($shouldPost) {
+                        $this->postAction->execute($slip);
+                    }
 
-        return $slips;
+                    return $slip;
+                });
+
+                $slips->push($slip);
+            }
+
+            return $slips;
+        });
     }
 
     /**
@@ -151,6 +159,9 @@ class GeneratePayrollRunAction
                     ->orWhereDate('exit_date', '>=', $periodStart);
             })
             ->when($employeeIds !== [], fn ($query) => $query->whereIn('id', $employeeIds))
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->orderBy('id')
             ->get();
     }
 }
