@@ -1,5 +1,6 @@
 <script setup>
 import { useForm, router } from '@inertiajs/vue3'
+import { todayLocal } from '@/lib/dates'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
 import CardHeader from '@/Components/UI/CardHeader.vue'
@@ -71,7 +72,7 @@ function sendReminder() {
 const finalizeForm = useForm({})
 const paymentForm = useForm({
   amount: '',
-  payment_date: new Date().toISOString().slice(0, 10),
+  payment_date: todayLocal(),
   payment_method: 'bank',
   reference: '',
   bank_account_code: '',
@@ -119,7 +120,7 @@ function recordPayment() {
 
 function openPaymentModal() {
   paymentForm.amount = amountDue.value.toFixed(2)
-  paymentForm.payment_date = new Date().toISOString().slice(0, 10)
+  paymentForm.payment_date = todayLocal()
   paymentForm.payment_method = 'bank'
   paymentForm.reference = ''
   paymentForm.bank_account_code = ''

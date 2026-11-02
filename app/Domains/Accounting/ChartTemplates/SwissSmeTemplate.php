@@ -2,6 +2,7 @@
 
 namespace App\Domains\Accounting\ChartTemplates;
 
+use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\Enums\AccountType;
 
 class SwissSmeTemplate implements ChartTemplateInterface
@@ -24,6 +25,11 @@ class SwissSmeTemplate implements ChartTemplateInterface
     public function seedsVatRates(): bool
     {
         return true;
+    }
+
+    public function revenueAccountCode(): string
+    {
+        return AccountCode::REVENUE;
     }
 
     public function accounts(): array
@@ -124,7 +130,7 @@ class SwissSmeTemplate implements ChartTemplateInterface
                 'en' => 'Revenue from Products', 'fr' => 'Produits des ventes de marchandises', 'de' => 'Handelserlöse', 'it' => 'Ricavi da vendite di merci', 'rm' => 'Entradas da venditas da products',
             ]],
             ['code' => '3400', 'type' => AccountType::Revenue->value, 'name' => [
-                'en' => 'Revenue from Services', 'fr' => 'Vente de prestations', 'de' => 'Dienstleistungserlöse', 'it' => 'Ricavi da prestazioni di servizi', 'rm' => 'Entradas da prestaziuns da servetschs',
+                'en' => 'Revenue from Services', 'fr' => 'Ventes de prestations', 'de' => 'Dienstleistungserlöse', 'it' => 'Ricavi da prestazioni di servizi', 'rm' => 'Entradas da prestaziuns da servetschs',
             ]],
             ['code' => '3800', 'type' => AccountType::Revenue->value, 'name' => [
                 'en' => 'Discounts Given', 'fr' => 'Escomptes accordés', 'de' => 'Skonti', 'it' => 'Sconti concessi', 'rm' => 'Rabats concedids',

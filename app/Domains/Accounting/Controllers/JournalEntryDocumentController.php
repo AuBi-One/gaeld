@@ -5,8 +5,10 @@ namespace App\Domains\Accounting\Controllers;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Organizations\Services\OrganizationDocumentStorageService;
 use App\Http\Controllers\Controller;
+use App\Support\Services\FileUploadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -17,7 +19,51 @@ class JournalEntryDocumentController extends Controller
 {
     public function __construct(
         private OrganizationDocumentStorageService $documentStorage,
+        private FileUploadService $uploadService,
     ) {}
+
+    /**
+     * Attach a justificatif to an entry without one, also once posted (audited like any
+     * change of the entry). Replacing or removing it needs a draft (update).
+     */
+    public function attachJustificatif(Request $request, JournalEntry $journalEntry): RedirectResponse
+    {
+        $this->authorize('attachJustificatif', $journalEntry);
+
+        $validated = $request->validate([
+            'justificatif' => ['required', 'file', 'mimes:'.config('uploads.allowed_mimes.document'), 'max:'.config('uploads.max_size.document')],
+        ]);
+        $document = $validated['justificatif'];
+        $organization = $journalEntry->organization;
+        $documentBytes = (int) $document->getSize();
+        $this->documentStorage->reserve($organization, $documentBytes);
+
+        try {
+            $path = $this->uploadService->store($document, "justificatifs/{$journalEntry->organization_id}");
+        } catch (\Throwable $exception) {
+            $this->documentStorage->release($organization, $documentBytes);
+
+            throw $exception;
+        }
+
+        // Only if still none: a concurrent attach must not orphan the other file.
+        $attached = DB::transaction(function () use ($journalEntry, $path): bool {
+            $entry = JournalEntry::query()->whereKey($journalEntry->id)->lockForUpdate()->first();
+            if ($entry === null || $entry->justificatif_path !== null) {
+                return false;
+            }
+            $entry->update(['justificatif_path' => $path]);
+
+            return true;
+        });
+
+        if (! $attached) {
+            $this->documentStorage->delete($organization, $path);
+            abort(409);
+        }
+
+        return back()->with('success', __('app.justificatif_added'));
+    }
 
     public function removeJustificatif(JournalEntry $journalEntry): RedirectResponse
     {

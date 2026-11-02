@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useForm } from '@inertiajs/vue3'
+import { todayLocal } from '@/lib/dates'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
 import CardHeader from '@/Components/UI/CardHeader.vue'
@@ -26,7 +27,7 @@ const { t } = useTranslations()
 const form = useForm({
   customer_id: '',
   frequency: 'monthly',
-  start_date: new Date().toISOString().slice(0, 10),
+  start_date: todayLocal(),
   end_date: '',
   currency: 'CHF',
   notes: '',

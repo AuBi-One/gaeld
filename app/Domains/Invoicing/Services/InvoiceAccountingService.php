@@ -5,8 +5,12 @@ namespace App\Domains\Invoicing\Services;
 use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
+use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Enums\VatEntryType;
+use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Models\VatEntry;
+use App\Domains\Accounting\Services\ChartTemplateService;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Invoicing\DTOs\RecordPaymentData;
@@ -28,6 +32,7 @@ class InvoiceAccountingService
     public function __construct(
         private LedgerService $ledgerService,
         private LedgerQueryService $ledgerQuery,
+        private ChartTemplateService $chartTemplates,
     ) {}
 
     /**
@@ -35,12 +40,14 @@ class InvoiceAccountingService
      *
      * Accounting effect (multi-VAT aware):
      *   Debit  1100 Accounts Receivable  (invoice total incl. VAT)
-     *   Credit 3000 Revenue from Services (net amount per VAT group)
+     *   Credit revenue account            (net amount per VAT group; the organisation's
+     *                                      setting, by default 3400 Revenue from Services)
      *   Credit 2200 VAT Output Tax        (VAT amount per VAT group)
      *
-     * For credit notes, debit/credit are reversed:
+     * For credit notes, debit/credit are reversed, and the revenue is taken back from
+     * the account the original invoice credited:
      *   Credit 1100 Accounts Receivable
-     *   Debit  3000 Revenue from Services
+     *   Debit  revenue account
      *   Debit  2200 VAT Output Tax
      *
      * Marks the invoice as Sent.
@@ -54,7 +61,7 @@ class InvoiceAccountingService
             $isCreditNote = $invoice->type === InvoiceType::CreditNote;
 
             $ar = $this->ledgerQuery->resolveAccount($orgId, AccountCode::ACCOUNTS_RECEIVABLE);
-            $revenue = $this->ledgerQuery->resolveAccount($orgId, AccountCode::REVENUE);
+            $revenue = $this->revenueAccount($invoice, $isCreditNote);
 
             $lines = [];
 
@@ -148,6 +155,36 @@ class InvoiceAccountingService
 
             return $invoice->fresh(['lines', 'customer', 'journalEntry.lines']);
         });
+    }
+
+    /**
+     * The account the revenue lines go to. A credit note reverses the revenue of its
+     * invoice on the account that invoice credited (the setting may have changed since).
+     * A missing configured account is created (only that one), so an organisation whose
+     * chart lacks it can still finalise.
+     */
+    private function revenueAccount(Invoice $invoice, bool $isCreditNote): Account
+    {
+        if ($isCreditNote && $invoice->related_invoice_id !== null) {
+            $originalEntryId = Invoice::query()->withoutGlobalScopes()
+                ->where('organization_id', $invoice->organization_id)
+                ->whereKey($invoice->related_invoice_id)
+                ->value('journal_entry_id');
+            $accountId = $originalEntryId === null ? null : TransactionLine::query()
+                ->join('accounts', 'accounts.id', '=', 'transaction_lines.account_id')
+                ->where('transaction_lines.journal_entry_id', $originalEntryId)
+                ->where('accounts.organization_id', $invoice->organization_id)
+                ->where('accounts.type', AccountType::Revenue->value)
+                ->where('transaction_lines.credit', '>', 0)
+                ->orderByDesc('transaction_lines.credit')
+                ->value('transaction_lines.account_id');
+            $account = $accountId === null ? null : Account::query()->withoutGlobalScopes()->whereKey($accountId)->first();
+            if ($account !== null) {
+                return $account;
+            }
+        }
+
+        return $this->chartTemplates->ensureRevenueAccount($invoice->organization);
     }
 
     /**

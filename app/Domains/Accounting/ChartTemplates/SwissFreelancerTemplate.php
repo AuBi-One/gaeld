@@ -2,6 +2,7 @@
 
 namespace App\Domains\Accounting\ChartTemplates;
 
+use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\Enums\AccountType;
 
 /**
@@ -28,6 +29,11 @@ class SwissFreelancerTemplate implements ChartTemplateInterface
     public function seedsVatRates(): bool
     {
         return true;
+    }
+
+    public function revenueAccountCode(): string
+    {
+        return AccountCode::REVENUE;
     }
 
     public function accounts(): array
@@ -92,7 +98,7 @@ class SwissFreelancerTemplate implements ChartTemplateInterface
                 'en' => 'Revenue from Manufactured Goods', 'fr' => 'Ventes de produits fabriqués', 'de' => 'Produktionserlöse', 'it' => 'Ricavi di produzione', 'rm' => 'Entradas da productura',
             ]],
             ['code' => '3400', 'type' => AccountType::Revenue->value, 'name' => [
-                'en' => 'Revenue from Services', 'fr' => 'Vente de prestations', 'de' => 'Dienstleistungserlöse', 'it' => 'Ricavi da prestazioni di servizi', 'rm' => 'Entradas da prestaziuns da servetschs',
+                'en' => 'Revenue from Services', 'fr' => 'Ventes de prestations', 'de' => 'Dienstleistungserlöse', 'it' => 'Ricavi da prestazioni di servizi', 'rm' => 'Entradas da prestaziuns da servetschs',
             ]],
             ['code' => '3900', 'type' => AccountType::Revenue->value, 'name' => [
                 'en' => 'Revenue Corrections', 'fr' => 'Corrections de produits', 'de' => 'Erlösberichtigungen', 'it' => 'Rettifiche di ricavi', 'rm' => 'Correcturas d\'entradas',

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { Link, router } from '@inertiajs/vue3'
+import { Link, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
 import CardHeader from '@/Components/UI/CardHeader.vue'
@@ -9,6 +9,7 @@ import CardContent from '@/Components/UI/CardContent.vue'
 import Button from '@/Components/UI/Button.vue'
 import Badge from '@/Components/UI/Badge.vue'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
+import FileUpload from '@/Components/UI/FileUpload.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 import { Paperclip, Trash2, Eye, Download, X } from 'lucide-vue-next'
@@ -18,6 +19,7 @@ const props = defineProps({
   source: { type: Object, default: null },
   justificatifUrl: { type: String, default: null },
   canEditJustificatif: { type: Boolean, default: false },
+  canAttachJustificatif: { type: Boolean, default: false },
 })
 
 const { t } = useTranslations()
@@ -27,6 +29,17 @@ const showJustificatifPreview = ref(false)
 
 function removeJustificatif() {
   router.delete(`/accounting/journal-entries/${props.entry.id}/justificatif`)
+}
+
+// Also on a posted entry that has none yet (a voucher does not change the booking).
+const attachForm = useForm({ justificatif: null })
+
+function attachJustificatif() {
+  attachForm.post(`/accounting/journal-entries/${props.entry.id}/justificatif`, {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => attachForm.reset(),
+  })
 }
 
 const totalDebit = computed(() => props.entry.lines?.reduce((total, line) => total + Number(line.debit || 0), 0) || 0)
@@ -144,6 +157,30 @@ const totalCredit = computed(() => props.entry.lines?.reduce((total, line) => to
               {{ t('download') }}
             </a>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card v-else-if="canAttachJustificatif">
+        <CardHeader>
+          <CardTitle class="flex items-center gap-2">
+            <Paperclip class="h-4 w-4" />
+            {{ t('justificatif') }}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form class="space-y-4" @submit.prevent="attachJustificatif">
+            <FileUpload
+              v-model="attachForm.justificatif"
+              size="compact"
+              :help-text="t('justificatif_attach_hint')"
+              :error="attachForm.errors.justificatif"
+            />
+            <div class="flex justify-end">
+              <Button type="submit" :disabled="!attachForm.justificatif || attachForm.processing" :loading="attachForm.processing">
+                {{ t('attach_justificatif') }}
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
 

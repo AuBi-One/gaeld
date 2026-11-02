@@ -120,7 +120,7 @@ function onCustomerCreated(customer) {
 }
 
 // The contact person offered depends on the chosen customer; keep a valid
-// selection (or the customer's primary/only person) as that choice changes.
+// selection as that choice changes. None by default: an "Attention" line is opt-in.
 const personOptions = computed(() => [
   { value: '', label: t('no_contact_person') },
   ...(props.contactPersons[form.customer_id] ?? []).map(p => ({ value: p.id, label: p.email ? `${p.name} — ${p.email}` : p.name })),
@@ -128,7 +128,7 @@ const personOptions = computed(() => [
 watch(() => form.customer_id, () => {
   const persons = props.contactPersons[form.customer_id] ?? []
   if (!persons.some(p => p.id === form.contact_person_id)) {
-    form.contact_person_id = persons.find(p => p.is_primary)?.id ?? (persons.length === 1 ? persons[0].id : '')
+    form.contact_person_id = ''
   }
 })
 </script>

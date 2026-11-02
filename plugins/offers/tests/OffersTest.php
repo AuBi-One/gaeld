@@ -819,4 +819,57 @@ class OffersTest extends OffersTestCase
         $as()->delete("/offers/{$offer->id}")->assertForbidden();
         $as()->post("/offers/{$offer->id}/send")->assertSessionHasNoErrors();
     }
+
+    #[Test]
+    public function store_with_send_saves_and_sends_in_one_step(): void
+    {
+        Storage::fake('local');
+
+        $response = $this->actAsOrg()->post('/offers', $this->payload(['send' => true]));
+
+        $offer = Offer::query()->firstOrFail();
+        $response->assertSessionHasNoErrors()->assertRedirect("/offers/{$offer->id}");
+        $this->assertSame(Offer::STATUS_SENT, $offer->status);
+        Storage::disk('local')->assertExists($offer->document_path);
+    }
+
+    #[Test]
+    public function store_with_send_leaves_no_draft_when_sending_fails(): void
+    {
+        Storage::fake('local');
+        $this->mock(OfferPdf::class)->shouldReceive('render')->andThrow(new \RuntimeException('PDF failed'));
+
+        $this->withoutExceptionHandling();
+        try {
+            $this->actAsOrg()->post('/offers', $this->payload(['send' => true]));
+            $this->fail('The PDF error should propagate.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('PDF failed', $e->getMessage());
+        }
+
+        $this->assertSame(0, Offer::query()->withoutGlobalScopes()->count());
+        $this->assertSame([], Storage::disk('local')->allFiles('offers'));
+        // The number was not consumed: the next offer still gets the first one.
+        $this->assertSame('OF-2026-001', $this->offer()->number);
+    }
+
+    #[Test]
+    public function the_sender_contact_migration_only_touches_drafts_and_keeps_updated_at(): void
+    {
+        $draft = $this->offer(['title' => 'Draft']);
+        $sent = $this->sent(['title' => 'Sent']);
+        $hidden = ['from' => ['email' => false, 'phone' => false, 'name' => true]];
+        DB::table('of_offers')->update(['layout' => json_encode($hidden), 'updated_at' => '2026-01-01 10:00:00']);
+
+        $migration = require __DIR__.'/../migrations/2026_10_17_225800_show_sender_contact_by_default_on_offers.php';
+        $migration->up();
+
+        $draftRow = DB::table('of_offers')->where('id', $draft->id)->first();
+        $this->assertSame(['email' => true, 'phone' => true, 'name' => true], json_decode($draftRow->layout, true)['from']);
+        $this->assertStringStartsWith('2026-01-01 10:00:00', (string) $draftRow->updated_at);
+        $this->assertSame($hidden, json_decode(DB::table('of_offers')->where('id', $sent->id)->value('layout'), true));
+
+        $migration->down();
+        $this->assertSame($hidden['from'], json_decode(DB::table('of_offers')->where('id', $draft->id)->value('layout'), true)['from']);
+    }
 }

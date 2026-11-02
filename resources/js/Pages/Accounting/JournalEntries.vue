@@ -207,8 +207,10 @@ function submitForm(post = true) {
   form.is_posted = post
 
   if (editingEntry.value) {
-    form.put(`/accounting/journal-entries/${editingEntry.value.id}`, {
+    // PHP does not parse multipart bodies on PUT: POST with a method override, as the other upload forms.
+    form.post(`/accounting/journal-entries/${editingEntry.value.id}`, {
       forceFormData: true,
+      headers: { 'X-HTTP-Method-Override': 'PUT' },
       onSuccess: () => { showForm.value = false },
       preserveScroll: true,
     })

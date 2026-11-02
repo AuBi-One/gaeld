@@ -31,6 +31,11 @@ class SwissAssociationTemplate implements ChartTemplateInterface
         return true;
     }
 
+    public function revenueAccountCode(): string
+    {
+        return '3000'; // Membership fees
+    }
+
     public function accounts(): array
     {
         return [

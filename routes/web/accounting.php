@@ -103,6 +103,7 @@ Route::put('/accounting/journal-entries/{journalEntry}', [AccountingController::
 Route::post('/accounting/journal-entries/{journalEntry}/post', [AccountingController::class, 'postJournalEntry'])->name('accounting.journal-entries.post');
 Route::post('/accounting/journal-entries/{journalEntry}/reverse', [AccountingController::class, 'reverseJournalEntry'])->name('accounting.journal-entries.reverse');
 Route::delete('/accounting/journal-entries/{journalEntry}', [AccountingController::class, 'destroyJournalEntry'])->name('accounting.journal-entries.destroy');
+Route::post('/accounting/journal-entries/{journalEntry}/justificatif', [JournalEntryDocumentController::class, 'attachJustificatif'])->name('accounting.journal-entries.justificatif.attach');
 Route::delete('/accounting/journal-entries/{journalEntry}/justificatif', [JournalEntryDocumentController::class, 'removeJustificatif'])->name('accounting.journal-entries.justificatif.remove');
 Route::get('/accounting/journal-entries/{journalEntry}/justificatif', [JournalEntryDocumentController::class, 'downloadJustificatif'])->middleware('throttle:30,1')->name('accounting.journal-entries.justificatif.download');
 

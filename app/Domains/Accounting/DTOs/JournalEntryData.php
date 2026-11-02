@@ -23,6 +23,7 @@ readonly class JournalEntryData
         public ?string $description,
         public array $lines,
         public ?string $type = null,
+        public ?string $justificatifPath = null,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -39,6 +40,7 @@ readonly class JournalEntryData
                 $data['lines'],
             ),
             type: $data['type'] ?? null,
+            justificatifPath: $data['justificatif_path'] ?? null,
         );
     }
 
@@ -51,6 +53,7 @@ readonly class JournalEntryData
             'description' => $this->description,
             'lines' => array_map(fn (JournalLineData $line) => $line->toArray(), $this->lines),
             'type' => $this->type,
+            'justificatif_path' => $this->justificatifPath,
         ];
     }
 }

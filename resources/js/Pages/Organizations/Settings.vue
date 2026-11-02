@@ -18,6 +18,7 @@ import { currencyOptions, countryOptions } from '@/lib/contactOptions'
 import IbanHint from '@/Components/IbanHint.vue'
 import PdfFooterCard from '@/Components/Settings/PdfFooterCard.vue'
 import PdfLayoutsCard from '@/Components/Settings/PdfLayoutsCard.vue'
+import RevenueAccountCard from '@/Components/Settings/RevenueAccountCard.vue'
 import { Upload, Trash2, Plus } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -27,6 +28,8 @@ const props = defineProps({
   catalogItems: { type: Array, default: () => [] },
   vatRates: { type: Array, default: () => [] },
   pdfLayouts: { type: Array, default: () => [] },
+  revenueAccountCode: { type: String, default: '' },
+  revenueAccounts: { type: Array, default: () => [] },
   modules: { type: Array, default: () => [] },
   modulePresets: { type: Object, default: () => ({}) },
   pendingFiscalYearChange: { type: Object, default: null },
@@ -635,6 +638,9 @@ const businessTypeOptions = [
 
         <!-- Footer line of generated PDFs -->
         <PdfFooterCard :organization="organization" />
+
+        <!-- Account invoice revenue is booked to -->
+        <RevenueAccountCard v-if="revenueAccountCode" :code="revenueAccountCode" :accounts="revenueAccounts" />
 
         <!-- Invoice texts -->
         <Card>

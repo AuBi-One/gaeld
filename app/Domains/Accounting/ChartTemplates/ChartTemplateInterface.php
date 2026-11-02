@@ -32,4 +32,9 @@ interface ChartTemplateInterface
      * Whether this template also seeds VAT rates.
      */
     public function seedsVatRates(): bool;
+
+    /**
+     * The account invoices book their revenue to for an organisation seeded with this template.
+     */
+    public function revenueAccountCode(): string;
 }

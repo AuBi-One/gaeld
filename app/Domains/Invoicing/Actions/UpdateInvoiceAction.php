@@ -25,7 +25,8 @@ class UpdateInvoiceAction
 
         $invoiceData = [
             'customer_id' => $data->customerId,
-            'contact_person_id' => $data->contactPersonId,
+            // Only a person of the chosen customer is kept (set below).
+            'contact_person_id' => null,
             'number' => $data->number,
             'issue_date' => $data->issueDate,
             'due_date' => $data->dueDate,
@@ -52,6 +53,7 @@ class UpdateInvoiceAction
             $person = $customer !== null && $data->contactPersonId !== null
                 ? $customer->contactPersons()->whereKey($data->contactPersonId)->first()
                 : null;
+            $invoiceData['contact_person_id'] = $person?->id;
             $invoiceData['customer_snapshot'] = $customer?->toInvoiceSnapshot($person);
         }
 

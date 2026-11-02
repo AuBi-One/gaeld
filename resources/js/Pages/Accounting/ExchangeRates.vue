@@ -163,7 +163,7 @@ function fetchEcb() {
           id="rate"
           v-model="form.rate"
           type="number"
-          step="0.00001"
+          step="any"
           :label="t('exchange_rate_rate')"
           :error="form.errors.rate"
           required

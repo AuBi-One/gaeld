@@ -6,6 +6,7 @@ use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Models\ContactPerson;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 use Tests\Traits\WithAuthenticatedOrganization;
@@ -85,5 +86,13 @@ class InvoiceContactPersonTest extends TestCase
 
         $this->actAsOrg()->post('/invoices', $this->payload(['contact_person_id' => $otherPerson->id]))
             ->assertSessionHasErrors('contact_person_id');
+    }
+
+    public function test_the_contact_person_foreign_key_is_indexed(): void
+    {
+        $indexed = collect(Schema::getIndexes('invoices'))
+            ->contains(fn (array $index): bool => $index['columns'] === ['contact_person_id']);
+
+        $this->assertTrue($indexed, 'ON DELETE SET NULL on contact_persons would scan invoices');
     }
 }

@@ -25,6 +25,7 @@ import { useFormValidation, z } from '@/lib/useFormValidation'
 import FileUpload from '@/Components/UI/FileUpload.vue'
 import InvoiceLineItems from '@/Components/Invoices/InvoiceLineItems.vue'
 import { Plus } from 'lucide-vue-next'
+import { addDays, todayLocal } from '@/lib/dates'
 
 const props = defineProps({
   customers: { type: Array, default: () => [] },
@@ -47,7 +48,7 @@ const { isClosed: isIssueDateClosed, closedYear } = useClosedFiscalYear(() => fo
 const form = useForm({
   customer_id: '',
   contact_person_id: '',
-  issue_date: new Date().toISOString().slice(0, 10),
+  issue_date: todayLocal(),
   due_date: '',
   currency: 'CHF',
   introduction: '',
@@ -144,9 +145,7 @@ const dueDateManuallyEdited = ref(false)
 
 function computeDueDate(issueDate, paymentTermsDays) {
   if (!issueDate || !paymentTermsDays) return ''
-  const date = new Date(issueDate)
-  date.setDate(date.getDate() + parseInt(paymentTermsDays))
-  return date.toISOString().slice(0, 10)
+  return addDays(issueDate, parseInt(paymentTermsDays))
 }
 
 function applyPaymentTerms() {
@@ -163,7 +162,7 @@ watch(() => form.customer_id, applyPaymentTerms)
 watch(() => form.issue_date, applyPaymentTerms)
 
 // The contact person offered depends on the chosen customer; keep a valid
-// selection (or the customer's primary/only person) as that choice changes.
+// selection as that choice changes. None by default: an "Attention" line is opt-in.
 const personOptions = computed(() => [
   { value: '', label: t('no_contact_person') },
   ...(props.contactPersons[form.customer_id] ?? []).map(p => ({ value: p.id, label: p.email ? `${p.name} — ${p.email}` : p.name })),
@@ -171,7 +170,7 @@ const personOptions = computed(() => [
 watch(() => form.customer_id, () => {
   const persons = props.contactPersons[form.customer_id] ?? []
   if (!persons.some(p => p.id === form.contact_person_id)) {
-    form.contact_person_id = persons.find(p => p.is_primary)?.id ?? (persons.length === 1 ? persons[0].id : '')
+    form.contact_person_id = ''
   }
 })
 
@@ -184,8 +183,13 @@ watch(() => form.payment_terms, (days) => {
   }
 })
 
+// A real edit only: FormInput forwards listeners to the <input> (dcbc1fce), so blur
+// fires when merely tabbing through and must not freeze the date. A date set back to
+// empty or to the computed one lets the payment terms drive it again.
 function onDueDateManualEdit() {
-  dueDateManuallyEdited.value = true
+  const customer = customerList.find(c => String(c.id) === form.customer_id)
+  const days = form.payment_terms || customer?.payment_terms || props.defaultPaymentTermsDays
+  dueDateManuallyEdited.value = form.due_date !== '' && form.due_date !== computeDueDate(form.issue_date, days)
   validateField('due_date', form.due_date)
 }
 </script>
@@ -265,7 +269,7 @@ function onDueDateManualEdit() {
               :error="form.errors.due_date || clientErrors.due_date"
               :hint="t('required_to_finalize')"
               :required="form.finalize"
-              @blur="onDueDateManualEdit"
+              @blur="validateField('due_date', form.due_date)"
               @change="onDueDateManualEdit"
             />
             <FormSelect

@@ -32,7 +32,7 @@ class SwissChartOfAccountsSeederTest extends TestCase
         ]);
         $this->assertDatabaseHas('accounts', [
             'organization_id' => $organization->id,
-            'code' => '3000',
+            'code' => '3400',
             'name' => 'Revenue from Services',
         ]);
         $this->assertDatabaseHas('accounts', [

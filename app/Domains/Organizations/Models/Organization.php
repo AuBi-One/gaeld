@@ -2,6 +2,7 @@
 
 namespace App\Domains\Organizations\Models;
 
+use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Banking\Models\BankAccount;
@@ -45,6 +46,7 @@ use Illuminate\Support\Carbon;
  * @property array<string, bool>|null $enabled_modules
  * @property array<string, string>|null $pdf_layouts
  * @property string|null $pdf_footer_text
+ * @property string|null $default_revenue_account_code
  * @property string|null $locale
  * @property BusinessType|null $business_type
  * @property string $setup_mode
@@ -86,6 +88,7 @@ class Organization extends Model
         'invoice_footer_text',
         'pdf_layouts',
         'pdf_footer_text',
+        'default_revenue_account_code',
         'invoice_email_subject',
         'invoice_email_body',
         'enabled_modules',
@@ -107,6 +110,17 @@ class Organization extends Model
             'founded_at' => 'date:Y-m-d',
             'suspended_at' => 'datetime',
         ];
+    }
+
+    /**
+     * The account invoices credit their revenue to: the organisation's choice, else the
+     * default services account.
+     */
+    public function revenueAccountCode(): string
+    {
+        $code = $this->getAttribute('default_revenue_account_code');
+
+        return is_string($code) && $code !== '' ? $code : AccountCode::REVENUE;
     }
 
     /**

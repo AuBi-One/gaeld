@@ -58,6 +58,22 @@ class JournalEntryPolicy extends BasePolicy
         return $allowed ? $this->unlessOwned($entry) : false;
     }
 
+    /**
+     * Attach a justificatif to an entry that has none, posted or not: the voucher does not change
+     * the booking (OR 957a). Replacing or removing one stays a draft-only edit (update).
+     */
+    public function attachJustificatif(User $user, JournalEntry $entry): Response|bool
+    {
+        if ($entry->archived_at !== null || $entry->justificatif_path !== null) {
+            return false;
+        }
+
+        $allowed = $this->belongsToOrganization($user, $entry)
+            && $user->hasPermissionTo(Permission::AccountingEdit);
+
+        return $allowed ? $this->unlessOwned($entry) : false;
+    }
+
     public function post(User $user, JournalEntry $entry): bool
     {
         return $this->belongsToOrganization($user, $entry)

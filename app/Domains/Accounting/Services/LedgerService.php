@@ -18,6 +18,7 @@ use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Organizations\Models\Organization;
+use App\Domains\Organizations\Services\OrganizationDocumentStorageService;
 use App\Support\Money;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
@@ -38,6 +39,7 @@ class LedgerService
 
     public function __construct(
         private LedgerQueryService $queryService,
+        private OrganizationDocumentStorageService $documentStorage,
     ) {}
 
     // ──────────────────────────────────────────────────────────────
@@ -127,7 +129,8 @@ class LedgerService
     }
 
     /**
-     * Delete an unposted journal entry and its lines.
+     * Delete an unposted journal entry and its lines. Its justificatif file and the
+     * quota it held go too, once the deletion is committed.
      *
      * @throws AlreadyPostedException When the entry is already posted
      * @throws InvalidEntryDataException When the entry is archived
@@ -142,9 +145,21 @@ class LedgerService
             throw new AlreadyPostedException('Posted journal entries cannot be deleted.');
         }
 
-        DB::transaction(function () use ($journalEntry): void {
+        $justificatifPath = $journalEntry->justificatif_path;
+        $organizationId = $journalEntry->organization_id;
+
+        DB::transaction(function () use ($journalEntry, $justificatifPath, $organizationId): void {
             $journalEntry->lines()->delete();
             $journalEntry->delete();
+
+            if ($justificatifPath !== null) {
+                DB::afterCommit(function () use ($justificatifPath, $organizationId): void {
+                    $organization = Organization::query()->find($organizationId);
+                    if ($organization !== null) {
+                        $this->documentStorage->delete($organization, $justificatifPath);
+                    }
+                });
+            }
         });
     }
 
@@ -274,6 +289,8 @@ class LedgerService
                     'description' => $entry->description,
                     'is_posted' => $isPosted,
                     'type' => $entry->type,
+                    // Set with the entry, so JournalEntryPosted listeners already see the document.
+                    'justificatif_path' => $entry->justificatifPath,
                 ]);
 
                 foreach ($entry->lines as $line) {

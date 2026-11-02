@@ -87,10 +87,17 @@ class ChartTemplateService
 
         $locale = $organization->locale ?? 'en';
 
+        // The template decides where invoice revenue goes, unless the organisation already chose.
+        if ($organization->default_revenue_account_code === null) {
+            $organization->forceFill(['default_revenue_account_code' => $template->revenueAccountCode()])->save();
+        }
+
         $systemCodes = array_filter(
             (new \ReflectionClass(AccountCode::class))->getConstants(),
-            fn ($v) => is_string($v) && ctype_digit($v),
+            fn ($v, $name) => is_string($v) && ctype_digit($v) && $name !== 'REVENUE',
+            ARRAY_FILTER_USE_BOTH,
         );
+        $systemCodes[] = $organization->revenueAccountCode();
 
         foreach ($template->accounts() as $account) {
             $def = new AccountDefinition(
@@ -129,6 +136,11 @@ class ChartTemplateService
     {
         $locale = $organization->locale ?? 'en';
 
+        // From now on the code is the organisation's own: AccountCode::REVENUE only decides at creation.
+        if ($organization->default_revenue_account_code === null) {
+            $organization->forceFill(['default_revenue_account_code' => AccountCode::REVENUE])->save();
+        }
+
         $systemAccounts = [
             ['code' => AccountCode::BANK_CASH, 'type' => AccountType::Asset, 'name' => [
                 'en' => 'Bank Account CHF', 'fr' => 'Compte bancaire CHF', 'de' => 'Bankkonto CHF', 'it' => 'Conto bancario CHF',
@@ -145,9 +157,7 @@ class ChartTemplateService
             ['code' => AccountCode::VAT_PAYABLE_AFC, 'type' => AccountType::Liability, 'name' => [
                 'en' => 'VAT Payable AFC', 'fr' => 'TVA à payer AFC', 'de' => 'MWST-Zahllast ESTV', 'it' => 'IVA da versare AFC',
             ]],
-            ['code' => AccountCode::REVENUE, 'type' => AccountType::Revenue, 'name' => [
-                'en' => 'Revenue from Services', 'fr' => 'Produits des prestations de services', 'de' => 'Dienstleistungserlöse', 'it' => 'Ricavi da prestazioni di servizi',
-            ]],
+            ['code' => $organization->revenueAccountCode(), 'type' => AccountType::Revenue, 'name' => $this->servicesAccountNames()],
             ['code' => AccountCode::ROUNDING_DIFFERENCE, 'type' => AccountType::Revenue, 'name' => [
                 'en' => 'Revenue Corrections', 'fr' => 'Corrections de produits', 'de' => 'Erlösberichtigungen', 'it' => 'Rettifiche di ricavi',
             ]],
@@ -171,6 +181,44 @@ class ChartTemplateService
                 ],
             );
         }
+    }
+
+    /**
+     * The organisation's invoice revenue account, created (as a system account named
+     * like the templates' services account) when its chart lacks it.
+     */
+    public function ensureRevenueAccount(Organization $organization): Account
+    {
+        $names = $this->servicesAccountNames();
+
+        return Account::withoutGlobalScopes()->firstOrCreate(
+            [
+                'organization_id' => $organization->id,
+                'code' => $organization->revenueAccountCode(),
+            ],
+            [
+                'name' => $names[$organization->locale ?? 'en'] ?? $names['en'],
+                'type' => AccountType::Revenue->value,
+                'is_system' => true,
+            ],
+        );
+    }
+
+    /**
+     * The services account's name per locale, as the SME template labels it.
+     *
+     * @return array<string, string>
+     */
+    private function servicesAccountNames(): array
+    {
+        $template = new SwissSmeTemplate;
+        foreach ($template->accounts() as $account) {
+            if ($account['code'] === $template->revenueAccountCode()) {
+                return $account['name'];
+            }
+        }
+
+        return ['en' => 'Revenue from Services'];
     }
 
     /**

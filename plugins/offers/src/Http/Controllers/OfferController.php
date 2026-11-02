@@ -10,6 +10,7 @@ use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Response;
@@ -100,10 +101,13 @@ class OfferController extends PluginController
     public function store(Request $request): RedirectResponse
     {
         $this->authorizeWrite();
-        $offer = $this->offers->saveDraft($this->orgId(), $this->validated($request), null, $request->user()?->id);
-        if ($request->boolean('send')) {
-            $this->offers->transition($offer, 'send');
-        }
+        $data = $this->validated($request);
+        // Save and send at once: a failing send (e.g. the PDF) must not leave a numbered draft behind.
+        $offer = DB::transaction(function () use ($request, $data): Offer {
+            $offer = $this->offers->saveDraft($this->orgId(), $data, null, $request->user()?->id);
+
+            return $request->boolean('send') ? $this->offers->transition($offer, 'send') : $offer;
+        });
 
         return redirect("/offers/{$offer->id}")->with('success', __('offers::of.saved'));
     }

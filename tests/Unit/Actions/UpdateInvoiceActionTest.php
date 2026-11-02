@@ -64,6 +64,8 @@ class UpdateInvoiceActionTest extends TestCase
 
         $invoice->shouldReceive('update')->once()->with([
             'customer_id' => 'customer-1',
+            // No organisation to check the person against: none is kept.
+            'contact_person_id' => null,
             'number' => 'INV-200',
             'issue_date' => '2025-02-01',
             'due_date' => '2025-03-03',

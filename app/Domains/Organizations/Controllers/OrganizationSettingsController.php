@@ -2,6 +2,8 @@
 
 namespace App\Domains\Organizations\Controllers;
 
+use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Queries\VatRateQuery;
 use App\Domains\Expenses\Controllers\ExpenseCategoryController;
 use App\Domains\Expenses\Queries\ExpenseCategoryQuery;
@@ -30,7 +32,9 @@ use App\Support\Pdf\PdfLayouts;
 use App\Support\Services\FileUploadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -64,6 +68,15 @@ class OrganizationSettingsController extends Controller
             'catalogItems' => InvoiceCatalogItemQuery::all(),
             'vatRates' => VatRateQuery::active(),
             'pdfLayouts' => $pdfLayouts->forSettings($organization),
+            'revenueAccountCode' => $organization->revenueAccountCode(),
+            'revenueAccounts' => Account::query()
+                ->where('organization_id', $organization->id)
+                ->where('type', AccountType::Revenue->value)
+                ->where('is_active', true)
+                ->orderBy('code')
+                ->get(['code', 'name'])
+                ->map(fn (Account $account): array => ['code' => $account->code, 'name' => $account->name])
+                ->values(),
             'modules' => OrganizationModule::values(),
             'modulePresets' => OrganizationModule::presets(),
             'pendingFiscalYearChange' => FiscalYearChangeRequest::query()
@@ -213,6 +226,40 @@ class OrganizationSettingsController extends Controller
 
         return redirect()->route('settings')
             ->with('success', __('app.pdf_footer_updated'));
+    }
+
+    /**
+     * The account finalised invoices credit their revenue to. The chosen account becomes a
+     * system account, so it cannot be deleted (or dropped by a chart import) while in use.
+     */
+    public function updateRevenueAccount(Request $request, CurrentOrganization $currentOrg): RedirectResponse
+    {
+        $organization = $currentOrg->get();
+        $this->authorize('update', $organization);
+
+        $validated = $request->validate([
+            'default_revenue_account_code' => [
+                'required',
+                'string',
+                Rule::exists('accounts', 'code')
+                    ->where('organization_id', $organization->id)
+                    ->where('type', AccountType::Revenue->value)
+                    ->where('is_active', true),
+            ],
+        ]);
+        $code = (string) $validated['default_revenue_account_code'];
+
+        DB::transaction(function () use ($organization, $code): void {
+            $organization->update(['default_revenue_account_code' => $code]);
+            Account::query()
+                ->where('organization_id', $organization->id)
+                ->where('code', $code)
+                ->first()
+                ?->update(['is_system' => true]);
+        });
+
+        return redirect()->route('settings')
+            ->with('success', __('app.revenue_account_updated'));
     }
 
     public function updateModules(Request $request, CurrentOrganization $currentOrg): RedirectResponse

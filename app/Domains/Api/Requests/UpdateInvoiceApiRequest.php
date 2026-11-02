@@ -25,6 +25,24 @@ class UpdateInvoiceApiRequest extends FormRequest
                 'uuid',
                 Rule::exists('contacts', 'uuid')->where('organization_id', $orgId),
             ],
+            // A person of the invoice's customer (the new one when customer_id is sent); null removes it.
+            'contact_person_id' => [
+                'sometimes',
+                'nullable',
+                'uuid',
+                function (string $attribute, mixed $value, \Closure $fail) use ($orgId): void {
+                    $customerId = $this->input('customer_id');
+                    $invoice = $this->route('invoice');
+                    $customer = Contact::query()
+                        ->where('organization_id', $orgId)
+                        ->when($customerId !== null, fn ($query) => $query->where('uuid', $customerId))
+                        ->when($customerId === null, fn ($query) => $query->whereKey($invoice instanceof Invoice ? $invoice->customer_id : null))
+                        ->first();
+                    if ($customer === null || ! $customer->contactPersons()->whereKey($value)->exists()) {
+                        $fail(__('validation.exists', ['attribute' => $attribute]));
+                    }
+                },
+            ],
             'number' => 'nullable|string|max:50',
             'issue_date' => 'sometimes|date',
             'due_date' => 'nullable|date|after_or_equal:issue_date',

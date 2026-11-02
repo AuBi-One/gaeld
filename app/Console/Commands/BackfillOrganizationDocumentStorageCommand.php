@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Expenses\Models\Expense;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Organizations\Models\Organization;
@@ -30,6 +31,13 @@ class BackfillOrganizationDocumentStorageCommand extends Command
                 ->pluck('receipt_path')
                 ->merge(
                     Invoice::query()
+                        ->withoutGlobalScopes()
+                        ->where('organization_id', $organization->id)
+                        ->whereNotNull('justificatif_path')
+                        ->pluck('justificatif_path'),
+                )
+                ->merge(
+                    JournalEntry::query()
                         ->withoutGlobalScopes()
                         ->where('organization_id', $organization->id)
                         ->whereNotNull('justificatif_path')

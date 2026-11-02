@@ -449,6 +449,12 @@ class InvoiceApiController extends Controller
                 ? $validated['payment_terms']
                 : $invoice->payment_terms,
             'tax_treatment' => $validated['tax_treatment'] ?? $invoice->tax_treatment->value,
+            // Kept by a sparse update; another customer drops a person that was not sent with it.
+            'contact_person_id' => array_key_exists('contact_person_id', $validated)
+                ? $validated['contact_person_id']
+                : ((int) ($validated['customer_id'] ?? $invoice->customer_id) === (int) $invoice->customer_id
+                    ? $invoice->contact_person_id
+                    : null),
             'lines' => $validated['lines'] ?? $this->serializeExistingLines($invoice),
         ];
     }

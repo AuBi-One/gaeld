@@ -5,6 +5,7 @@ namespace App\Domains\Accounting\Controllers;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Exceptions\AlreadyPostedException;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
@@ -14,6 +15,7 @@ use App\Domains\Accounting\Services\JournalEntryReferences;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Organizations\Enums\Permission;
+use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Organizations\Services\OrganizationDocumentStorageService;
 use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
@@ -24,6 +26,7 @@ use App\Support\PdfExportService;
 use App\Support\Services\FileUploadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -140,6 +143,7 @@ class AccountingController extends Controller
                 ? route('accounting.journal-entries.justificatif.download', $journalEntry)
                 : null,
             'canEditJustificatif' => $request->user()?->can('update', $journalEntry) ?? false,
+            'canAttachJustificatif' => $request->user()?->can('attachJustificatif', $journalEntry) ?? false,
         ]);
     }
 
@@ -181,43 +185,31 @@ class AccountingController extends Controller
             description: $line['description'] ?? null,
         ), $validated['lines']);
 
+        $justificatifPath = $request->hasFile('justificatif')
+            ? $this->storeJustificatif($currentOrg->get(), $request->file('justificatif'))
+            : null;
+
         $entryData = new JournalEntryData(
             date: $validated['date'],
             reference: $validated['reference'] ?? null,
             description: $validated['description'] ?? null,
             lines: $lines,
+            justificatifPath: $justificatifPath,
         );
 
-        $justificatifPath = null;
-        if ($request->hasFile('justificatif')) {
-            $organization = $currentOrg->get();
-            $document = $request->file('justificatif');
-            $documentBytes = (int) $document->getSize();
-            $this->documentStorage->reserve($organization, $documentBytes);
-
-            try {
-                $justificatifPath = $this->uploadService->store($document, "justificatifs/{$currentOrg->id()}");
-            } catch (Throwable $exception) {
-                $this->documentStorage->release($organization, $documentBytes);
-
-                throw $exception;
-            }
-        }
-
         try {
-            $entry = $isPosted
+            // One transaction with the posting listeners: whatever fails, no entry and no file remain.
+            DB::transaction(fn () => $isPosted
                 ? $ledger->postEntry($currentOrg->id(), $entryData)
-                : $ledger->createDraft($currentOrg->id(), $entryData);
+                : $ledger->createDraft($currentOrg->id(), $entryData));
+        } catch (Throwable $e) {
+            $this->documentStorage->delete($currentOrg->get(), $justificatifPath);
 
-            if ($justificatifPath !== null) {
-                $entry->update(['justificatif_path' => $justificatifPath]);
-            }
-        } catch (DomainException $e) {
-            if ($justificatifPath !== null) {
-                $this->documentStorage->delete($currentOrg->get(), $justificatifPath);
+            if ($e instanceof DomainException) {
+                return $this->backWithError($e);
             }
 
-            return $this->backWithError($e);
+            throw $e;
         }
 
         return $this->toJournalList()
@@ -255,27 +247,22 @@ class AccountingController extends Controller
             lines: $lines,
         );
 
-        $newJustificatifPath = null;
         $oldJustificatifPath = null;
-        if ($request->hasFile('justificatif')) {
-            $organization = $journalEntry->organization;
-            $document = $request->file('justificatif');
-            $documentBytes = (int) $document->getSize();
-            $this->documentStorage->reserve($organization, $documentBytes);
-
-            try {
-                $newJustificatifPath = $this->uploadService->store($document, "justificatifs/{$journalEntry->organization_id}");
-                $oldJustificatifPath = $journalEntry->justificatif_path;
-            } catch (Throwable $exception) {
-                $this->documentStorage->release($organization, $documentBytes);
-
-                throw $exception;
-            }
-        }
+        $newJustificatifPath = $request->hasFile('justificatif')
+            ? $this->storeJustificatif($journalEntry->organization, $request->file('justificatif'))
+            : null;
 
         try {
             // Delete old lines and update entry in a transaction
-            DB::transaction(function () use ($journalEntry, $entryData, $newJustificatifPath) {
+            DB::transaction(function () use ($journalEntry, $entryData, $newJustificatifPath, &$oldJustificatifPath) {
+                // Locked, and the replaced path read under the lock: a concurrent attach
+                // (attachJustificatif) must not slip a file in between and be orphaned.
+                $locked = JournalEntry::query()->whereKey($journalEntry->id)->lockForUpdate()->firstOrFail();
+                if ($locked->is_posted) {
+                    throw new AlreadyPostedException(__('app.cannot_edit_posted_entry'));
+                }
+                $oldJustificatifPath = $locked->justificatif_path;
+
                 $journalEntry->lines()->delete();
                 $journalEntry->update([
                     'date' => $entryData->date,
@@ -296,17 +283,19 @@ class AccountingController extends Controller
                 }
             });
 
-            $journalEntry->load('lines.account');
+        } catch (Throwable $e) {
+            $this->documentStorage->delete($journalEntry->organization, $newJustificatifPath);
 
-            if ($newJustificatifPath !== null && $oldJustificatifPath !== null) {
-                $this->documentStorage->delete($journalEntry->organization, $oldJustificatifPath);
-            }
-        } catch (DomainException $e) {
-            if ($newJustificatifPath !== null) {
-                $this->documentStorage->delete($journalEntry->organization, $newJustificatifPath);
+            if ($e instanceof DomainException) {
+                return $this->backWithError($e);
             }
 
-            return $this->backWithError($e);
+            throw $e;
+        }
+
+        // The replaced document goes only once the new one is committed.
+        if ($newJustificatifPath !== null) {
+            $this->documentStorage->delete($journalEntry->organization, $oldJustificatifPath);
         }
 
         return $this->toJournalList()
@@ -352,14 +341,31 @@ class AccountingController extends Controller
         $this->authorize('delete', $journalEntry);
 
         try {
-            $journalEntry->lines()->delete();
-            $journalEntry->delete();
+            // Also removes the justificatif and releases its quota (after commit).
+            $ledger->deleteDraft($journalEntry);
         } catch (DomainException $e) {
             return $this->backWithError($e);
         }
 
         return $this->toJournalList()
             ->with('success', __('app.journal_entry_deleted'));
+    }
+
+    /**
+     * Store an uploaded justificatif within the organisation's document quota.
+     */
+    private function storeJustificatif(Organization $organization, UploadedFile $document): string
+    {
+        $documentBytes = (int) $document->getSize();
+        $this->documentStorage->reserve($organization, $documentBytes);
+
+        try {
+            return $this->uploadService->store($document, "justificatifs/{$organization->id}");
+        } catch (Throwable $exception) {
+            $this->documentStorage->release($organization, $documentBytes);
+
+            throw $exception;
+        }
     }
 
     /**
