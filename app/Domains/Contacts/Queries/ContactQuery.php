@@ -3,6 +3,7 @@
 namespace App\Domains\Contacts\Queries;
 
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Support\QueryBuilder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -53,6 +54,26 @@ class ContactQuery
             600,
             fn () => Contact::orderBy('name')->get()
         );
+    }
+
+    /**
+     * Contact persons grouped by their customer, for the "Attention: ..."
+     * selector on the invoice and recurring-invoice forms. Not cached (unlike
+     * forSelect(), used for the plain customer list): a person
+     * added or edited must show up immediately.
+     *
+     * @return array<int, array<int, array{id: string, name: string, email: string|null, is_primary: bool}>>
+     */
+    public static function personsByContact(): array
+    {
+        return Contact::query()->with('contactPersons')->get()
+            ->mapWithKeys(fn (Contact $c): array => [$c->id => $c->contactPersons
+                ->sortByDesc('is_primary')
+                ->map(fn (ContactPerson $p): array => ['id' => $p->id, 'name' => $p->full_name, 'email' => $p->email, 'is_primary' => (bool) $p->is_primary])
+                ->values()
+                ->all(),
+            ])
+            ->all();
     }
 
     public static function hasMatchingSupplier(string $organizationId, string $creditorName): bool

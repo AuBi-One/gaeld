@@ -22,6 +22,9 @@
                 <td style="width:34%;">
                     <span class="info-label">{{ __('exports.salary_slip.name') }}</span>
                     {{ $employeeData['first_name'] }} {{ $employeeData['last_name'] }}
+                    @foreach(\App\Domains\Payroll\Models\SalarySlip::addressLines($employeeData) as $addressLine)
+                        <br>{{ $addressLine }}
+                    @endforeach
                 </td>
                 <td style="width:33%;">
                     <span class="info-label">{{ __('exports.salary_slip.ahv_number') }}</span>

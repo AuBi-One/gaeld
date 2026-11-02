@@ -143,6 +143,7 @@ final class TokenPermissionMap
                 'finalize' => Permission::InvoicingFinalize,
                 'recordPayment' => Permission::InvoicingRecordPayment,
                 'send' => Permission::InvoicingEdit,
+                'manageReminders' => Permission::InvoicingEdit,
                 'cancel' => Permission::InvoicingEdit,
                 'creditNote' => Permission::InvoicingCreate,
             ],

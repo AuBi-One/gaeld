@@ -25,6 +25,8 @@ class SendPaymentRemindersJob implements ShouldQueue
         $overdueInvoices = Invoice::withoutGlobalScope('organization')
             ->overdue()
             ->whereNull('archived_at')
+            // Turned off on the invoice page: manual reminders only.
+            ->where('auto_reminders', true)
             ->whereHas('customer', fn ($q) => $q->whereNotNull('email'))
             ->where(function ($q) {
                 $q->whereNull('last_reminded_at')

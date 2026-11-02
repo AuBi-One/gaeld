@@ -354,7 +354,23 @@ class DeductionRateTest extends TestCase
         $this->assertDatabaseHas('deduction_rates', ['code' => 'lpp_plan_employer', 'certificate_box' => null]);
 
         $this->actAsOrg()->post('/payroll/deduction-rates', [
-            'deduction_rate_set_id' => $this->set->id, 'name' => 'Bad', 'code' => 'bad_employee', 'rate' => '1', 'type' => 'employee', 'certificate_box' => '15',
+            'deduction_rate_set_id' => $this->set->id, 'name' => 'Bad', 'code' => 'bad_employee', 'rate' => '1', 'type' => 'employee', 'certificate_box' => '11',
         ])->assertSessionHasErrors('certificate_box');
+    }
+
+    public function test_an_employee_line_can_be_listed_in_certificate_box_15(): void
+    {
+        $this->actAsOrg()->post('/payroll/deduction-rates', [
+            'deduction_rate_set_id' => $this->set->id, 'name' => 'PC Familles', 'code' => 'pc_familles_employee', 'rate' => '0.06', 'type' => 'employee', 'certificate_box' => '15',
+        ])->assertSessionHasNoErrors();
+        $rate = DeductionRate::where('code', 'pc_familles_employee')->firstOrFail();
+        $this->assertSame('15', $rate->certificate_box);
+
+        $this->actAsOrg()->put("/payroll/deduction-rates/{$rate->id}", ['name' => 'PC Familles', 'rate' => '0.06', 'certificate_box' => null])
+            ->assertSessionHasNoErrors();
+        $this->assertNull($rate->fresh()->certificate_box);
+        $this->actAsOrg()->put("/payroll/deduction-rates/{$rate->id}", ['name' => 'PC Familles', 'rate' => '0.06', 'certificate_box' => '15'])
+            ->assertSessionHasNoErrors();
+        $this->assertSame('15', $rate->fresh()->certificate_box);
     }
 }

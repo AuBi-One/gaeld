@@ -232,7 +232,7 @@ class SalarySlip extends Model
     /**
      * Return the employee identity captured for generated documents.
      *
-     * @return array{first_name: string, last_name: string, email: string|null, ahv_number: string|null, iban: string|null}
+     * @return array{first_name: string, last_name: string, email: string|null, ahv_number: string|null, iban: string|null, address: string|null, postal_code: string|null, city: string|null, country: string|null}
      */
     public function employeeDocumentData(): array
     {
@@ -248,6 +248,10 @@ class SalarySlip extends Model
                 'iban' => array_key_exists('iban', $snapshot)
                     ? $this->decryptSnapshotField($snapshot, 'iban')
                     : $this->documentEmployee()->iban,
+                // Likewise for the address (added after the IBAN).
+                ...(array_key_exists('city', $snapshot)
+                    ? $this->addressOf($snapshot)
+                    : $this->addressOf($this->documentEmployee()->only(['address', 'postal_code', 'city', 'country']))),
             ];
         }
 
@@ -259,7 +263,45 @@ class SalarySlip extends Model
             'email' => $employee->email,
             'ahv_number' => $employee->ahv_number,
             'iban' => $employee->iban,
+            ...$this->addressOf($employee->only(['address', 'postal_code', 'city', 'country'])),
         ];
+    }
+
+    /**
+     * The address fields of an employee snapshot or record, trimmed (empty
+     * ones as null).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{address: string|null, postal_code: string|null, city: string|null, country: string|null}
+     */
+    private function addressOf(array $data): array
+    {
+        $value = fn (string $key): ?string => isset($data[$key]) && trim((string) $data[$key]) !== '' ? trim((string) $data[$key]) : null;
+
+        return [
+            'address' => $value('address'),
+            'postal_code' => $value('postal_code'),
+            'city' => $value('city'),
+            'country' => $value('country'),
+        ];
+    }
+
+    /**
+     * The recipient lines of the employee's address on a document: street,
+     * postal code and city, and the country when it is not Switzerland.
+     *
+     * @param  array{address: string|null, postal_code: string|null, city: string|null, country: string|null}  $employee
+     * @return list<string>
+     */
+    public static function addressLines(array $employee): array
+    {
+        $locality = trim(($employee['postal_code'] ?? '').' '.($employee['city'] ?? ''));
+        $country = $employee['country'] ?? null;
+
+        return array_values(array_filter(
+            [$employee['address'] ?? null, $locality, $country !== 'CH' ? $country : null],
+            fn (?string $line): bool => $line !== null && $line !== '',
+        ));
     }
 
     /**

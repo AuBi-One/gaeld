@@ -34,6 +34,7 @@ const boxOptions = computed(() => [
   { value: '', label: t('deduction_rate_box_none') },
   { value: '9', label: t('deduction_rate_box_9') },
   { value: '10', label: t('deduction_rate_box_10') },
+  { value: '15', label: t('deduction_rate_box_15') },
 ])
 
 function familyKey(code) {

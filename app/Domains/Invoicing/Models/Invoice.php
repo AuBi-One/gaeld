@@ -53,6 +53,7 @@ use Laravel\Scout\Searchable;
  * @property string|null $justificatif_path
  * @property int $reminder_count
  * @property Carbon|null $last_reminded_at
+ * @property bool $auto_reminders
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -77,6 +78,7 @@ class Invoice extends Model
 
     protected $attributes = [
         'tax_treatment' => InvoiceTaxTreatment::Standard->value,
+        'auto_reminders' => true,
     ];
 
     protected $fillable = [
@@ -105,6 +107,7 @@ class Invoice extends Model
         'justificatif_path',
         'reminder_count',
         'last_reminded_at',
+        'auto_reminders',
         'archived_at',
     ];
 
@@ -122,6 +125,7 @@ class Invoice extends Model
             'customer_snapshot' => 'array',
             'reminder_count' => 'integer',
             'last_reminded_at' => 'datetime',
+            'auto_reminders' => 'boolean',
             'archived_at' => 'datetime',
         ];
     }

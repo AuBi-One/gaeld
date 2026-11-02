@@ -105,6 +105,20 @@ class InvoicePolicy extends BasePolicy
             && in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue], true);
     }
 
+    /**
+     * Turn the automatic payment reminders of an invoice on or off: whatever
+     * its status (it matters once sent), as long as it is not archived.
+     */
+    public function manageReminders(User $user, Invoice $invoice): bool
+    {
+        if ($invoice->archived_at !== null) {
+            return false;
+        }
+
+        return $this->belongsToOrganization($user, $invoice)
+            && $user->hasPermissionTo(Permission::InvoicingEdit);
+    }
+
     public function cancel(User $user, Invoice $invoice): bool
     {
         return $this->belongsToOrganization($user, $invoice)

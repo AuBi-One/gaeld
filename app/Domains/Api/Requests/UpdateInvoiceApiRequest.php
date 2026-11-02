@@ -43,6 +43,8 @@ class UpdateInvoiceApiRequest extends FormRequest
                     }
                 },
             ],
+            // Scheduled payment reminders on/off; alone, it may be sent for any non-archived invoice.
+            'auto_reminders' => 'sometimes|boolean',
             'number' => 'nullable|string|max:50',
             'issue_date' => 'sometimes|date',
             'due_date' => 'nullable|date|after_or_equal:issue_date',

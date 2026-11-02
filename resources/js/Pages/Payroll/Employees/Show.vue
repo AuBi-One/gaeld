@@ -12,6 +12,7 @@ import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import EmptyState from '@/Components/UI/EmptyState.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
+import { countryLabel } from '@/lib/contactOptions'
 import { computed } from 'vue'
 import { FileText, Pencil } from 'lucide-vue-next'
 
@@ -81,6 +82,14 @@ const salaryColumns = computed(() => [
             <div v-if="employee.iban">
               <p class="text-[hsl(var(--muted-foreground))]">{{ t('iban') }}</p>
               <p class="font-medium font-mono">{{ employee.iban }}</p>
+            </div>
+            <div v-if="employee.address || employee.postal_code || employee.city">
+              <p class="text-[hsl(var(--muted-foreground))]">{{ t('postal_address') }}</p>
+              <p class="font-medium">
+                <span v-if="employee.address" class="block">{{ employee.address }}</span>
+                <span class="block">{{ [employee.postal_code, employee.city].filter(Boolean).join(' ') }}</span>
+                <span v-if="employee.country && employee.country !== 'CH'" class="block">{{ countryLabel(employee.country, t) }}</span>
+              </p>
             </div>
             <div>
               <p class="text-[hsl(var(--muted-foreground))]">{{ t('deduction_rate_code') }}</p>

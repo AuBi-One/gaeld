@@ -6,6 +6,7 @@ require_once __DIR__.'/OffersTestCase.php';
 
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Models\Invoice;
@@ -284,6 +285,22 @@ class OffersTest extends OffersTestCase
         $this->actAsOrg()->post("/offers/{$offer->id}/reopen")->assertSessionHasErrors('status');
         $this->actAsOrg()->get('/offers')->assertInertia(fn ($page) => $page->where('offers.data.0.invoicing', 'full')->where('stats.to_invoice.count', 0));
         $this->assertSame(1, Invoice::query()->count());
+    }
+
+    #[Test]
+    public function the_invoice_keeps_the_offers_contact_person_while_it_still_belongs_to_the_customer(): void
+    {
+        $offer = app(Offers::class)->transition($this->sent(), 'accept');
+        $this->actAsOrg()->post("/offers/{$offer->id}/invoice", ['lines' => $this->whole($offer)])->assertSessionHasNoErrors();
+        $invoice = Invoice::query()->sole();
+        $this->assertSame($this->person->id, $invoice->contact_person_id);
+        $this->assertSame('Marie Exemple', $invoice->customer_snapshot['attention']);
+
+        // The person has since moved to another contact: the next invoice has none.
+        $other = Contact::factory()->create(['organization_id' => $this->org->id]);
+        ContactPerson::query()->whereKey($this->person->id)->update(['contactable_id' => $other->id]);
+        $this->actAsOrg()->post("/offers/{$offer->id}/invoice", ['lines' => $this->whole($offer)])->assertSessionHasNoErrors();
+        $this->assertNull(Invoice::query()->whereKeyNot($invoice->id)->sole()->contact_person_id);
     }
 
     #[Test]

@@ -20,7 +20,9 @@ final class GenerateSalaryCertificateAction
      *     gross_salary: string,
      *     social_contributions: string,
      *     pension_contributions: string,
+     *     certificate_net_salary: string,
      *     other_deductions: string,
+     *     remarks: list<array{name: string, amount: string}>,
      *     source_tax: string,
      *     reimbursements: string,
      *     net_salary: string,
@@ -61,7 +63,10 @@ final class GenerateSalaryCertificateAction
             'gross_salary' => $grossSalary,
             'social_contributions' => $boxes['9'],
             'pension_contributions' => $boxes['10'],
+            // Box 11: gross (box 8) minus boxes 9 and 10.
+            'certificate_net_salary' => Money::subtract(Money::subtract($grossSalary, $boxes['9']), $boxes['10']),
             'other_deductions' => $boxes['other'],
+            'remarks' => $boxes['15'],
             'source_tax' => $sourceTax,
             'reimbursements' => $reimbursements,
             'net_salary' => $netSalary,
@@ -73,16 +78,20 @@ final class GenerateSalaryCertificateAction
     /**
      * Every employee charge of the slips, summed by the certificate box its
      * rate line counts in (9: AVS/AI/APG/AC/AANP, 10: LPP), whatever its code;
+     * box 15 (remarks) charges are listed one per code, under the name of its
+     * latest slip (sorted by name), with their amount;
      * charges without a box are "other". The box comes from the slip's
      * snapshot; codes without a line (e.g. imported slips) use the box of
      * their legacy prefix.
      *
      * @param  Collection<int, SalarySlip>  $slips
-     * @return array{9: string, 10: string, other: string}
+     * @return array{9: string, 10: string, 15: list<array{name: string, amount: string}>, other: string}
      */
     private function sumEmployeeChargesByBox(Collection $slips): array
     {
         $sums = ['9' => Money::zero(), '10' => Money::zero(), 'other' => Money::zero()];
+        /** @var array<string, array{name: string, amount: string}> $remarks */
+        $remarks = [];
         foreach ($slips as $slip) {
             $lines = $slip->rateLines();
             foreach ($slip->chargeAmounts() as $code => $amount) {
@@ -92,12 +101,24 @@ final class GenerateSalaryCertificateAction
                     continue;
                 }
                 $box = $line !== null ? $line['certificate_box'] : DeductionRate::defaultCertificateBox($code, 'employee');
-                $key = in_array($box, DeductionRate::CERTIFICATE_BOXES, true) ? $box : 'other';
+                if ($box === '15') {
+                    // Slips come in period order: the last name seen is the most recent.
+                    $remarks[$code] = [
+                        'name' => $line['name'] ?? $code,
+                        'amount' => Money::add($remarks[$code]['amount'] ?? Money::zero(), $amount),
+                    ];
+
+                    continue;
+                }
+                $key = $box === '9' || $box === '10' ? $box : 'other';
                 $sums[$key] = Money::add($sums[$key], $amount);
             }
         }
 
-        return $sums;
+        $listed = array_values($remarks);
+        usort($listed, fn (array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
+
+        return ['9' => $sums['9'], '10' => $sums['10'], '15' => $listed, 'other' => $sums['other']];
     }
 
     /**

@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
@@ -19,6 +19,7 @@ import { Plus, Trash2 } from 'lucide-vue-next'
 const props = defineProps({
   recurringInvoice: { type: Object, required: true },
   customers: { type: Array, default: () => [] },
+  contactPersons: { type: Object, default: () => ({}) },
   vatRates: { type: Array, default: () => [] },
 })
 
@@ -32,6 +33,11 @@ const form = useForm({
   currency: props.recurringInvoice.template_data?.currency ?? 'CHF',
   notes: props.recurringInvoice.template_data?.notes ?? '',
   payment_terms: props.recurringInvoice.template_data?.payment_terms ?? '',
+  // A person since deleted or moved to another contact is dropped (it would block saving).
+  contact_person_id: (props.contactPersons[props.recurringInvoice.customer_id] ?? [])
+    .some(p => p.id === props.recurringInvoice.template_data?.contact_person_id)
+    ? props.recurringInvoice.template_data.contact_person_id
+    : '',
   lines: props.recurringInvoice.template_data?.lines?.length
     ? props.recurringInvoice.template_data.lines.map(l => ({
         description: l.description,
@@ -64,6 +70,7 @@ function submit() {
         notes: data.notes,
         currency: data.currency,
         payment_terms: data.payment_terms,
+        contact_person_id: data.contact_person_id || null,
       },
     }))
     .put(`/invoices/recurring/${props.recurringInvoice.uuid}`)
@@ -72,6 +79,19 @@ function submit() {
 const clientOptions = computed(() =>
   props.customers.map(c => ({ value: c.id, label: c.name }))
 )
+
+// The "Attention: ..." person of the generated invoices, among the chosen
+// customer's own; none by default, and reset when the customer changes.
+const personOptions = computed(() => [
+  { value: '', label: t('no_contact_person') },
+  ...(props.contactPersons[form.customer_id] ?? []).map(p => ({ value: p.id, label: p.email ? `${p.name} — ${p.email}` : p.name })),
+])
+watch(() => form.customer_id, () => {
+  const persons = props.contactPersons[form.customer_id] ?? []
+  if (!persons.some(p => p.id === form.contact_person_id)) {
+    form.contact_person_id = ''
+  }
+})
 
 const frequencyOptions = computed(() => [
   { value: 'weekly', label: t('frequency_weekly') },
@@ -109,6 +129,13 @@ const vatOptions = computed(() => [
               :placeholder="t('select_client')"
               :error="form.errors.customer_id"
               required
+            />
+            <FormSelect
+              id="contact_person_id"
+              v-model="form.contact_person_id"
+              :label="t('contact_person')"
+              :options="personOptions"
+              :error="form.errors['template_data.contact_person_id']"
             />
             <FormSelect
               id="frequency"

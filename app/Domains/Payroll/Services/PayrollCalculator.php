@@ -122,6 +122,10 @@ class PayrollCalculator
                     ? Crypt::encryptString($employee->iban)
                     : null,
                 'iban_encrypted' => true,
+                'address' => $employee->address,
+                'postal_code' => $employee->postal_code,
+                'city' => $employee->city,
+                'country' => $employee->country,
             ],
         ]);
 

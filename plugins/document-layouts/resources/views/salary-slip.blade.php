@@ -24,6 +24,7 @@
     /* The model places the employee with tabs (12.49 mm stops): 106.5 mm from the page edge. */
     td.employee { width: 84.45mm; }
     .employee-name { padding-left: 23mm; font-size: 14pt; font-weight: bold; }
+    .employee-line { padding-left: 23mm; }
     a.mail { color: #1155CC; text-decoration: underline; }
     table.title { margin-top: 18.5mm; }
     table.title td { padding: 0; vertical-align: baseline; }
@@ -57,6 +58,7 @@
         </td>
         <td class="employee">
             <div class="employee-name">{{ $employeeName }}</div>
+            @foreach($employeeAddress as $line)<div class="employee-line">{{ $line }}</div>@endforeach
         </td>
     </tr>
 </table>

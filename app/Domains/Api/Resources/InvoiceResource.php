@@ -32,6 +32,7 @@ class InvoiceResource extends JsonResource
             'notes' => $this->notes,
             'introduction' => $this->introduction,
             'payment_terms' => $this->payment_terms,
+            'auto_reminders' => $this->auto_reminders,
             'amount_paid' => $this->amountPaid(),
             'amount_due' => $this->amountDue(),
             'lines' => InvoiceLineResource::collection($this->whenLoaded('lines')),

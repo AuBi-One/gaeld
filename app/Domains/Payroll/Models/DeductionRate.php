@@ -44,10 +44,12 @@ class DeductionRate extends Model
 
     /**
      * Boxes of the Swiss salary certificate an employee line can count in:
-     * 9 = AVS/AI/APG/AC/AANP contributions, 10 = occupational pension (LPP).
+     * 9 = AVS/AI/APG/AC/AANP contributions, 10 = occupational pension (LPP),
+     * 15 = remarks (other employee charges the certificate lists one by one,
+     * e.g. PC Familles or a sickness daily-allowance contribution).
      * Null = not a certificate deduction (and always null for employer lines).
      */
-    public const CERTIFICATE_BOXES = ['9', '10'];
+    public const CERTIFICATE_BOXES = ['9', '10', '15'];
 
     /**
      * The box the built-in and legacy codes count in, for lines (and slips)

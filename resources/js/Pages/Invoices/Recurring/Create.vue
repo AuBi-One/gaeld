@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import { todayLocal } from '@/lib/dates'
 import AppLayout from '@/Components/AppLayout.vue'
@@ -19,6 +19,7 @@ import { Plus, Trash2 } from 'lucide-vue-next'
 
 const props = defineProps({
   customers: { type: Array, default: () => [] },
+  contactPersons: { type: Object, default: () => ({}) },
   vatRates: { type: Array, default: () => [] },
 })
 
@@ -32,6 +33,7 @@ const form = useForm({
   currency: 'CHF',
   notes: '',
   payment_terms: '',
+  contact_person_id: '',
   lines: [{ description: '', quantity: 1, unit_price: 0, vat_rate_id: '' }],
 })
 
@@ -57,6 +59,7 @@ function submit() {
         notes: data.notes,
         currency: data.currency,
         payment_terms: data.payment_terms,
+        contact_person_id: data.contact_person_id || null,
       },
     }))
     .post('/invoices/recurring')
@@ -65,6 +68,19 @@ function submit() {
 const clientOptions = computed(() =>
   props.customers.map(c => ({ value: c.id, label: c.name }))
 )
+
+// The "Attention: ..." person of the generated invoices, among the chosen
+// customer's own; none by default, and reset when the customer changes.
+const personOptions = computed(() => [
+  { value: '', label: t('no_contact_person') },
+  ...(props.contactPersons[form.customer_id] ?? []).map(p => ({ value: p.id, label: p.email ? `${p.name} — ${p.email}` : p.name })),
+])
+watch(() => form.customer_id, () => {
+  const persons = props.contactPersons[form.customer_id] ?? []
+  if (!persons.some(p => p.id === form.contact_person_id)) {
+    form.contact_person_id = ''
+  }
+})
 
 const frequencyOptions = computed(() => [
   { value: 'weekly', label: t('frequency_weekly') },
@@ -102,6 +118,13 @@ const vatOptions = computed(() => [
               :placeholder="t('select_client')"
               :error="form.errors.customer_id"
               required
+            />
+            <FormSelect
+              id="contact_person_id"
+              v-model="form.contact_person_id"
+              :label="t('contact_person')"
+              :options="personOptions"
+              :error="form.errors['template_data.contact_person_id']"
             />
             <FormSelect
               id="frequency"

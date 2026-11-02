@@ -136,6 +136,7 @@ return [
         'gross_salary' => 'Salario lordo',
         'social_contributions' => 'Contributi AVS/AI/IPG/AD/AINF (cifra 9)',
         'pension_contributions' => 'Previdenza professionale LPP (cifra 10)',
+        'certificate_net_salary' => 'Salario netto (cifra 11)',
         'other_deductions' => 'Altre trattenute del dipendente',
         'source_tax' => 'Imposta alla fonte',
         'net_salary' => 'Salario netto',
@@ -144,5 +145,7 @@ return [
         'total_paid' => 'Totale pagato',
         'employer_charges' => 'Oneri datore di lavoro',
         'total_employer_charges' => 'Totale oneri datore di lavoro',
+        'remarks' => 'Osservazioni (cifra 15)',
+        'remark_employee_contribution' => 'Contributo del dipendente: :name',
     ],
 ];

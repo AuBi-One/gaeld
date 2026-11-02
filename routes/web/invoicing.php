@@ -31,4 +31,5 @@ Route::get('/invoices/{invoice}/qr-pdf', [InvoiceDocumentController::class, 'dow
 Route::delete('/invoices/{invoice}/justificatif', [InvoiceDocumentController::class, 'removeJustificatif'])->name('invoices.justificatif.remove');
 Route::get('/invoices/{invoice}/justificatif', [InvoiceDocumentController::class, 'downloadJustificatif'])->middleware('throttle:30,1')->name('invoices.justificatif.download');
 Route::post('/invoices/{invoice}/reminder', [InvoiceCommunicationController::class, 'sendReminder'])->name('invoices.reminder');
+Route::patch('/invoices/{invoice}/auto-reminders', [InvoiceCommunicationController::class, 'updateAutoReminders'])->name('invoices.autoReminders');
 Route::delete('/invoices/{invoice}/purge', [InvoiceLifecycleController::class, 'purge'])->withTrashed()->name('invoices.purge');

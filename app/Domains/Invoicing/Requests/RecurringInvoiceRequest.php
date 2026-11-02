@@ -2,13 +2,15 @@
 
 namespace App\Domains\Invoicing\Requests;
 
+use App\Domains\Contacts\Models\Contact;
 use App\Domains\Organizations\Services\CurrentOrganization;
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class RecurringInvoiceRequest extends FormRequest
 {
-    /** @return array<string, array<int, string>> */
+    /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
         $orgId = app(CurrentOrganization::class)->id();
@@ -29,6 +31,13 @@ class RecurringInvoiceRequest extends FormRequest
             'template_data.notes' => ['nullable', 'string', 'max:2000'],
             'template_data.payment_terms' => ['nullable', 'string', 'max:255'],
             'template_data.currency' => ['nullable', 'string', 'size:3'],
+            // The "Attention: ..." person of the generated invoices: one of the customer's own.
+            'template_data.contact_person_id' => ['bail', 'nullable', 'uuid', function (string $attribute, mixed $value, Closure $fail) use ($orgId): void {
+                $customer = Contact::query()->where('organization_id', $orgId)->whereKey($this->input('customer_id'))->first();
+                if ($customer === null || ! $customer->contactPersons()->whereKey($value)->exists()) {
+                    $fail(__('validation.exists', ['attribute' => __('app.contact_person')]));
+                }
+            }],
         ];
 
         if ($this->isMethod('POST')) {

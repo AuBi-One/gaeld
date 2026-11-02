@@ -26,6 +26,10 @@ use Illuminate\Support\Carbon;
  * @property string $last_name
  * @property string|null $email
  * @property string|null $ahv_number
+ * @property string|null $address
+ * @property string|null $postal_code
+ * @property string|null $city
+ * @property string|null $country
  * @property Carbon $entry_date
  * @property Carbon|null $exit_date
  * @property string $gross_salary
@@ -56,6 +60,10 @@ class Employee extends Model
         'last_name',
         'email',
         'iban',
+        'address',
+        'postal_code',
+        'city',
+        'country',
         'ahv_number',
         'entry_date',
         'exit_date',

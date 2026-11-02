@@ -37,6 +37,7 @@ class RecurringInvoiceController extends Controller
 
         return Inertia::render('Invoices/Recurring/Create', [
             'customers' => ContactQuery::forSelect(),
+            'contactPersons' => ContactQuery::personsByContact(),
             'frequencies' => array_map(
                 fn (RecurrenceFrequency $f) => ['value' => $f->value, 'label' => ucfirst($f->value)],
                 RecurrenceFrequency::cases(),
@@ -70,6 +71,7 @@ class RecurringInvoiceController extends Controller
         return Inertia::render('Invoices/Recurring/Edit', [
             'recurringInvoice' => $recurring->load('customer:id,name'),
             'customers' => ContactQuery::forSelect(),
+            'contactPersons' => ContactQuery::personsByContact(),
             'frequencies' => array_map(
                 fn (RecurrenceFrequency $f) => ['value' => $f->value, 'label' => ucfirst($f->value)],
                 RecurrenceFrequency::cases(),

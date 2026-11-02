@@ -201,6 +201,74 @@ class SalarySlipDeductionLabelsTest extends TestCase
     }
 
     #[Test]
+    public function the_annual_summary_lists_box_15_charges_by_name_with_their_amount(): void
+    {
+        $employee = $this->employee(['deduction_rate_code' => 'SPECIAL']);
+        $set = DeductionRateSet::create([
+            'organization_id' => $this->org->id, 'code' => 'SPECIAL', 'title' => 'Spécial', 'date_from' => '2026-01-01', 'date_to' => null,
+        ]);
+        foreach ([
+            ['name' => 'AVS/AI/APG', 'code' => 'avs_employee', 'rate' => '5.3000', 'type' => 'employee', 'certificate_box' => '9'],
+            ['name' => 'PC Familles', 'code' => 'pc_familles_employee', 'rate' => '0.0600', 'type' => 'employee', 'certificate_box' => '15'],
+            ['name' => 'APGM', 'code' => 'apgm_employee', 'rate' => '0.5000', 'type' => 'employee', 'certificate_box' => '15'],
+            ['name' => 'APGM', 'code' => 'apgm_employer', 'rate' => '0.5000', 'type' => 'employer'],
+            ['name' => 'Divers', 'code' => 'divers_employee', 'rate' => '1.0000', 'type' => 'employee'],
+        ] as $line) {
+            $set->rates()->create(['organization_id' => $this->org->id, ...$line]);
+        }
+        foreach ([3, 4] as $month) {
+            $slip = app(PayrollCalculator::class)->calculate($employee->fresh(), $month, 2026);
+            $slip->posted_at = now();
+            $slip->save();
+            // Renamed after March: one remark per charge, under its latest name.
+            $set->rates()->where('code', 'pc_familles_employee')->update(['name' => 'PC Familles VD']);
+        }
+        // The box is read from the slip's snapshot: a later change of the line does not move posted slips.
+        $set->rates()->where('code', 'apgm_employee')->update(['certificate_box' => null]);
+
+        $certificate = app(GenerateSalaryCertificateAction::class)->execute($employee->fresh(), 2026);
+
+        // 6000 a month: AVS 2 x 318, PC Familles 2 x 3.60, APGM 2 x 30, Divers 2 x 60.
+        $this->assertSame('636.00', $certificate['social_contributions']);
+        $this->assertSame([
+            ['name' => 'APGM', 'amount' => '60.00'],
+            ['name' => 'PC Familles VD', 'amount' => '7.20'],
+        ], $certificate['remarks']);
+        // Box 11 = box 8 (12'000) - box 9 (636) - box 10 (0).
+        $this->assertSame('11364.00', $certificate['certificate_net_salary']);
+        $this->assertSame('120.00', $certificate['other_deductions']);
+        // Box 15 charges are still deducted from the net salary.
+        $this->assertSame('11176.80', $certificate['net_salary']);
+
+        app()->setLocale('fr');
+        $html = view('exports.salary-certificate', ['certificate' => $certificate, 'organization' => $this->org])->render();
+        $this->assertStringContainsString('Remarques (chiffre 15)', $html);
+        $this->assertStringContainsString('Cotisation du collaborateur : PC Familles VD', $html);
+        $this->assertStringContainsString('Salaire net (chiffre 11)', $html);
+        $this->assertStringContainsString('11&#039;364.00', $html); // escaped thousands separator
+        // Box 15 charges are remarks: their deduction row carries the name only.
+        $this->assertStringNotContainsString('APGM (chiffre 15)', $html);
+        $this->assertMatchesRegularExpression('#<td>APGM</td><td class="right">-60.00</td>#', $html);
+        $this->assertStringContainsString('CHF 60.00', $html);
+    }
+
+    #[Test]
+    public function the_annual_summary_has_no_remarks_without_box_15_charges(): void
+    {
+        $employee = $this->employee();
+        $slip = app(PayrollCalculator::class)->calculate($employee->fresh(), 3, 2026);
+        $slip->posted_at = now();
+        $slip->save();
+
+        $certificate = app(GenerateSalaryCertificateAction::class)->execute($employee->fresh(), 2026);
+
+        $this->assertSame([], $certificate['remarks']);
+        app()->setLocale('fr');
+        $html = view('exports.salary-certificate', ['certificate' => $certificate, 'organization' => $this->org])->render();
+        $this->assertStringNotContainsString('Remarques (chiffre 15)', $html);
+    }
+
+    #[Test]
     public function the_annual_summary_uses_the_legacy_boxes_for_imported_slips(): void
     {
         $employee = $this->employee();

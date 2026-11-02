@@ -136,6 +136,7 @@ return [
         'gross_salary' => 'Gross salary',
         'social_contributions' => 'AHV/IV/APG, unemployment and non-occupational accident contributions (box 9)',
         'pension_contributions' => 'Occupational pension LPP (box 10)',
+        'certificate_net_salary' => 'Net salary (box 11)',
         'other_deductions' => 'Other employee deductions',
         'source_tax' => 'Withholding tax',
         'net_salary' => 'Net salary',
@@ -144,5 +145,7 @@ return [
         'total_paid' => 'Total paid',
         'employer_charges' => 'Employer charges',
         'total_employer_charges' => 'Total employer charges',
+        'remarks' => 'Remarks (box 15)',
+        'remark_employee_contribution' => 'Employee contribution: :name',
     ],
 ];

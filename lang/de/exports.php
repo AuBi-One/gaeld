@@ -136,6 +136,7 @@ return [
         'gross_salary' => 'Bruttolohn',
         'social_contributions' => 'Beiträge AHV/IV/EO/ALV/NBUV (Ziffer 9)',
         'pension_contributions' => 'Berufliche Vorsorge BVG (Ziffer 10)',
+        'certificate_net_salary' => 'Nettolohn (Ziffer 11)',
         'other_deductions' => 'Übrige Abzüge Arbeitnehmer',
         'source_tax' => 'Quellensteuer',
         'net_salary' => 'Nettolohn',
@@ -144,5 +145,7 @@ return [
         'total_paid' => 'Total ausbezahlt',
         'employer_charges' => 'Arbeitgeberbeiträge',
         'total_employer_charges' => 'Total Arbeitgeberbeiträge',
+        'remarks' => 'Bemerkungen (Ziffer 15)',
+        'remark_employee_contribution' => 'Beitrag Arbeitnehmer: :name',
     ],
 ];

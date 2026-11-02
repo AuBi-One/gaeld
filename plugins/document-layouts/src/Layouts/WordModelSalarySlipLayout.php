@@ -79,6 +79,7 @@ final class WordModelSalarySlipLayout implements SalarySlipPdfLayoutInterface
             'footer' => trim((string) $organization->pdf_footer_text) !== '' ? PdfFooter::text($organization) : null,
             'language' => $language,
             'employeeName' => trim($employee['first_name'].' '.$employee['last_name']),
+            'employeeAddress' => SalarySlip::addressLines($employee),
             'ahvNumber' => $employee['ahv_number'],
             'month' => mb_convert_case($localized->translatedFormat('F Y'), MB_CASE_TITLE),
             'date' => ($slip->posted_at ?? $period->copy()->endOfMonth())->format('d.m.Y'),

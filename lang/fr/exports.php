@@ -136,6 +136,7 @@ return [
         'gross_salary' => 'Salaire brut',
         'social_contributions' => 'Cotisations AVS/AI/APG/AC/AANP (chiffre 9)',
         'pension_contributions' => 'Prévoyance professionnelle LPP (chiffre 10)',
+        'certificate_net_salary' => 'Salaire net (chiffre 11)',
         'other_deductions' => 'Autres retenues du collaborateur',
         'source_tax' => 'Impôt à la source',
         'net_salary' => 'Salaire net',
@@ -144,5 +145,7 @@ return [
         'total_paid' => 'Total payé',
         'employer_charges' => 'Charges patronales',
         'total_employer_charges' => 'Total charges patronales',
+        'remarks' => 'Remarques (chiffre 15)',
+        'remark_employee_contribution' => 'Cotisation du collaborateur : :name',
     ],
 ];

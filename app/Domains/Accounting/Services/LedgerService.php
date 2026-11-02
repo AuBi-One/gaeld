@@ -121,7 +121,7 @@ class LedgerService
             }
 
             $lockedEntry->update(['is_posted' => true]);
-            $this->flushCache($lockedEntry->organization_id);
+            $this->flushCacheAfterCommit($lockedEntry->organization_id);
             JournalDraftPosted::dispatch($lockedEntry);
 
             return $lockedEntry->fresh(['lines.account']);
@@ -228,6 +228,18 @@ class LedgerService
         Cache::tags(["org:{$organizationId}:dashboard"])->flush();
     }
 
+    /**
+     * Flush the cached ledger data once the current transaction (and any
+     * outer one) commits, immediately when there is none: a report read
+     * while the transaction is still open would otherwise cache the
+     * pre-commit balances again after an early flush. Nothing is flushed
+     * on rollback, as nothing changed.
+     */
+    private function flushCacheAfterCommit(string $organizationId): void
+    {
+        DB::afterCommit(fn () => $this->flushCache($organizationId));
+    }
+
     // ──────────────────────────────────────────────────────────────
     //  Validation
     // ──────────────────────────────────────────────────────────────
@@ -304,7 +316,7 @@ class LedgerService
                 }
 
                 if ($isPosted) {
-                    $this->flushCache($organizationId);
+                    $this->flushCacheAfterCommit($organizationId);
                 }
 
                 return $journalEntry->load('lines.account');

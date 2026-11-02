@@ -398,6 +398,8 @@ class Offers
             $invoice = $this->createInvoice->execute(CreateInvoiceData::fromArray([
                 'organization_id' => $offer->organization_id,
                 'customer_id' => $offer->contact_id,
+                // The offer's "Attention" person; dropped by CreateInvoiceAction if no longer the customer's.
+                'contact_person_id' => $offer->contact_person_id,
                 'number' => $this->invoiceNumbers->next($offer->organization_id, null, $today->year),
                 'issue_date' => $today->toDateString(),
                 'due_date' => $today->copy()->addDays($organization->default_payment_terms_days ?? 30)->toDateString(),

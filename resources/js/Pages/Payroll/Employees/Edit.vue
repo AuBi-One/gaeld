@@ -12,6 +12,7 @@ import MaskedInput from '@/Components/UI/MaskedInput.vue'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import Tooltip from '@/Components/UI/Tooltip.vue'
 import { useTranslations } from '@/lib/useTranslations'
+import { countryOptions } from '@/lib/contactOptions'
 import { HelpCircle } from 'lucide-vue-next'
 
 const { t } = useTranslations()
@@ -54,6 +55,10 @@ const form = useForm({
   source_tax_tariff: props.employee.source_tax_tariff ?? '',
   source_tax_municipality_code: props.employee.source_tax_municipality_code ?? '',
   iban: props.employee.iban ?? '',
+  address: props.employee.address ?? '',
+  postal_code: props.employee.postal_code ?? '',
+  city: props.employee.city ?? '',
+  country: props.employee.country ?? '',
   has_thirteenth_salary: props.employee.has_thirteenth_salary ?? false,
   deduction_rate_code: props.employee.deduction_rate_code ?? '',
 })
@@ -217,6 +222,51 @@ function submit() {
                 />
               </div>
             </div>
+          </div>
+
+          <!-- Postal address (printed on the salary slip) -->
+          <hr class="border-[hsl(var(--border))]" />
+          <h3 class="text-sm font-medium text-[hsl(var(--foreground))]">{{ t('postal_address') }}</h3>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormInput
+              id="address"
+              v-model="form.address"
+              :label="t('address')"
+              :error="form.errors.address"
+              autocomplete="street-address"
+              class="sm:col-span-2"
+            />
+            <!-- The 4-digit mask is Swiss; foreign postal codes are typed freely. -->
+            <MaskedInput
+              v-if="form.country === 'CH'"
+              id="postal_code"
+              v-model="form.postal_code"
+              mask="postal"
+              :label="t('postal_code')"
+              :error="form.errors.postal_code"
+            />
+            <FormInput
+              v-else
+              id="postal_code"
+              v-model="form.postal_code"
+              :label="t('postal_code')"
+              :error="form.errors.postal_code"
+              maxlength="10"
+            />
+            <FormInput
+              id="city"
+              v-model="form.city"
+              :label="t('city')"
+              :error="form.errors.city"
+            />
+            <FormSelect
+              id="country"
+              v-model="form.country"
+              :label="t('country')"
+              :options="[{ value: '', label: '—' }, ...countryOptions(t)]"
+              :error="form.errors.country"
+              class="sm:col-span-2"
+            />
           </div>
 
           <!-- Bank account -->

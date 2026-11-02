@@ -5,6 +5,7 @@ namespace Tests\Feature\Invoicing;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
 use App\Domains\Invoicing\Enums\RecurrenceFrequency;
 use App\Domains\Invoicing\Jobs\GenerateRecurringInvoicesJob;
@@ -133,6 +134,41 @@ class RecurringInvoiceFlowTest extends TestCase
         $invoice = Invoice::first();
         $this->assertEquals($this->customer->id, $invoice->customer_id);
         $this->assertEquals($this->org->id, $invoice->organization_id);
+    }
+
+    public function test_the_contact_person_is_stored_validated_and_carried_to_the_generated_invoices(): void
+    {
+        $person = ContactPerson::query()->create(['contactable_type' => Contact::class, 'contactable_id' => $this->customer->id, 'first_name' => 'Jean', 'last_name' => 'Dupont']);
+        $other = Contact::create(['organization_id' => $this->org->id, 'name' => 'Other AG']);
+        $otherPerson = ContactPerson::query()->create(['contactable_type' => Contact::class, 'contactable_id' => $other->id, 'first_name' => 'Eva', 'last_name' => 'Muster']);
+        $payload = fn (string $personId): array => [
+            'customer_id' => $this->customer->id, 'frequency' => 'monthly', 'next_issue_date' => now()->addYear()->toDateString(),
+            'template_data' => ['currency' => 'CHF', 'contact_person_id' => $personId, 'lines' => [['description' => 'Hosting', 'quantity' => 1, 'unit_price' => '200.00']]],
+        ];
+
+        $this->actAsOrg()->get(route('invoices.recurring.create'))
+            ->assertInertia(fn ($page) => $page->where("contactPersons.{$this->customer->id}.0.name", 'Jean Dupont'));
+        $this->actAsOrg()->post(route('invoices.recurring.store'), $payload($otherPerson->id))
+            ->assertSessionHasErrors('template_data.contact_person_id');
+        // A malformed id is a validation error, not a database error.
+        $this->actAsOrg()->post(route('invoices.recurring.store'), $payload('not-a-uuid'))
+            ->assertSessionHasErrors('template_data.contact_person_id');
+        $this->actAsOrg()->post(route('invoices.recurring.store'), $payload($person->id))->assertSessionHasNoErrors();
+        $recurring = RecurringInvoice::query()->sole();
+        $this->assertSame($person->id, $recurring->template_data['contact_person_id']);
+        $recurring->update(['next_issue_date' => '2026-03-15']);
+
+        $run = fn () => app(GenerateRecurringInvoicesJob::class)->handle(app(CreateInvoiceAction::class), app(InvoiceNumberGenerator::class));
+        $run();
+        $invoice = Invoice::query()->sole();
+        $this->assertSame($person->id, $invoice->contact_person_id);
+        $this->assertSame('Jean Dupont', $invoice->customer_snapshot['attention']);
+
+        // A person who no longer belongs to the customer is not carried over.
+        ContactPerson::query()->whereKey($person->id)->update(['contactable_id' => $other->id]);
+        Carbon::setTestNow('2026-04-15 08:00:00');
+        $run();
+        $this->assertNull(Invoice::query()->whereKeyNot($invoice->id)->sole()->contact_person_id);
     }
 
     public function test_job_advances_next_issue_date(): void

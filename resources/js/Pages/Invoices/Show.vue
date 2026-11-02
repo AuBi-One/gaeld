@@ -27,6 +27,7 @@ const props = defineProps({
   canForceDelete: { type: Boolean, default: false },
   canRecordPayment: { type: Boolean, default: false },
   canSend: { type: Boolean, default: false },
+  canManageReminders: { type: Boolean, default: false },
   canRevertToDraft: { type: Boolean, default: false },
   justificatifUrl: { type: String, default: null },
   bankAccounts: { type: Array, default: () => [] },
@@ -67,6 +68,20 @@ function sendInvoice() {
 
 function sendReminder() {
   reminderForm.post(`/invoices/${props.invoice.id}/reminder`)
+}
+
+// Scheduled reminders on/off; shown for invoices that can still be reminded.
+const autoRemindersForm = useForm({ auto_reminders: props.invoice.auto_reminders ?? true })
+const showAutoReminders = computed(() => props.canManageReminders
+  && props.invoice?.type !== 'credit_note'
+  && !['paid', 'cancelled'].includes(props.invoice?.status))
+function toggleAutoReminders(event) {
+  autoRemindersForm.auto_reminders = event.target.checked
+  autoRemindersForm.patch(`/invoices/${props.invoice.id}/auto-reminders`, {
+    preserveScroll: true,
+    // Refused (e.g. no permission any more): show the stored value again.
+    onError: () => { autoRemindersForm.auto_reminders = props.invoice.auto_reminders ?? true },
+  })
 }
 
 const finalizeForm = useForm({})
@@ -450,7 +465,7 @@ const bankAccountOptions = computed(() =>
       </Card>
 
       <!-- Reminder Info -->
-      <Card v-if="reminderCount > 0 || isOverdue">
+      <Card v-if="reminderCount > 0 || isOverdue || showAutoReminders">
         <CardHeader>
           <CardTitle class="flex items-center gap-2">
             <Bell class="h-4 w-4" />
@@ -460,6 +475,20 @@ const bankAccountOptions = computed(() =>
         <CardContent class="space-y-1 text-sm">
           <p>{{ t('reminders_sent') }}: <span class="font-medium">{{ reminderCount }}</span></p>
           <p v-if="lastRemindedAt">{{ t('last_reminded') }}: <span class="font-medium">{{ formatDate(lastRemindedAt) }}</span></p>
+          <label v-if="showAutoReminders" class="flex cursor-pointer items-start gap-2 pt-2">
+            <input
+              id="auto_reminders"
+              type="checkbox"
+              :checked="autoRemindersForm.auto_reminders"
+              :disabled="autoRemindersForm.processing"
+              class="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
+              @change="toggleAutoReminders"
+            />
+            <span>
+              <span class="block font-medium">{{ t('auto_reminders') }}</span>
+              <span class="block text-xs text-[hsl(var(--muted-foreground))]">{{ t('auto_reminders_desc') }}</span>
+            </span>
+          </label>
         </CardContent>
       </Card>
 

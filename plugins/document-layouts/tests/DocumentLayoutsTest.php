@@ -131,6 +131,17 @@ class DocumentLayoutsTest extends DocumentLayoutsTestCase
         $this->assertStringContainsString('CH93 0076 2011 6238 5295 7', $html);
     }
 
+    public function test_the_salary_slip_prints_the_employee_address_in_the_recipient_block(): void
+    {
+        $slip = $this->slip(['avs_employee' => '265.00', 'total_employee' => '265.00'], net: '4735.00');
+        $snapshot = $slip->employee_snapshot ?? ['first_name' => 'Marie', 'last_name' => 'Exemple', 'email' => null, 'ahv_number' => null, 'ahv_number_encrypted' => true, 'iban' => null, 'iban_encrypted' => true];
+        $slip->update(['employee_snapshot' => [...$snapshot, 'address' => 'Route des Mines 1', 'postal_code' => '1880', 'city' => 'Bex', 'country' => 'FR']]);
+
+        $html = (new WordModelSalarySlipLayout)->html($slip->fresh(), $this->org->fresh());
+
+        $this->assertMatchesRegularExpression('#<div class="employee-name">Marie Exemple</div>\s*<div class="employee-line">Route des Mines 1</div><div class="employee-line">1880 Bex</div><div class="employee-line">FR</div>#', $html);
+    }
+
     public function test_a_description_taller_than_a_page_continues_on_the_next_pages(): void
     {
         $invoice = $this->invoice(lines: 1);
