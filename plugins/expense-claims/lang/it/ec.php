@@ -188,5 +188,8 @@ return [
     'rate_exists' => 'Una tariffa per questo tipo di veicolo inizia già in quella data.',
     'entry_lost' => 'Era registrata, ma la scrittura è stata eliminata nel giornale: conta come non registrata.',
     'closing_debt_entry_lost' => ':count debito/i (CHF :amount) erano registrati, ma la loro scrittura è stata eliminata nel giornale: costo e debito mancano nella contabilità. Senza rimborsi, annulla il debito e passa di nuovo le note a debito; altrimenti registra di nuovo la scrittura nel giornale.',
+    'closing_repayment_entry_lost' => ':count rimborso/i di debiti tramite banca (CHF :amount) erano registrati, ma la loro scrittura è stata eliminata nel giornale: il conto dei debiti mostra ancora l\'importo come dovuto. Registra di nuovo il rimborso nel giornale (D conto debiti / A banca); questo avviso riguarda l\'esercizio del rimborso.',
+    'repayment_debt_still_draft' => 'Registra prima la scrittura del debito: i suoi rimborsi vengono registrati con essa.',
+    'repayment_date_invalid' => 'La data del rimborso deve essere uguale o successiva alla data del debito e in un esercizio aperto.',
     'debt_entry_lost' => 'Era registrato, ma la scrittura è stata eliminata nel giornale. Senza rimborsi: annulla il debito e passa di nuovo le note a debito; altrimenti registra di nuovo la scrittura nel giornale.',
 ];

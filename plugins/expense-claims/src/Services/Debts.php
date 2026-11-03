@@ -4,6 +4,7 @@ namespace Plugins\ExpenseClaims\Services;
 
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
+use App\Domains\Accounting\Models\FiscalYear;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -142,6 +143,12 @@ final class Debts
             $debt = $this->locked($debt)->load('person');
             if (! Money::isPositive($amount) || Money::compare($amount, $debt->remaining()) > 0) {
                 throw new \DomainException(__('expense-claims::ec.repayment_too_high'));
+            }
+            // A draft is not checked against closed years by the ledger: a repayment there could never be
+            // posted, and with it neither its debt (PostRepaymentDrafts).
+            $closed = FiscalYear::query()->withoutGlobalScopes()->where('organization_id', $debt->organization_id)->forDate($date)->first()?->isClosed() ?? false;
+            if ($date < $debt->date->toDateString() || $closed) {
+                throw new \DomainException(__('expense-claims::ec.repayment_date_invalid'));
             }
             $orgId = (string) $debt->organization_id;
             $accountCode ??= Setting::forOrganization($orgId)->bank_account_code;

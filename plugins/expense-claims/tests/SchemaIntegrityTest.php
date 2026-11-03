@@ -151,6 +151,12 @@ class SchemaIntegrityTest extends ExpenseClaimsTestCase
         app(Debts::class)->repay($debt->fresh(), '2027-02-01', '20.00');
         $this->assertSame('0.00', $debt->fresh()->load('repayments')->remaining());
         $this->assertSame(['expense-claims.debt-entry-lost'], array_column(app(ClosingCheck::class)->check($this->org->id, '2026-01-01', '2026-12-31'), 'key'));
+        // The repayment's entry (2027) was deleted too: reported when closing 2027, with its amount.
+        $findings2027 = app(ClosingCheck::class)->check($this->org->id, '2027-01-01', '2027-12-31');
+        $lostRepayment = collect($findings2027)->firstWhere('key', 'expense-claims.repayment-entry-lost');
+        $this->assertNotNull($lostRepayment);
+        $this->assertStringContainsString('1 bank repayment', $lostRepayment['message']);
+        $this->assertStringContainsString('10.00', $lostRepayment['message']);
         $this->actAsOrg()->get('/expense-balances')->assertOk()
             ->assertInertia(fn ($page) => $page->where('debts', fn ($debts) => collect($debts)->pluck('entry_lost', 'id')->all() === [$debt->id => true, $noEntry->id => false]
                 || collect($debts)->pluck('entry_lost', 'id')->all() === [$noEntry->id => false, $debt->id => true]));

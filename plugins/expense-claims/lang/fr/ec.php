@@ -188,5 +188,8 @@ return [
     'rate_exists' => 'Un taux pour ce type de véhicule commence déjà à cette date.',
     'entry_lost' => 'Comptabilisée, mais l\'écriture a été supprimée dans le journal : compte comme non comptabilisée.',
     'closing_debt_entry_lost' => ':count dette(s) (CHF :amount) avaient été comptabilisées, mais leur écriture a été supprimée dans le journal : le coût et la dette manquent dans la comptabilité. Sans remboursement, annulez la dette et repassez les notes en dette ; sinon, ressaisissez l\'écriture dans le journal.',
+    'closing_repayment_entry_lost' => ':count remboursement(s) de dettes par la banque (CHF :amount) avaient été enregistrés, mais leur écriture a été supprimée dans le journal : le compte de dettes montre encore ce montant comme dû. Ressaisissez le remboursement dans le journal (D compte de dettes / C banque) ; cet avis concerne l\'exercice du remboursement.',
+    'repayment_debt_still_draft' => 'Comptabilisez d\'abord l\'écriture de la dette : ses remboursements sont comptabilisés avec elle.',
+    'repayment_date_invalid' => 'La date du remboursement doit être postérieure ou égale à la date de la dette et dans un exercice ouvert.',
     'debt_entry_lost' => 'Comptabilisée, mais l\'écriture a été supprimée dans le journal. Sans remboursement : annulez la dette et repassez les notes en dette ; sinon, ressaisissez l\'écriture dans le journal.',
 ];

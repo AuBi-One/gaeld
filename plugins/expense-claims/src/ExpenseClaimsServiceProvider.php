@@ -3,6 +3,7 @@
 namespace Plugins\ExpenseClaims;
 
 use App\Domains\Accounting\Contracts\ClosingCheckInterface;
+use App\Domains\Accounting\Events\JournalDraftPosted;
 use App\Domains\Accounting\Services\JournalEntryReferences;
 use App\Domains\Payroll\Contracts\ReimbursementSourceInterface;
 use App\Support\Plugins\PluginNavigation;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Plugins\ExpenseClaims\Console\ImportAirtableCommand;
 use Plugins\ExpenseClaims\Listeners\ApprovalNotice;
+use Plugins\ExpenseClaims\Listeners\PostRepaymentDrafts;
 use Plugins\ExpenseClaims\Services\ClosingCheck;
 use Plugins\ExpenseClaims\Services\JournalOwners;
 use Plugins\ExpenseClaims\Services\ReimbursementSource;
@@ -32,6 +34,7 @@ class ExpenseClaimsServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         $this->loadMigrationsFrom(__DIR__.'/../migrations');
         Event::listen(Login::class, ApprovalNotice::class);
+        Event::listen(JournalDraftPosted::class, PostRepaymentDrafts::class);
         // Entries of claims and debts are changed here, not in the journal.
         $this->callAfterResolving(JournalEntryReferences::class, fn (JournalEntryReferences $references) => JournalOwners::register($references));
 

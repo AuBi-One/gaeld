@@ -188,5 +188,8 @@ return [
     'rate_exists' => 'Für diesen Fahrzeugtyp beginnt an diesem Datum bereits ein Ansatz.',
     'entry_lost' => 'War gebucht, aber die Buchung wurde im Journal gelöscht: gilt als nicht gebucht.',
     'closing_debt_entry_lost' => ':count Schuld(en) (CHF :amount) waren gebucht, aber ihre Buchung wurde im Journal gelöscht: Kosten und Schuld fehlen in der Buchhaltung. Ohne Rückzahlungen die Schuld stornieren und die Abrechnungen erneut überführen; sonst die Buchung im Journal neu erfassen.',
+    'closing_repayment_entry_lost' => ':count Rückzahlung(en) von Schulden über die Bank (CHF :amount) waren erfasst, aber ihre Buchung wurde im Journal gelöscht: das Schuldenkonto zeigt den Betrag noch als geschuldet. Die Rückzahlung im Journal neu erfassen (S Schuldenkonto / H Bank); dieser Hinweis gilt für das Jahr der Rückzahlung.',
+    'repayment_debt_still_draft' => 'Zuerst die Buchung der Schuld verbuchen: ihre Rückzahlungen werden mit ihr verbucht.',
+    'repayment_date_invalid' => 'Das Rückzahlungsdatum muss am oder nach dem Datum der Schuld und in einem offenen Geschäftsjahr liegen.',
     'debt_entry_lost' => 'War gebucht, aber die Buchung wurde im Journal gelöscht. Ohne Rückzahlungen: Schuld stornieren und die Abrechnungen erneut überführen; sonst die Buchung im Journal neu erfassen.',
 ];

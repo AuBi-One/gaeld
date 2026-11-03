@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Plugins\ExpenseClaims\Models\Claim;
 use Plugins\ExpenseClaims\Models\DebtRecord;
+use Plugins\ExpenseClaims\Models\DebtRepayment;
 
 /**
  * Year-end closing (D46). Claims dated in the closing year whose cost is not
@@ -49,6 +50,7 @@ final class ClosingCheck implements ClosingCheckInterface
                 ->reject($booked)->reject(fn (Claim $c): bool => $c->settled_via === 'migrated'), 'closing_settled_later', null),
             ...$this->finding('drafts-earlier', $earlier->where('status', Claim::STATUS_DRAFT), 'closing_drafts_earlier', '/expense-balances?status=draft'.$before),
             ...$this->lostDebts($organizationId, $toDate),
+            ...$this->lostRepayments($organizationId, $fromDate, $toDate),
             ...$this->finding('unpaid-earlier', $earlier->where('status', Claim::STATUS_APPROVED), 'closing_unpaid_earlier', '/expense-balances?status=approved'.$before),
         ];
     }
@@ -77,6 +79,38 @@ final class ClosingCheck implements ClosingCheckInterface
             'message' => (string) __('expense-claims::ec.closing_debt_entry_lost', [
                 'count' => $lost->count(),
                 'amount' => Money::sumAmounts($lost->map(fn (DebtRecord $d): array => ['amount' => (string) $d->amount])->values()->all()),
+            ]),
+            'action_label' => (string) __('expense-claims::ec.debts'),
+            'action_url' => '/expense-balances',
+        ]];
+    }
+
+    /**
+     * Bank repayments whose entry was deleted in the journal (the foreign key
+     * nulled the id): the debt account still shows what was repaid. Reported
+     * in the year of the repayment only (re-booked in the journal, it stays
+     * unlinked). Payroll repayments have no entry of their own (the slip
+     * carries them).
+     *
+     * @return list<array{key: string, message: string, action_label?: string, action_url?: string, blocking?: bool}>
+     */
+    private function lostRepayments(string $organizationId, string $fromDate, string $toDate): array
+    {
+        $lost = DebtRepayment::withoutGlobalScopes()
+            ->where('organization_id', $organizationId)
+            ->where('via', 'bank')
+            ->whereNull('journal_entry_id')
+            ->whereBetween('date', [$fromDate, $toDate])
+            ->get();
+        if ($lost->isEmpty()) {
+            return [];
+        }
+
+        return [[
+            'key' => 'expense-claims.repayment-entry-lost',
+            'message' => (string) __('expense-claims::ec.closing_repayment_entry_lost', [
+                'count' => $lost->count(),
+                'amount' => Money::sumAmounts($lost->map(fn (DebtRepayment $r): array => ['amount' => (string) $r->amount])->values()->all()),
             ]),
             'action_label' => (string) __('expense-claims::ec.debts'),
             'action_url' => '/expense-balances',

@@ -188,5 +188,8 @@ return [
     'rate_exists' => 'A rate for this vehicle type already starts on that date.',
     'entry_lost' => 'Booked once, but the entry was deleted in the journal: counts as not booked.',
     'closing_debt_entry_lost' => ':count debt record(s) (CHF :amount) were booked once, but their entry was deleted in the journal: cost and debt are missing from the ledger. Without repayments, cancel the record and pass the claims to debt again; otherwise re-book the entry in the journal.',
+    'closing_repayment_entry_lost' => ':count bank repayment(s) of debts (CHF :amount) were recorded, but their entry was deleted in the journal: the debt account still shows the amount as owed. Re-book the repayment in the journal (Dr debt account / Cr bank); this notice is for the year of the repayment.',
+    'repayment_debt_still_draft' => 'Post the debt\'s entry first: its repayments are posted with it.',
+    'repayment_date_invalid' => 'The repayment date must be on or after the debt date and in an open fiscal year.',
     'debt_entry_lost' => 'Booked once, but the entry was deleted in the journal. Without repayments: cancel the record and pass the claims to debt again; otherwise re-book the entry in the journal.',
 ];

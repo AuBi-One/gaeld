@@ -257,10 +257,35 @@ class GroupedEntriesTest extends ExpenseClaimsTestCase
         // A draft debt is not offered for repayment with a salary.
         $this->assertSame([], app(ReimbursementSourceInterface::class)->openItems($this->org->id, (string) $this->employee->id));
 
-        // Repayments made after the debt entry is posted are posted (earlier draft ones stay drafts until posted in the journal).
+        // Posting the debt entry posts its draft repayments with it; later repayments are posted at once.
         app(LedgerService::class)->postDraft(JournalEntry::findOrFail($debt->journal_entry_id));
+        $this->assertTrue($entry->fresh()->is_posted);
+        $this->assertSame('-20.00', $this->balances()[$debt->account_code] ?? null); // debt 30 less the repayment 10, in the ledger
         $second = app(Debts::class)->repay($debt->fresh(), '2026-03-01', '5.00');
         $this->assertTrue(JournalEntry::findOrFail($second->journal_entry_id)->is_posted);
+        $this->assertSame('15.00', $debt->fresh()->load('repayments')->remaining());
+    }
+
+    #[Test]
+    public function a_draft_repayment_is_neither_dated_before_its_debt_nor_posted_before_it(): void
+    {
+        $claim = $this->draft($this->owner, '2025-05-10', '30.00');
+        app(Claims::class)->approve($claim);
+        $debt = app(Debts::class)->convert([$claim], '2025-12-31', null, true)->sole();
+
+        try {
+            app(Debts::class)->repay($debt, '2025-12-30', '10.00');
+            $this->fail('Repaid before the debt date.');
+        } catch (\DomainException) {
+        }
+        $repayment = app(Debts::class)->repay($debt->fresh(), '2026-02-01', '10.00');
+        try {
+            app(LedgerService::class)->postDraft(JournalEntry::findOrFail($repayment->journal_entry_id));
+            $this->fail('Repayment posted while its debt is a draft.');
+        } catch (\DomainException) {
+        }
+        $this->assertFalse(JournalEntry::findOrFail($repayment->journal_entry_id)->is_posted);
+        $this->assertSame([], array_filter($this->balances(), fn (string $b): bool => $b !== '0.00'));
     }
 
     #[Test]
