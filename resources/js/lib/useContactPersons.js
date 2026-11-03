@@ -6,8 +6,8 @@ import { useToast } from '@/lib/useToast'
 /**
  * Composable for contact person CRUD operations.
  *
- * @param {string} entityType - 'customers' or 'suppliers'
- * @param {number|string} entityId - The parent entity ID
+ * @param {string} entityType - 'contacts'
+ * @param {string} entityId - The parent's public uuid
  * @param {Array} initialContacts - Initial contact persons array
  */
 export function useContactPersons(entityType, entityId, initialContacts = []) {

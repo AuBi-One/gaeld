@@ -11,6 +11,7 @@ use App\Domains\Contacts\Requests\UpdateContactPersonRequest;
 use App\Http\Controllers\Controller;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Str;
 
 /**
  * CRUD for contact persons attached to customers or suppliers.
@@ -74,12 +75,15 @@ class ContactPersonController extends Controller
         return response()->json(null, 204);
     }
 
+    /**
+     * The parent comes from the URL by its public uuid, like every other contact
+     * URL, within the current organisation; anything else is a 404.
+     */
     private function resolveParent(string $type, string $id): Model
     {
-        return match ($type) {
-            'contacts' => Contact::withoutGlobalScopes()->findOrFail($id),
-            default => abort(404),
-        };
+        abort_unless($type === 'contacts' && Str::isUuid($id), 404);
+
+        return Contact::query()->where('uuid', $id)->firstOrFail();
     }
 
     private function authorizeParent(string $ability, Model $parent): void
