@@ -1,0 +1,3 @@
+# AuBi-One fork: false positives of the full-history gitleaks scan (CI).
+# A git commit SHA (API_REF) in an old upstream RELEASE.md, flagged as generic-api-key.
+a67725ab6a6c24776eb7215b09eaf05f863d608b:RELEASE.md:generic-api-key:35
