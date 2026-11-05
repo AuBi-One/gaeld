@@ -2395,6 +2395,8 @@ return [
     'execution_date' => 'Ausführungsdatum',
     'selected_count' => 'Ausgewählt',
     'no_iban' => 'Keine IBAN',
+    'no_supplier_address' => 'Adresse unvollständig (Ort, Land)',
+    'payment_supplier_address_missing' => 'Adresse unvollständig (Ort, Land) bei: :names. Die Bank weist die Datei sonst zurück.',
 
     // Belegabgleich-Badges
     'justification_missing' => 'Beleg fehlt',

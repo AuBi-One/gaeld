@@ -2399,6 +2399,8 @@ return [
     'execution_date' => 'Data di esecuzione',
     'selected_count' => 'Selezionati',
     'no_iban' => 'Nessun IBAN',
+    'no_supplier_address' => 'Indirizzo incompleto (località, paese)',
+    'payment_supplier_address_missing' => 'Indirizzo incompleto (località, paese) per: :names. La banca rifiuterebbe il file.',
 
     // Badge giustificativi
     'justification_missing' => 'Documento giustificativo mancante',

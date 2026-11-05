@@ -2,6 +2,7 @@
 
 namespace App\Domains\Banking\Controllers;
 
+use App\Domains\Banking\DTOs\PaymentInstructionData;
 use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Banking\Services\PaymentInitiationService;
 use App\Domains\Organizations\Services\CurrentOrganization;
@@ -36,6 +37,8 @@ class PaymentInitiationController extends Controller
                     'id' => $e->supplier->id,
                     'name' => $e->supplier->name,
                     'iban' => $e->supplier->iban,
+                    // SPS 2025: the bank rejects a creditor without town and country.
+                    'has_address' => PaymentInstructionData::hasPostalAddress($e->supplier->city, $e->supplier->country),
                 ] : null,
                 'amount' => (string) $e->amount,
                 'currency' => $e->currency,

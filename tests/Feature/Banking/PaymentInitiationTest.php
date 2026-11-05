@@ -45,6 +45,7 @@ class PaymentInitiationTest extends TestCase
             'organization_id' => $this->organization->id,
             'name' => 'Supplier '.uniqid(),
             'email' => uniqid('s').'@example.com',
+            'city' => 'Bern',
             'country' => 'CH',
             'currency' => 'CHF',
             'iban' => $supplierIban,
@@ -116,5 +117,49 @@ class PaymentInitiationTest extends TestCase
             'bank_account_id' => $this->bankAccount->id,
             'expense_ids' => [],
         ])->assertSessionHasErrors('expense_ids');
+    }
+
+    public function test_download_writes_the_supplier_address_and_flags_incomplete_ones(): void
+    {
+        $expense = $this->createPayableExpense();
+        $expense->supplier->update([
+            'address' => 'Bahnhofstrasse 10',
+            'postal_code' => '8001',
+            'city' => 'Zürich',
+            'country' => 'CH',
+        ]);
+        $incomplete = $this->createPayableExpense();
+        $incomplete->supplier->update(['city' => null, 'name' => 'No Town AG']);
+
+        $this->actAsOrg()
+            ->get('/payments/outgoing')
+            ->assertInertia(fn ($page) => $page
+                ->where('expenses', fn ($rows) => collect($rows)->pluck('supplier.has_address', 'id')->all() === [
+                    $expense->id => true,
+                    $incomplete->id => false,
+                ]));
+
+        $body = (string) $this->actAsOrg()->post('/payments/outgoing/download', [
+            'bank_account_id' => $this->bankAccount->id,
+            'expense_ids' => [$expense->id],
+            'execution_date' => now()->addDay()->toDateString(),
+        ])->assertOk()->getContent();
+
+        $this->assertStringContainsString(
+            '<PstlAdr><StrtNm>Bahnhofstrasse 10</StrtNm><PstCd>8001</PstCd><TwnNm>Zürich</TwnNm><Ctry>CH</Ctry></PstlAdr>',
+            (string) preg_replace('/>\s+</', '><', $body),
+        );
+    }
+
+    public function test_download_refuses_a_supplier_without_town_or_country(): void
+    {
+        $expense = $this->createPayableExpense();
+        $expense->supplier->update(['city' => null, 'name' => 'No Town AG']);
+
+        $this->actAsOrg()->post('/payments/outgoing/download', [
+            'bank_account_id' => $this->bankAccount->id,
+            'expense_ids' => [$expense->id],
+            'execution_date' => now()->addDay()->toDateString(),
+        ])->assertRedirect()->assertSessionHas('error', fn ($m) => str_contains((string) $m, 'No Town AG'));
     }
 }

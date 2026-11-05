@@ -126,4 +126,107 @@ class FilePain001ProviderTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         (new FilePain001Provider(new SwissBicResolver))->initiate($ba, [$this->instruction('A', '10.00')]);
     }
+
+    public function test_writes_structured_debtor_and_creditor_addresses(): void
+    {
+        $debtor = $this->debtor();
+        $debtor->organization->fill([
+            'address' => 'Rue du Lac 1',
+            'postal_code' => '1003',
+            'city' => 'Lausanne',
+            'country' => 'CH',
+        ]);
+        $instr = new PaymentInstructionData(
+            endToEndId: 'GAELD-ADR',
+            creditorName: 'Supplier AG',
+            creditorIban: 'CH4431999123000889012',
+            amount: '10.00',
+            currency: 'CHF',
+            executionDate: Carbon::parse('2026-04-01'),
+            structuredReference: null,
+            unstructuredRemittance: 'Invoice #42',
+            creditorStreet: "Bahnhofstrasse 10\nPostfach",
+            creditorPostalCode: '8001',
+            creditorTown: 'Zürich',
+            creditorCountry: 'ch',
+        );
+
+        $xml = (string) (new FilePain001Provider(new SwissBicResolver))
+            ->initiate($debtor, [$instr])->download->getContent();
+        $doc = new \DOMDocument;
+        $doc->loadXML($xml);
+        $xp = new \DOMXPath($doc);
+        $xp->registerNamespace('p', 'urn:iso:std:iso:20022:tech:xsd:pain.001.001.09');
+
+        $children = fn (string $path) => array_map(
+            fn (\DOMNode $n) => $n->nodeName.'='.$n->textContent,
+            array_values(array_filter(
+                iterator_to_array($xp->query($path)->item(0)->childNodes),
+                fn (\DOMNode $n) => $n instanceof \DOMElement,
+            )),
+        );
+
+        $this->assertSame(
+            ['StrtNm=Rue du Lac 1', 'PstCd=1003', 'TwnNm=Lausanne', 'Ctry=CH'],
+            $children('//p:Dbtr/p:PstlAdr'),
+        );
+        $this->assertSame(
+            ['StrtNm=Bahnhofstrasse 10, Postfach', 'PstCd=8001', 'TwnNm=Zürich', 'Ctry=CH'],
+            $children('//p:Cdtr/p:PstlAdr'),
+        );
+        // Schema order inside the party: Nm before PstlAdr.
+        $this->assertSame('Nm', $xp->query('//p:Cdtr/*[1]')->item(0)->localName);
+    }
+
+    public function test_omits_address_without_town_or_country(): void
+    {
+        $instr = new PaymentInstructionData(
+            endToEndId: 'GAELD-NOADR',
+            creditorName: 'Supplier AG',
+            creditorIban: 'CH4431999123000889012',
+            amount: '10.00',
+            currency: 'CHF',
+            executionDate: Carbon::parse('2026-04-01'),
+            structuredReference: null,
+            unstructuredRemittance: 'Invoice #42',
+            creditorStreet: 'Bahnhofstrasse 10',
+            creditorTown: 'Zürich',
+            creditorCountry: null,
+        );
+
+        $xml = (string) (new FilePain001Provider(new SwissBicResolver))
+            ->initiate($this->debtor(), [$instr])->download->getContent();
+
+        $this->assertStringNotContainsString('<PstlAdr>', $xml);
+    }
+
+    public function test_escapes_ampersands_and_keeps_to_the_sps_character_set(): void
+    {
+        $instr = new PaymentInstructionData(
+            endToEndId: 'GAELD-CHARS',
+            creditorName: 'Müller & Söhne',
+            creditorIban: 'CH4431999123000889012',
+            amount: '10.00',
+            currency: 'CHF',
+            executionDate: Carbon::parse('2026-04-01'),
+            structuredReference: null,
+            unstructuredRemittance: 'Note d’honoraires – 2025 ✓',
+            creditorBic: 'NOT A BIC',
+            creditorTown: 'Zürich',
+            creditorCountry: 'CH',
+        );
+
+        $xml = (string) (new FilePain001Provider(new SwissBicResolver))
+            ->initiate($this->debtor(), [$instr])->download->getContent();
+        $doc = new \DOMDocument;
+        $doc->loadXML($xml);
+        $xp = new \DOMXPath($doc);
+        $xp->registerNamespace('p', 'urn:iso:std:iso:20022:tech:xsd:pain.001.001.09');
+
+        $this->assertSame('Müller & Söhne', $xp->query('//p:Cdtr/p:Nm')->item(0)->textContent);
+        $this->assertSame("Note d'honoraires - 2025", $xp->query('//p:Ustrd')->item(0)->textContent);
+        // A malformed stored BIC is not written.
+        $this->assertStringNotContainsString('NOT A BIC', $xml);
+        $this->assertStringNotContainsString('NOTABIC', $xml);
+    }
 }

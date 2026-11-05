@@ -27,7 +27,21 @@ readonly class PaymentInstructionData
         public ?string $creditorBic = null,
         public ?string $sourceType = null,
         public ?string $sourceId = null,
+        // Creditor postal address (SPS 2025: structured, town and country required).
+        public ?string $creditorStreet = null,
+        public ?string $creditorPostalCode = null,
+        public ?string $creditorTown = null,
+        public ?string $creditorCountry = null,
     ) {}
+
+    /**
+     * SPS 2025: a creditor needs at least a town and an ISO country code, or the bank rejects the file.
+     */
+    public static function hasPostalAddress(?string $town, ?string $country): bool
+    {
+        return trim((string) $town) !== ''
+            && preg_match('/^[A-Za-z]{2}$/', trim((string) $country)) === 1;
+    }
 
     public static function fromExpense(Expense $expense, ?Carbon $executionDate = null): self
     {
@@ -50,6 +64,10 @@ readonly class PaymentInstructionData
             creditorBic: $supplier->bic,
             sourceType: 'expense',
             sourceId: $expense->id,
+            creditorStreet: $supplier->address,
+            creditorPostalCode: $supplier->postal_code,
+            creditorTown: $supplier->city,
+            creditorCountry: $supplier->country,
         );
     }
 
@@ -74,6 +92,10 @@ readonly class PaymentInstructionData
             creditorBic: $supplier->bic,
             sourceType: 'invoice',
             sourceId: $invoice->id,
+            creditorStreet: $supplier->address,
+            creditorPostalCode: $supplier->postal_code,
+            creditorTown: $supplier->city,
+            creditorCountry: $supplier->country,
         );
     }
 

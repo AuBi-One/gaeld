@@ -165,6 +165,9 @@ function submit() {
                     <Badge v-if="!e.supplier?.iban" variant="outline" class="ml-1 text-[10px]">
                       {{ t('no_iban') }}
                     </Badge>
+                    <Badge v-if="e.supplier && !e.supplier.has_address" variant="outline" class="ml-1 text-[10px]">
+                      {{ t('no_supplier_address') }}
+                    </Badge>
                   </td>
                   <td class="py-2 font-mono text-xs">{{ e.supplier?.iban || '—' }}</td>
                   <td class="py-2">{{ e.description }}</td>

@@ -2473,6 +2473,8 @@ return [
     'execution_date' => 'Execution date',
     'selected_count' => 'Selected',
     'no_iban' => 'No IBAN',
+    'no_supplier_address' => 'Address incomplete (town, country)',
+    'payment_supplier_address_missing' => 'Incomplete address (town, country) for: :names. The bank would reject the file.',
 
     // Justification badges
     'justification_missing' => 'Supporting document missing',

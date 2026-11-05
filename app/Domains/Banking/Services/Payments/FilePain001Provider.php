@@ -80,23 +80,23 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
         // ── Group Header ──
         $grpHdr = $dom->createElement('GrpHdr');
         $cstmr->appendChild($grpHdr);
-        $grpHdr->appendChild($dom->createElement('MsgId', $msgId));
-        $grpHdr->appendChild($dom->createElement('CreDtTm', $now->toIso8601String()));
-        $grpHdr->appendChild($dom->createElement('NbOfTxs', (string) count($instructions)));
-        $grpHdr->appendChild($dom->createElement('CtrlSum', $controlSum));
+        $grpHdr->appendChild($this->textElement($dom, 'MsgId', $msgId));
+        $grpHdr->appendChild($this->textElement($dom, 'CreDtTm', $now->toIso8601String()));
+        $grpHdr->appendChild($this->textElement($dom, 'NbOfTxs', (string) count($instructions)));
+        $grpHdr->appendChild($this->textElement($dom, 'CtrlSum', $controlSum));
 
         $initgPty = $dom->createElement('InitgPty');
-        $initgPty->appendChild($dom->createElement('Nm', $this->sanitize($org->legal_name ?: $org->name)));
+        $initgPty->appendChild($this->textElement($dom, 'Nm', $this->sanitize($org->legal_name ?: $org->name)));
         $grpHdr->appendChild($initgPty);
 
         // ── Payment Information (one block, single currency / single execution date) ──
         $pmtInf = $dom->createElement('PmtInf');
         $cstmr->appendChild($pmtInf);
-        $pmtInf->appendChild($dom->createElement('PmtInfId', $pmtInfId));
-        $pmtInf->appendChild($dom->createElement('PmtMtd', 'TRF'));
-        $pmtInf->appendChild($dom->createElement('BtchBookg', 'true'));
-        $pmtInf->appendChild($dom->createElement('NbOfTxs', (string) count($instructions)));
-        $pmtInf->appendChild($dom->createElement('CtrlSum', $controlSum));
+        $pmtInf->appendChild($this->textElement($dom, 'PmtInfId', $pmtInfId));
+        $pmtInf->appendChild($this->textElement($dom, 'PmtMtd', 'TRF'));
+        $pmtInf->appendChild($this->textElement($dom, 'BtchBookg', 'true'));
+        $pmtInf->appendChild($this->textElement($dom, 'NbOfTxs', (string) count($instructions)));
+        $pmtInf->appendChild($this->textElement($dom, 'CtrlSum', $controlSum));
 
         // PmtTpInf is omitted for SPS Type 3 (Swiss-domestic CHF/EUR) which covers
         // the vast majority of payments. SEPA SvcLvl is EUR-only and would cause
@@ -110,16 +110,20 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
 
         // pain.001.001.09: ReqdExctnDt is element-only and must wrap the date in <Dt> (or <DtTm>).
         $reqdExctnDt = $dom->createElement('ReqdExctnDt');
-        $reqdExctnDt->appendChild($dom->createElement('Dt', $execDate));
+        $reqdExctnDt->appendChild($this->textElement($dom, 'Dt', $execDate));
         $pmtInf->appendChild($reqdExctnDt);
 
         $dbtr = $dom->createElement('Dbtr');
-        $dbtr->appendChild($dom->createElement('Nm', $this->sanitize($org->legal_name ?: $org->name)));
+        $dbtr->appendChild($this->textElement($dom, 'Nm', $this->sanitize($org->legal_name ?: $org->name)));
+        $dbtrAdr = $this->buildPostalAddress($dom, $org->address, $org->postal_code, $org->city, $org->country);
+        if ($dbtrAdr !== null) {
+            $dbtr->appendChild($dbtrAdr);
+        }
         $pmtInf->appendChild($dbtr);
 
         $dbtrAcct = $dom->createElement('DbtrAcct');
         $dbtrAcctId = $dom->createElement('Id');
-        $dbtrAcctId->appendChild($dom->createElement('IBAN', $this->normalizeIban($debtor->iban)));
+        $dbtrAcctId->appendChild($this->textElement($dom, 'IBAN', $this->normalizeIban($debtor->iban)));
         $dbtrAcct->appendChild($dbtrAcctId);
         $pmtInf->appendChild($dbtrAcct);
 
@@ -127,7 +131,7 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
         $dbtrAgt->appendChild($this->buildFinInstnId($dom, $debtor->iban, $debtor->bic));
         $pmtInf->appendChild($dbtrAgt);
 
-        $pmtInf->appendChild($dom->createElement('ChrgBr', 'SLEV'));
+        $pmtInf->appendChild($this->textElement($dom, 'ChrgBr', 'SLEV'));
 
         // ── Credit Transfer Transactions ──
         foreach ($instructions as $instr) {
@@ -137,16 +141,49 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
         return $dom->saveXML() ?: '';
     }
 
+    /**
+     * Structured postal address (PostalAddress24), as SPS 2025 requires for the debtor and the
+     * creditor: town and country are mandatory, so without them no address is written.
+     * Element order follows the schema: StrtNm, PstCd, TwnNm, Ctry.
+     */
+    private function buildPostalAddress(
+        \DOMDocument $dom,
+        ?string $street,
+        ?string $postalCode,
+        ?string $town,
+        ?string $country,
+    ): ?\DOMElement {
+        $town = trim((string) $town);
+        $country = strtoupper(trim((string) $country));
+        if ($town === '' || preg_match('/^[A-Z]{2}$/', $country) !== 1) {
+            return null;
+        }
+
+        $adr = $dom->createElement('PstlAdr');
+        $street = trim((string) preg_replace('/\s*[\r\n]+\s*/', ', ', (string) $street));
+        if ($street !== '') {
+            $adr->appendChild($this->textElement($dom, 'StrtNm', $this->sanitize($street, 70)));
+        }
+        $postalCode = trim((string) $postalCode);
+        if ($postalCode !== '') {
+            $adr->appendChild($this->textElement($dom, 'PstCd', $this->sanitize($postalCode, 16)));
+        }
+        $adr->appendChild($this->textElement($dom, 'TwnNm', $this->sanitize($town, 35)));
+        $adr->appendChild($this->textElement($dom, 'Ctry', $country));
+
+        return $adr;
+    }
+
     private function buildTransaction(\DOMDocument $dom, PaymentInstructionData $instr): \DOMElement
     {
         $tx = $dom->createElement('CdtTrfTxInf');
 
         $pmtId = $dom->createElement('PmtId');
-        $pmtId->appendChild($dom->createElement('EndToEndId', $this->sanitize($instr->endToEndId, 35)));
+        $pmtId->appendChild($this->textElement($dom, 'EndToEndId', $this->sanitize($instr->endToEndId, 35)));
         $tx->appendChild($pmtId);
 
         $amt = $dom->createElement('Amt');
-        $instdAmt = $dom->createElement('InstdAmt', $instr->amount);
+        $instdAmt = $this->textElement($dom, 'InstdAmt', $instr->amount);
         $instdAmt->setAttribute('Ccy', $instr->currency);
         $amt->appendChild($instdAmt);
         $tx->appendChild($amt);
@@ -156,12 +193,22 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
         $tx->appendChild($cdtrAgt);
 
         $cdtr = $dom->createElement('Cdtr');
-        $cdtr->appendChild($dom->createElement('Nm', $this->sanitize($instr->creditorName, 70)));
+        $cdtr->appendChild($this->textElement($dom, 'Nm', $this->sanitize($instr->creditorName, 70)));
+        $cdtrAdr = $this->buildPostalAddress(
+            $dom,
+            $instr->creditorStreet,
+            $instr->creditorPostalCode,
+            $instr->creditorTown,
+            $instr->creditorCountry,
+        );
+        if ($cdtrAdr !== null) {
+            $cdtr->appendChild($cdtrAdr);
+        }
         $tx->appendChild($cdtr);
 
         $cdtrAcct = $dom->createElement('CdtrAcct');
         $cdtrAcctId = $dom->createElement('Id');
-        $cdtrAcctId->appendChild($dom->createElement('IBAN', $instr->creditorIban));
+        $cdtrAcctId->appendChild($this->textElement($dom, 'IBAN', $instr->creditorIban));
         $cdtrAcct->appendChild($cdtrAcctId);
         $tx->appendChild($cdtrAcct);
 
@@ -172,11 +219,11 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
             $cdtrRefInf = $dom->createElement('CdtrRefInf');
             $tp = $dom->createElement('Tp');
             $cdOrPrtry = $dom->createElement('CdOrPrtry');
-            $prtry = $dom->createElement('Prtry', 'QRR');
+            $prtry = $this->textElement($dom, 'Prtry', 'QRR');
             $cdOrPrtry->appendChild($prtry);
             $tp->appendChild($cdOrPrtry);
             $cdtrRefInf->appendChild($tp);
-            $cdtrRefInf->appendChild($dom->createElement('Ref', $instr->structuredReference));
+            $cdtrRefInf->appendChild($this->textElement($dom, 'Ref', $instr->structuredReference));
             $strd->appendChild($cdtrRefInf);
             $rmtInf->appendChild($strd);
         } elseif ($instr->isScorReference()) {
@@ -184,17 +231,19 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
             $cdtrRefInf = $dom->createElement('CdtrRefInf');
             $tp = $dom->createElement('Tp');
             $cdOrPrtry = $dom->createElement('CdOrPrtry');
-            $cd = $dom->createElement('Cd', 'SCOR');
+            $cd = $this->textElement($dom, 'Cd', 'SCOR');
             $cdOrPrtry->appendChild($cd);
             $tp->appendChild($cdOrPrtry);
             $cdtrRefInf->appendChild($tp);
-            $cdtrRefInf->appendChild($dom->createElement('Ref', $instr->structuredReference));
+            $cdtrRefInf->appendChild($this->textElement($dom, 'Ref', $instr->structuredReference));
             $strd->appendChild($cdtrRefInf);
             $rmtInf->appendChild($strd);
         } elseif ($instr->unstructuredRemittance) {
-            $rmtInf->appendChild($dom->createElement('Ustrd', $this->sanitize($instr->unstructuredRemittance, 140)));
+            $rmtInf->appendChild($this->textElement($dom, 'Ustrd', $this->sanitize($instr->unstructuredRemittance, 140)));
         }
-        $tx->appendChild($rmtInf);
+        if ($rmtInf->hasChildNodes()) {
+            $tx->appendChild($rmtInf);
+        }
 
         return $tx;
     }
@@ -239,13 +288,13 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
         $bic = $this->resolveBic($iban, $explicitBic);
 
         if ($bic !== null) {
-            $finInstnId->appendChild($dom->createElement('BICFI', $bic));
+            $finInstnId->appendChild($this->textElement($dom, 'BICFI', $bic));
 
             return $finInstnId;
         }
 
         $othr = $dom->createElement('Othr');
-        $othr->appendChild($dom->createElement('Id', 'NOTPROVIDED'));
+        $othr->appendChild($this->textElement($dom, 'Id', 'NOTPROVIDED'));
         $finInstnId->appendChild($othr);
 
         return $finInstnId;
@@ -259,16 +308,20 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
      */
     private function resolveBic(?string $iban, ?string $explicitBic): ?string
     {
-        if ($explicitBic !== null) {
-            $normalized = strtoupper(preg_replace('/\s+/', '', $explicitBic) ?? '');
-            if ($normalized !== '') {
-                return $normalized;
-            }
+        // Derived from a Swiss/LI IBAN via the curated IID table: always right for that IBAN.
+        // Only returns a BIC when the IID is unambiguously known.
+        $derived = $this->bicResolver->resolveFromIban($iban);
+        if ($derived !== null) {
+            return $derived;
         }
 
-        // Fallback: derive from Swiss/LI IBAN via curated IID table.
-        // Only returns a BIC when the IID is unambiguously known.
-        return $this->bicResolver->resolveFromIban($iban);
+        // A stored BIC only when well-formed: a malformed one fails the schema and the bank
+        // rejects the whole file.
+        $normalized = strtoupper(preg_replace('/\s+/', '', (string) $explicitBic) ?? '');
+
+        return preg_match('/^[A-Z0-9]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/', $normalized) === 1
+            ? $normalized
+            : null;
     }
 
     /**
@@ -307,7 +360,7 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
 
         $pmtTpInf = $dom->createElement('PmtTpInf');
         $svcLvl = $dom->createElement('SvcLvl');
-        $svcLvl->appendChild($dom->createElement('Cd', 'SEPA'));
+        $svcLvl->appendChild($this->textElement($dom, 'Cd', 'SEPA'));
         $pmtTpInf->appendChild($svcLvl);
 
         return $pmtTpInf;
@@ -327,11 +380,26 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
     }
 
     /**
-     * Strip control chars and trim to ISO 20022 max length.
+     * Element with text content. DOMDocument::createElement($name, $value) does not escape "&"
+     * (it silently drops the entity), so the text goes in as a text node.
+     */
+    private function textElement(\DOMDocument $dom, string $name, string $value): \DOMElement
+    {
+        $element = $dom->createElement($name);
+        $element->appendChild($dom->createTextNode($value));
+
+        return $element;
+    }
+
+    /**
+     * Strip control chars, keep to the SPS character set and trim to ISO 20022 max length.
      */
     private function sanitize(string $value, int $maxLength = 70): string
     {
         $clean = preg_replace('/[\x00-\x1F\x7F]/', '', $value) ?? $value;
+        // SPS allows Latin only: map common typographic characters, drop the rest.
+        $clean = strtr($clean, ['’' => "'", '‘' => "'", '‚' => "'", '“' => '"', '”' => '"', '„' => '"', '–' => '-', '—' => '-', '…' => '...']);
+        $clean = preg_replace('/[^\x{0020}-\x{007E}\x{00A0}-\x{017F}\x{0218}-\x{021B}\x{20AC}]/u', '', $clean) ?? $clean;
         $clean = trim($clean);
 
         return mb_substr($clean, 0, $maxLength);

@@ -2402,6 +2402,8 @@ return [
     'execution_date' => 'Date d\'exécution',
     'selected_count' => 'Sélection',
     'no_iban' => 'Pas d\'IBAN',
+    'no_supplier_address' => 'Adresse incomplète (localité, pays)',
+    'payment_supplier_address_missing' => 'Adresse incomplète (localité, pays) pour : :names. La banque refuserait le fichier.',
 
     // Badges de justification
     'justification_missing' => 'Pièce justificative manquante',

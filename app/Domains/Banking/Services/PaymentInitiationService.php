@@ -39,7 +39,7 @@ class PaymentInitiationService
             ->whereIn('status', [ExpenseStatus::Pending->value, ExpenseStatus::Approved->value])
             ->whereNull('journal_entry_id')
             ->whereHas('supplier', fn ($q) => $q->whereNotNull('iban'))
-            ->with('supplier:id,name,iban')
+            ->with('supplier:id,name,iban,bic,address,postal_code,city,country')
             ->orderBy('date')
             ->get();
     }
@@ -57,11 +57,22 @@ class PaymentInitiationService
         $expenses = Expense::query()
             ->where('organization_id', $debtor->organization_id)
             ->whereIn('id', $expenseIds)
-            ->with('supplier:id,name,iban')
+            ->with('supplier:id,name,iban,bic,address,postal_code,city,country')
             ->get();
 
         if ($expenses->isEmpty()) {
             throw new \InvalidArgumentException('No expenses selected for payment.');
+        }
+
+        $noAddress = $expenses
+            ->filter(fn (Expense $e) => $e->supplier !== null
+                && ! PaymentInstructionData::hasPostalAddress($e->supplier->city, $e->supplier->country))
+            ->map(fn (Expense $e) => $e->supplier->name)
+            ->unique();
+        if ($noAddress->isNotEmpty()) {
+            throw new \InvalidArgumentException(
+                __('app.payment_supplier_address_missing', ['names' => $noAddress->implode(', ')])
+            );
         }
 
         /** @var PaymentInstructionData[] $instructions */
