@@ -20,9 +20,12 @@ readonly class UpdateContactData
         public ?string $currency = null,
         public ?string $iban = null,
         public ?string $bic = null,
+        public ?string $accountHolder = null,
         public ?string $paymentTerms = null,
         public ?string $internalNotes = null,
         public ?string $notes = null,
+        // The form sends an empty account holder to fall back to the contact name: keep the null.
+        public bool $accountHolderGiven = false,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -39,9 +42,11 @@ readonly class UpdateContactData
             currency: $data['currency'] ?? null,
             iban: $data['iban'] ?? null,
             bic: $data['bic'] ?? null,
+            accountHolder: $data['account_holder'] ?? null,
             paymentTerms: $data['payment_terms'] ?? null,
             internalNotes: $data['internal_notes'] ?? null,
             notes: $data['notes'] ?? null,
+            accountHolderGiven: array_key_exists('account_holder', $data),
         );
     }
 
@@ -61,6 +66,7 @@ readonly class UpdateContactData
             'payment_terms' => $this->paymentTerms,
             'internal_notes' => $this->internalNotes,
             'notes' => $this->notes ? ['default' => $this->notes] : null,
-        ] + ($this->addressData?->toArray() ?? AddressData::empty()->toArray()), fn ($value) => $value !== null);
+        ] + ($this->addressData?->toArray() ?? AddressData::empty()->toArray()), fn ($value) => $value !== null)
+            + ($this->accountHolderGiven ? ['account_holder' => $this->accountHolder] : []);
     }
 }

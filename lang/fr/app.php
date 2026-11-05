@@ -1467,6 +1467,8 @@ return [
     'tooltip_qr_iban' => 'Le QR-IBAN est spécifique aux QR-factures suisses et diffère de votre IBAN habituel (chiffres 5 à 9 entre 30000 et 31999). Consultez votre e-banking sous bulletins de versement ou demandez-le à votre banque.',
     'bic_placeholder' => 'ex. UBSWCHZH80A',
     'bic_swift' => 'BIC / SWIFT',
+    'account_holder' => 'Titulaire du compte',
+    'account_holder_hint' => 'Nom tel que connu de la banque. Vide = nom du contact.',
     'bic_autofill_from_iban' => 'Remplir le BIC automatiquement depuis l\'IBAN',
     'tooltip_journal_balance' => 'En comptabilité en partie double, le total des débits doit toujours égaler le total des crédits. Une écriture déséquilibrée ne peut pas être comptabilisée.',
 

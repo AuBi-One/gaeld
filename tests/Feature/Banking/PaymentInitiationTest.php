@@ -6,6 +6,7 @@ use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Queries\ContactQuery;
 use App\Domains\Expenses\Enums\ExpenseStatus;
 use App\Domains\Expenses\Models\Expense;
 use App\Domains\Organizations\Models\Organization;
@@ -161,5 +162,72 @@ class PaymentInitiationTest extends TestCase
             'expense_ids' => [$expense->id],
             'execution_date' => now()->addDay()->toDateString(),
         ])->assertRedirect()->assertSessionHas('error', fn ($m) => str_contains((string) $m, 'No Town AG'));
+    }
+
+    public function test_payment_file_uses_the_account_holder_and_falls_back_to_the_contact_name(): void
+    {
+        $withHolder = $this->createPayableExpense();
+        $withHolder->supplier->update(['name' => 'DRP Trading Name', 'account_holder' => 'Holder Name SA']);
+        $withoutHolder = $this->createPayableExpense();
+        $withoutHolder->supplier->update(['name' => 'Plain Contact AG', 'account_holder' => '  ']);
+
+        $body = (string) $this->actAsOrg()->post('/payments/outgoing/download', [
+            'bank_account_id' => $this->bankAccount->id,
+            'expense_ids' => [$withHolder->id, $withoutHolder->id],
+            'execution_date' => now()->addDay()->toDateString(),
+        ])->assertOk()->getContent();
+
+        $doc = new \DOMDocument;
+        $doc->loadXML($body);
+        $xp = new \DOMXPath($doc);
+        $xp->registerNamespace('p', 'urn:iso:std:iso:20022:tech:xsd:pain.001.001.09');
+        $names = [];
+        foreach ($xp->query('//p:CdtTrfTxInf/p:Cdtr/p:Nm') as $n) {
+            $names[] = $n->textContent;
+        }
+        sort($names);
+
+        $this->assertSame(['Holder Name SA', 'Plain Contact AG'], $names);
+    }
+
+    public function test_contact_form_stores_and_clears_the_account_holder(): void
+    {
+        $this->actAsOrg()->post('/contacts', [
+            'name' => 'Holder Test AG',
+            'country' => 'CH',
+            'currency' => 'CHF',
+            'account_holder' => 'Holder Test SA',
+        ])->assertRedirect();
+        $contact = Contact::where('name', 'Holder Test AG')->firstOrFail();
+        $this->assertSame('Holder Test SA', $contact->account_holder);
+
+        $this->actAsOrg()->put("/contacts/{$contact->uuid}", [
+            'name' => 'Holder Test AG',
+            'country' => 'CH',
+            'currency' => 'CHF',
+            'account_holder' => '',
+        ])->assertRedirect();
+        $this->assertNull($contact->fresh()->account_holder);
+
+        $this->actAsOrg()->post('/contacts', [
+            'name' => 'Too Long AG',
+            'account_holder' => str_repeat('x', 71),
+        ])->assertSessionHasErrors('account_holder');
+    }
+
+    public function test_bank_import_matches_a_supplier_by_its_account_holder(): void
+    {
+        $expense = $this->createPayableExpense();
+        $expense->supplier->update([
+            'name' => 'Trading Name GmbH',
+            'account_holder' => 'Registered Holder SA',
+            'default_expense_category' => 'consulting',
+        ]);
+        $orgId = $this->organization->id;
+
+        $this->assertTrue(ContactQuery::hasMatchingSupplier($orgId, 'Registered Holder SA'));
+        $this->assertSame($expense->supplier_id, ContactQuery::findByCreditorName($orgId, 'Registered Holder SA')?->id);
+        $this->assertSame($expense->supplier_id, ContactQuery::findByCreditorName($orgId, 'Trading Name')?->id);
+        $this->assertFalse(ContactQuery::hasMatchingSupplier($orgId, 'Someone Else'));
     }
 }

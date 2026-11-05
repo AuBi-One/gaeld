@@ -37,6 +37,7 @@ use Laravel\Scout\Searchable;
  * @property string|null $vat_number
  * @property string|null $iban
  * @property string|null $bic
+ * @property string|null $account_holder
  * @property string|null $default_expense_category
  * @property string|null $currency
  * @property string|null $payment_terms
@@ -71,6 +72,7 @@ class Contact extends Model
         'vat_number',
         'iban',
         'bic',
+        'account_holder',
         'default_expense_category',
         'currency',
         'payment_terms',

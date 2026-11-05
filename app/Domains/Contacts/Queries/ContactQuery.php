@@ -80,7 +80,8 @@ class ContactQuery
     {
         return Contact::where('organization_id', $organizationId)
             ->whereNotNull('default_expense_category')
-            ->where('name', 'ilike', '%'.$creditorName.'%')
+            ->where(fn ($q) => $q->where('name', 'ilike', '%'.$creditorName.'%')
+                ->orWhere('account_holder', 'ilike', '%'.$creditorName.'%'))
             ->exists();
     }
 
@@ -88,7 +89,8 @@ class ContactQuery
     {
         return Contact::where('organization_id', $organizationId)
             ->whereNotNull('default_expense_category')
-            ->where('name', 'ilike', '%'.$creditorName.'%')
+            ->where(fn ($q) => $q->where('name', 'ilike', '%'.$creditorName.'%')
+                ->orWhere('account_holder', 'ilike', '%'.$creditorName.'%'))
             ->first();
     }
 }

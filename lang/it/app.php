@@ -1435,6 +1435,8 @@ return [
     'tooltip_qr_iban' => 'Il QR-IBAN inizia con CH ed è specifico per le fatture QR svizzere. È diverso dal tuo IBAN ordinario e si trova sul portale bancario.',
     'bic_placeholder' => 'es. UBSWCHZH80A',
     'bic_swift' => 'BIC / SWIFT',
+    'account_holder' => 'Titolare del conto',
+    'account_holder_hint' => 'Nome come registrato dalla banca. Vuoto = nome del contatto.',
     'bic_autofill_from_iban' => 'Compila BIC automaticamente dall\'IBAN',
     'tooltip_journal_balance' => 'Nella contabilità a partita doppia, il totale dei debiti deve sempre essere uguale al totale dei crediti. Una registrazione sbilanciata non può essere contabilizzata.',
 

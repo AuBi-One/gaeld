@@ -1472,6 +1472,8 @@ return [
     'tooltip_qr_iban' => 'Die QR-IBAN ist spezifisch für Schweizer QR-Rechnungen und unterscheidet sich von Ihrer normalen IBAN (Stellen 5–9 im Bereich 30000–31999). Sie finden sie im E-Banking unter Einzahlungsscheine oder fragen Sie Ihre Bank.',
     'bic_placeholder' => 'z.B. UBSWCHZH80A',
     'bic_swift' => 'BIC / SWIFT',
+    'account_holder' => 'Kontoinhaber',
+    'account_holder_hint' => 'Name, wie ihn die Bank führt. Leer = Kontaktname.',
     'bic_autofill_from_iban' => 'BIC aus IBAN automatisch ausfüllen',
     'tooltip_journal_balance' => 'In der doppelten Buchhaltung müssen Soll und Haben immer übereinstimmen. Eine unausgeglichene Buchung kann nicht gebucht werden.',
 

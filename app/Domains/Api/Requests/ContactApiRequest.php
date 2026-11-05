@@ -30,6 +30,7 @@ class ContactApiRequest extends FormRequest
             'vat_number' => ['nullable', 'string', 'max:50'],
             'iban' => ['nullable', 'string', 'max:50'],
             'bic' => ['nullable', 'string', 'max:20'],
+            'account_holder' => ['nullable', 'string', 'max:70'],
             'default_expense_category' => ['nullable', 'string', 'max:255'],
             'currency' => ['nullable', 'string', 'size:3'],
             'payment_terms' => ['nullable', 'string', 'max:255'],

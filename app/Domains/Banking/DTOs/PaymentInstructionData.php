@@ -43,6 +43,16 @@ readonly class PaymentInstructionData
             && preg_match('/^[A-Za-z]{2}$/', trim((string) $country)) === 1;
     }
 
+    /**
+     * The bank account holder when given, otherwise the contact name.
+     */
+    public static function creditorName(?string $accountHolder, string $name): string
+    {
+        $holder = trim((string) $accountHolder);
+
+        return $holder !== '' ? $holder : $name;
+    }
+
     public static function fromExpense(Expense $expense, ?Carbon $executionDate = null): self
     {
         $supplier = $expense->supplier;
@@ -54,7 +64,7 @@ readonly class PaymentInstructionData
 
         return new self(
             endToEndId: self::generateEndToEndId($expense->id),
-            creditorName: $supplier->name,
+            creditorName: self::creditorName($supplier->account_holder, $supplier->name),
             creditorIban: self::normalizeIban($iban),
             amount: number_format((float) $expense->amount, 2, '.', ''),
             currency: $expense->currency,
@@ -82,7 +92,7 @@ readonly class PaymentInstructionData
 
         return new self(
             endToEndId: self::generateEndToEndId($invoice->id),
-            creditorName: $supplier->name,
+            creditorName: self::creditorName($supplier->account_holder, $supplier->name),
             creditorIban: self::normalizeIban($iban),
             amount: number_format((float) $invoice->total, 2, '.', ''),
             currency: $invoice->currency,

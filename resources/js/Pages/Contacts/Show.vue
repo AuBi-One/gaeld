@@ -105,6 +105,10 @@ const cp = useContactPersons('contacts', props.contact.uuid, props.contact.conta
             <span class="text-[hsl(var(--muted-foreground))]">{{ t('iban') }}:</span>
             <span class="ml-2 font-mono">{{ contact.iban }}</span>
           </div>
+          <div v-if="contact.account_holder">
+            <span class="text-[hsl(var(--muted-foreground))]">{{ t('account_holder') }}:</span>
+            <span class="ml-2">{{ contact.account_holder }}</span>
+          </div>
           <div v-if="contact.default_expense_category">
             <span class="text-[hsl(var(--muted-foreground))]">{{ t('default_category') }}:</span>
             <span class="ml-2 capitalize">{{ contact.default_expense_category }}</span>

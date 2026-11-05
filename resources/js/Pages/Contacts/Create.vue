@@ -32,6 +32,7 @@ const form = useForm({
   currency: 'CHF',
   iban: '',
   bic: '',
+  account_holder: '',
   default_expense_category: '',
   payment_terms: '',
 })
@@ -204,6 +205,15 @@ const tabs = [
                   :error="form.errors.bic"
                 />
               </div>
+              <FormInput
+                id="account_holder"
+                v-model="form.account_holder"
+                :label="t('account_holder')"
+                :placeholder="form.name"
+                :hint="t('account_holder_hint')"
+                :error="form.errors.account_holder"
+                class="sm:col-span-2"
+              />
               <FormInput
                 id="default_expense_category"
                 v-model="form.default_expense_category"

@@ -39,7 +39,7 @@ class PaymentInitiationService
             ->whereIn('status', [ExpenseStatus::Pending->value, ExpenseStatus::Approved->value])
             ->whereNull('journal_entry_id')
             ->whereHas('supplier', fn ($q) => $q->whereNotNull('iban'))
-            ->with('supplier:id,name,iban,bic,address,postal_code,city,country')
+            ->with('supplier:id,name,account_holder,iban,bic,address,postal_code,city,country')
             ->orderBy('date')
             ->get();
     }
@@ -57,7 +57,7 @@ class PaymentInitiationService
         $expenses = Expense::query()
             ->where('organization_id', $debtor->organization_id)
             ->whereIn('id', $expenseIds)
-            ->with('supplier:id,name,iban,bic,address,postal_code,city,country')
+            ->with('supplier:id,name,account_holder,iban,bic,address,postal_code,city,country')
             ->get();
 
         if ($expenses->isEmpty()) {

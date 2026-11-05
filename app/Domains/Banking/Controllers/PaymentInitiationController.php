@@ -36,6 +36,7 @@ class PaymentInitiationController extends Controller
                 'supplier' => $e->supplier ? [
                     'id' => $e->supplier->id,
                     'name' => $e->supplier->name,
+                    'account_holder' => $e->supplier->account_holder,
                     'iban' => $e->supplier->iban,
                     // SPS 2025: the bank rejects a creditor without town and country.
                     'has_address' => PaymentInstructionData::hasPostalAddress($e->supplier->city, $e->supplier->country),

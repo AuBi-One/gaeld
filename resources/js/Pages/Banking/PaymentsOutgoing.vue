@@ -162,6 +162,9 @@ function submit() {
                   <td class="py-2">{{ formatDate(e.date) }}</td>
                   <td class="py-2">
                     {{ e.supplier?.name }}
+                    <span v-if="e.supplier?.account_holder && e.supplier.account_holder !== e.supplier.name" class="block text-xs text-[hsl(var(--muted-foreground))]">
+                      {{ t('account_holder') }}: {{ e.supplier.account_holder }}
+                    </span>
                     <Badge v-if="!e.supplier?.iban" variant="outline" class="ml-1 text-[10px]">
                       {{ t('no_iban') }}
                     </Badge>

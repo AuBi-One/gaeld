@@ -1550,6 +1550,8 @@ return [
     'tooltip_qr_iban' => 'The QR-IBAN is specific to Swiss QR invoices and differs from your regular IBAN (digits 5-9 are in range 30000-31999). Find it in your e-banking under payment slips/QR-bills, or ask your bank.',
     'bic_placeholder' => 'e.g. UBSWCHZH80A',
     'bic_swift' => 'BIC / SWIFT',
+    'account_holder' => 'Account holder',
+    'account_holder_hint' => 'Name as held by the bank. Empty = contact name.',
     'bic_autofill_from_iban' => 'Auto-fill BIC from IBAN',
     'tooltip_journal_balance' => 'In double-entry bookkeeping, total debits must always equal total credits. An unbalanced entry cannot be posted.',
 
