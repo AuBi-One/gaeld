@@ -141,7 +141,60 @@ class ChartTemplateService
             $organization->forceFill(['default_revenue_account_code' => AccountCode::REVENUE])->save();
         }
 
-        $systemAccounts = [
+        foreach ($this->systemAccounts($organization->revenueAccountCode()) as $account) {
+            // firstOrCreate replaces the previous pluck-then-check pattern, which
+            // was racy under concurrent organization creation requests.
+            Account::withoutGlobalScopes()->firstOrCreate(
+                [
+                    'organization_id' => $organization->id,
+                    'code' => $account['code'],
+                ],
+                [
+                    'name' => $account['name'][$locale] ?? $account['name']['en'],
+                    'type' => $account['type']->value,
+                    'is_system' => true,
+                ],
+            );
+        }
+    }
+
+    /**
+     * Every name the templates and the system accounts give an account code, in any locale. A stored
+     * name among them was seeded, not chosen by the organisation (AccountDisplayName translates it).
+     * When a template's wording changes, keep the old wording here too, or accounts seeded under it
+     * stop being translated.
+     *
+     * @return array<string, list<string>>
+     */
+    public function seededNames(): array
+    {
+        $names = [];
+        $add = function (string $code, array $byLocale) use (&$names): void {
+            foreach ($byLocale as $name) {
+                $names[$code][] = (string) $name;
+            }
+        };
+        foreach ($this->templates as $template) {
+            foreach ($template->accounts() as $account) {
+                $add($account['code'], (array) $account['name']);
+            }
+            $add($template->revenueAccountCode(), $this->servicesAccountNames()); // ensureRevenueAccount()
+        }
+        foreach ($this->systemAccounts(AccountCode::REVENUE) as $account) {
+            $add($account['code'], $account['name']);
+        }
+
+        return array_map(fn (array $list): array => array_values(array_unique($list)), $names);
+    }
+
+    /**
+     * The mandatory system accounts, with their names per locale.
+     *
+     * @return list<array{code: string, type: AccountType, name: array<string, string>}>
+     */
+    private function systemAccounts(string $revenueCode): array
+    {
+        return [
             ['code' => AccountCode::BANK_CASH, 'type' => AccountType::Asset, 'name' => [
                 'en' => 'Bank Account CHF', 'fr' => 'Compte bancaire CHF', 'de' => 'Bankkonto CHF', 'it' => 'Conto bancario CHF',
             ]],
@@ -157,7 +210,7 @@ class ChartTemplateService
             ['code' => AccountCode::VAT_PAYABLE_AFC, 'type' => AccountType::Liability, 'name' => [
                 'en' => 'VAT Payable AFC', 'fr' => 'TVA à payer AFC', 'de' => 'MWST-Zahllast ESTV', 'it' => 'IVA da versare AFC',
             ]],
-            ['code' => $organization->revenueAccountCode(), 'type' => AccountType::Revenue, 'name' => $this->servicesAccountNames()],
+            ['code' => $revenueCode, 'type' => AccountType::Revenue, 'name' => $this->servicesAccountNames()],
             ['code' => AccountCode::ROUNDING_DIFFERENCE, 'type' => AccountType::Revenue, 'name' => [
                 'en' => 'Revenue Corrections', 'fr' => 'Corrections de produits', 'de' => 'Erlösberichtigungen', 'it' => 'Rettifiche di ricavi',
             ]],
@@ -165,22 +218,6 @@ class ChartTemplateService
                 'en' => 'Opening Balance', 'fr' => 'Bilan d\'ouverture', 'de' => 'Eröffnungsbilanz', 'it' => 'Bilancio di apertura',
             ]],
         ];
-
-        foreach ($systemAccounts as $account) {
-            // firstOrCreate replaces the previous pluck-then-check pattern, which
-            // was racy under concurrent organization creation requests.
-            Account::withoutGlobalScopes()->firstOrCreate(
-                [
-                    'organization_id' => $organization->id,
-                    'code' => $account['code'],
-                ],
-                [
-                    'name' => $account['name'][$locale] ?? $account['name']['en'],
-                    'type' => $account['type']->value,
-                    'is_system' => true,
-                ],
-            );
-        }
     }
 
     /**
