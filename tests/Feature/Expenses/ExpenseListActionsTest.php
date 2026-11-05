@@ -4,6 +4,7 @@ namespace Tests\Feature\Expenses;
 
 use App\Domains\Expenses\Actions\ApproveExpenseAction;
 use App\Domains\Expenses\Actions\CreateExpenseAction;
+use App\Domains\Expenses\Actions\UnapproveExpenseAction;
 use App\Domains\Expenses\DTOs\CreateExpenseData;
 use App\Domains\Expenses\Enums\ExpenseStatus;
 use App\Domains\Expenses\Exceptions\InvalidExpenseStateException;
@@ -118,7 +119,7 @@ class ExpenseListActionsTest extends TestCase
         $expense->update(['status' => ExpenseStatus::Posted]);
 
         try {
-            app(\App\Domains\Expenses\Actions\UnapproveExpenseAction::class)->execute($stale);
+            app(UnapproveExpenseAction::class)->execute($stale);
             $this->fail('Unapprove of a posted expense must be refused.');
         } catch (InvalidExpenseStateException) {
         }

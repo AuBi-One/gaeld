@@ -12,8 +12,8 @@ use App\Domains\Expenses\Models\Expense;
 use App\Domains\Expenses\Services\ExpenseService;
 use App\Support\Exceptions\DomainException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Posts an approved expense to the ledger and records the payment journal entry.

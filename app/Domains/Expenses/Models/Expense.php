@@ -2,12 +2,12 @@
 
 namespace App\Domains\Expenses\Models;
 
-use App\Domains\Expenses\Exceptions\InvalidExpenseStateException;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Expenses\Enums\ExpenseStatus;
 use App\Domains\Expenses\Enums\ExpenseType;
+use App\Domains\Expenses\Exceptions\InvalidExpenseStateException;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Users\Models\User;
 use App\Support\Traits\Auditable;

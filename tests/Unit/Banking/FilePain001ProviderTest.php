@@ -8,8 +8,8 @@ use App\Domains\Banking\Services\Payments\FilePain001Provider;
 use App\Domains\Banking\Services\SwissBicResolver;
 use App\Domains\Organizations\Models\Organization;
 use Illuminate\Support\Carbon;
-use Tests\TestCase;
 use Symfony\Component\HttpFoundation\Response;
+use Tests\TestCase;
 
 class FilePain001ProviderTest extends TestCase
 {
