@@ -38,10 +38,13 @@ class DashboardController extends Controller
             && $metrics['expenses'] === '0.00'
             && count($metrics['recentTransactions']) === 0;
 
-        $expiredFiscalYear = FiscalYear::query()
-            ->where('status', FiscalYearStatus::Expired->value)
-            ->orderBy('end_date', 'desc')
-            ->first();
+        // The banner asks the user to close the year: only for users who may.
+        $expiredFiscalYear = $request->user()->can('closeYear', Account::class)
+            ? FiscalYear::query()
+                ->where('status', FiscalYearStatus::Expired->value)
+                ->orderBy('end_date', 'desc')
+                ->first()
+            : null;
 
         return Inertia::render('Dashboard', array_merge($metrics, [
             'isEmptyState' => $isEmptyState,

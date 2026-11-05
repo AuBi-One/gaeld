@@ -312,7 +312,7 @@ const transactionColumns = computed(() => [
           </div>
         </div>
         <Link
-          :href="`/accounting/closing?fiscal_year_id=${expiredFiscalYear.id}`"
+          :href="`/accounting/year-end-closing?fiscal_year_id=${expiredFiscalYear.id}`"
           class="shrink-0 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
         >
           {{ t('dashboard_close_year') }}

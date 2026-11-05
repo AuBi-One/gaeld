@@ -196,6 +196,29 @@ class FiscalYearPhase3Test extends TestCase
         );
     }
 
+    public function test_dashboard_hides_expired_year_from_users_who_cannot_close_it(): void
+    {
+        FiscalYear::factory()->for($this->org)->expired()->create([
+            'name' => '2023',
+            'start_date' => '2023-01-01',
+            'end_date' => '2023-12-31',
+        ]);
+
+        $viewer = User::factory()->create(['onboarding_completed_at' => now()]);
+        $this->org->users()->attach($viewer->id, ['role' => 'viewer']);
+        $this->assignOrganizationRole($viewer, $this->org, 'viewer');
+
+        $response = $this->actingAs($viewer)
+            ->withSession(['current_organization_id' => $this->org->id])
+            ->get('/dashboard');
+
+        $response->assertInertia(
+            fn ($page) => $page
+                ->component('Dashboard')
+                ->where('expiredFiscalYear', null)
+        );
+    }
+
     public function test_dashboard_passes_null_when_no_expired_fiscal_year(): void
     {
         $response = $this->actAsOrg()->get('/dashboard');
