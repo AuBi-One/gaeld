@@ -22,7 +22,8 @@ class UpdateExpenseAction
         }
 
         // Resolve the effective vat_rate_id before updating so VAT is computed correctly.
-        $vatRateId = $data->vatRateId ?? $expense->vat_rate_id;
+        // A vat_rate_id sent as null ("no VAT") clears the rate; an omitted one keeps it.
+        $vatRateId = $data->vatRateIdGiven ? $data->vatRateId : $expense->vat_rate_id;
 
         // Compute VAT server-side before the update; never trust $data->vatAmount.
         $vatAmount = $this->computeVatAmount($vatRateId, $data->amount);

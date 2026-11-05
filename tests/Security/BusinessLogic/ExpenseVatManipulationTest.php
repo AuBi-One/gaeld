@@ -140,4 +140,70 @@ class ExpenseVatManipulationTest extends SecurityTestCase
         $this->assertSame('16.20', $expense->vat_amount,
             'vat_amount must be recomputed from the new amount and VatRate, not from client input.');
     }
+
+    public function test_update_with_no_vat_rate_clears_the_rate_and_vat(): void
+    {
+        app(CurrentOrganization::class)->set($this->orgA);
+        $expense = Expense::withoutGlobalScopes()->create([
+            'organization_id' => $this->orgA->id,
+            'user_id' => $this->ownerA->id,
+            'category' => 'consulting',
+            'description' => 'Original expense',
+            'amount' => '100.00',
+            'vat_amount' => '8.10',
+            'vat_rate_id' => $this->vatRateA->id,
+            'date' => now()->toDateString(),
+            'currency' => 'CHF',
+            'status' => 'pending',
+        ]);
+
+        // The edit form sends "" for "no VAT"; ConvertEmptyStringsToNull turns it into null.
+        $this->actingAs($this->ownerA)
+            ->withSession(['current_organization_id' => $this->orgA->id])
+            ->put("/expenses/{$expense->id}", [
+                'category' => 'consulting',
+                'description' => 'Original expense',
+                'amount' => '108.10',
+                'vat_amount' => '8.75',
+                'vat_rate_id' => '',
+                'date' => now()->toDateString(),
+                'currency' => 'CHF',
+            ]);
+
+        $expense->refresh();
+
+        $this->assertNull($expense->vat_rate_id, 'Choosing "no VAT" must clear the VAT rate.');
+        $this->assertSame('0.00', $expense->vat_amount);
+        $this->assertSame('108.10', $expense->amount);
+    }
+
+    public function test_update_without_vat_rate_field_keeps_the_rate(): void
+    {
+        app(CurrentOrganization::class)->set($this->orgA);
+        $expense = Expense::withoutGlobalScopes()->create([
+            'organization_id' => $this->orgA->id,
+            'user_id' => $this->ownerA->id,
+            'category' => 'consulting',
+            'amount' => '100.00',
+            'vat_amount' => '8.10',
+            'vat_rate_id' => $this->vatRateA->id,
+            'date' => now()->toDateString(),
+            'currency' => 'CHF',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($this->ownerA)
+            ->withSession(['current_organization_id' => $this->orgA->id])
+            ->put("/expenses/{$expense->id}", [
+                'category' => 'consulting',
+                'amount' => '200.00',
+                'date' => now()->toDateString(),
+                'currency' => 'CHF',
+            ]);
+
+        $expense->refresh();
+
+        $this->assertEquals($this->vatRateA->id, $expense->vat_rate_id);
+        $this->assertSame('16.20', $expense->vat_amount);
+    }
 }

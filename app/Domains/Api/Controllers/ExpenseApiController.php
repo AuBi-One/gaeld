@@ -137,14 +137,17 @@ class ExpenseApiController extends Controller
     ): ExpenseResource {
         $this->authorize('update', $expense);
 
-        $validated = $this->completeUpdatePayload($expense, $request->validated());
+        $validated = $request->validated();
 
-        // Resolve vat_rate_id UUID to internal integer FK
+        // Resolve vat_rate_id UUID to internal integer FK, before the payload is completed
+        // with the expense's own (already internal) vat_rate_id.
         if (isset($validated['vat_rate_id'])) {
             $validated['vat_rate_id'] = VatRate::where('uuid', $validated['vat_rate_id'])
                 ->where('organization_id', $expense->organization_id)
                 ->value('id');
         }
+
+        $validated = $this->completeUpdatePayload($expense, $validated);
 
         $dto = UpdateExpenseData::fromArray($validated);
         $action->execute($expense, $dto);

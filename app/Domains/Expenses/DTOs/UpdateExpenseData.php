@@ -28,6 +28,8 @@ readonly class UpdateExpenseData
         public ?string $bankAccountCode = null,
         public ?string $supplierId = null,
         public ?string $paymentMethod = null,
+        // True when the request carried vat_rate_id, so null means "no VAT" rather than "unchanged".
+        public bool $vatRateIdGiven = false,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -50,6 +52,7 @@ readonly class UpdateExpenseData
             bankAccountCode: $data['bank_account_code'] ?? null,
             supplierId: $data['supplier_id'] ?? null,
             paymentMethod: $data['payment_method'] ?? null,
+            vatRateIdGiven: array_key_exists('vat_rate_id', $data),
         );
     }
 }

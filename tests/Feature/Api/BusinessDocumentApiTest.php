@@ -480,4 +480,42 @@ class BusinessDocumentApiTest extends SecurityTestCase
             ->assertOk()
             ->assertJsonPath('data.journal_entry.status', 'posted');
     }
+
+    public function test_expense_update_keeps_or_clears_the_vat_rate(): void
+    {
+        $rate = VatRate::withoutGlobalScopes()->create([
+            'organization_id' => $this->orgA->id,
+            'name' => 'Standard',
+            'rate' => '8.10',
+            'code' => 'NORMAL',
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+        $expense = Expense::factory()->create([
+            'organization_id' => $this->orgA->id,
+            'status' => ExpenseStatus::Pending,
+            'amount' => '100.00',
+            'vat_rate_id' => $rate->id,
+            'vat_amount' => '8.10',
+            'date' => '2026-08-21',
+        ]);
+
+        // Omitted vat_rate_id: the rate stays and the VAT follows the new amount.
+        $this->withToken($this->tokenA)
+            ->withHeader('Idempotency-Key', 'expense-update-amount')
+            ->putJson("/api/v1/expenses/{$expense->id}", ['amount' => '200.00'])
+            ->assertOk();
+        $expense->refresh();
+        $this->assertEquals($rate->id, $expense->vat_rate_id);
+        $this->assertSame('16.20', $expense->vat_amount);
+
+        // Explicit null: no VAT.
+        $this->withToken($this->tokenA)
+            ->withHeader('Idempotency-Key', 'expense-update-no-vat')
+            ->putJson("/api/v1/expenses/{$expense->id}", ['vat_rate_id' => null])
+            ->assertOk();
+        $expense->refresh();
+        $this->assertNull($expense->vat_rate_id);
+        $this->assertSame('0.00', $expense->vat_amount);
+    }
 }

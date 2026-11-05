@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
@@ -64,6 +64,13 @@ const { t } = useTranslations()
 const { isClosed: isDateClosed, closedYear } = useClosedFiscalYear(() => form.date)
 
 const categoryOptions = props.categories.map(c => ({ value: c.name, label: c.name }))
+
+// Show the VAT the server will compute (it ignores the submitted amount); keep the stored value until edited.
+watch([() => form.amount, () => form.vat_rate_id], () => {
+  const rate = Number(props.vatRates.find(v => String(v.id) === String(form.vat_rate_id))?.rate)
+  const amount = Number(form.amount)
+  form.vat_amount = Number.isFinite(rate) && Number.isFinite(amount) ? ((amount * rate) / 100).toFixed(2) : '0.00'
+})
 
 const vatOptions = [
   { value: '', label: t('no_vat') },

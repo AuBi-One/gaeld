@@ -81,4 +81,16 @@ class ExpenseDataTest extends TestCase
         $this->assertArrayNotHasKey('organization_id', $array);
         $this->assertArrayHasKey('category', $array);
     }
+
+    public function test_update_from_array_tells_a_cleared_vat_rate_from_an_omitted_one(): void
+    {
+        $base = ['category' => 'office', 'amount' => '10.00', 'date' => '2025-01-01'];
+
+        $cleared = UpdateExpenseData::fromArray([...$base, 'vat_rate_id' => null]);
+        $this->assertTrue($cleared->vatRateIdGiven);
+        $this->assertNull($cleared->vatRateId);
+
+        $omitted = UpdateExpenseData::fromArray($base);
+        $this->assertFalse($omitted->vatRateIdGiven);
+    }
 }
