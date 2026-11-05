@@ -22,6 +22,11 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
 {
     private const NAMESPACE_URI = 'urn:iso:std:iso:20022:tech:xsd:pain.001.001.09';
 
+    private const XSI_URI = 'http://www.w3.org/2001/XMLSchema-instance';
+
+    /** Swiss Payment Standards version this file follows (InitgPty/CtctDtls SPSV). */
+    private const SPS_VERSION = '2.2';
+
     public function __construct(private readonly SwissBicResolver $bicResolver) {}
 
     /**
@@ -72,6 +77,7 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
         $dom->formatOutput = true;
 
         $root = $dom->createElementNS(self::NAMESPACE_URI, 'Document');
+        $root->setAttributeNS(self::XSI_URI, 'xsi:schemaLocation', self::NAMESPACE_URI.' pain.001.001.09.ch.03.xsd');
         $dom->appendChild($root);
 
         $cstmr = $dom->createElement('CstmrCdtTrfInitn');
@@ -87,6 +93,7 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
 
         $initgPty = $dom->createElement('InitgPty');
         $initgPty->appendChild($this->textElement($dom, 'Nm', $this->sanitize($org->legal_name ?: $org->name)));
+        $initgPty->appendChild($this->softwareContactDetails($dom));
         $grpHdr->appendChild($initgPty);
 
         // ── Payment Information (one block, single currency / single execution date) ──
@@ -127,15 +134,23 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
         $dbtrAcct->appendChild($dbtrAcctId);
         $pmtInf->appendChild($dbtrAcct);
 
+        $dbtrFinInstnId = $this->buildFinInstnId($dom, $debtor->iban, $debtor->bic);
+        if ($dbtrFinInstnId === null) {
+            throw new \InvalidArgumentException(__('app.payment_debtor_bic_missing'));
+        }
         $dbtrAgt = $dom->createElement('DbtrAgt');
-        $dbtrAgt->appendChild($this->buildFinInstnId($dom, $debtor->iban, $debtor->bic));
+        $dbtrAgt->appendChild($dbtrFinInstnId);
         $pmtInf->appendChild($dbtrAgt);
 
-        $pmtInf->appendChild($this->textElement($dom, 'ChrgBr', 'SLEV'));
+        // SPS: optional, "if used, SLEV" for SEPA (type S); the SIX examples leave it out, and BCV
+        // rejected domestic files that carried it together with the other deviations.
+        if ($pmtTpInf !== null) {
+            $pmtInf->appendChild($this->textElement($dom, 'ChrgBr', 'SLEV'));
+        }
 
         // ── Credit Transfer Transactions ──
         foreach ($instructions as $instr) {
-            $pmtInf->appendChild($this->buildTransaction($dom, $instr));
+            $pmtInf->appendChild($this->buildTransaction($dom, $instr, $pmtTpInf !== null));
         }
 
         return $dom->saveXML() ?: '';
@@ -174,11 +189,12 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
         return $adr;
     }
 
-    private function buildTransaction(\DOMDocument $dom, PaymentInstructionData $instr): \DOMElement
+    private function buildTransaction(\DOMDocument $dom, PaymentInstructionData $instr, bool $sepa): \DOMElement
     {
         $tx = $dom->createElement('CdtTrfTxInf');
 
         $pmtId = $dom->createElement('PmtId');
+        $pmtId->appendChild($this->textElement($dom, 'InstrId', $this->sanitize($instr->endToEndId, 35)));
         $pmtId->appendChild($this->textElement($dom, 'EndToEndId', $this->sanitize($instr->endToEndId, 35)));
         $tx->appendChild($pmtId);
 
@@ -188,9 +204,19 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
         $amt->appendChild($instdAmt);
         $tx->appendChild($amt);
 
-        $cdtrAgt = $dom->createElement('CdtrAgt');
-        $cdtrAgt->appendChild($this->buildFinInstnId($dom, $instr->creditorIban, $instr->creditorBic));
-        $tx->appendChild($cdtrAgt);
+        // For a CH/LI IBAN the bank derives the creditor agent from the IID, and for SEPA from the
+        // IBAN: SPS lets it out. Any other payment abroad (type X) needs the BIC.
+        $cdtrFinInstnId = $this->isSwissIban($instr->creditorIban)
+            ? null
+            : $this->buildFinInstnId($dom, $instr->creditorIban, $instr->creditorBic);
+        if ($cdtrFinInstnId === null && ! $sepa && ! $this->isSwissIban($instr->creditorIban)) {
+            throw new \InvalidArgumentException(__('app.payment_creditor_bic_missing', ['names' => $instr->creditorName]));
+        }
+        if ($cdtrFinInstnId !== null) {
+            $cdtrAgt = $dom->createElement('CdtrAgt');
+            $cdtrAgt->appendChild($cdtrFinInstnId);
+            $tx->appendChild($cdtrAgt);
+        }
 
         $cdtr = $dom->createElement('Cdtr');
         $cdtr->appendChild($this->textElement($dom, 'Nm', $this->sanitize($instr->creditorName, 70)));
@@ -208,7 +234,7 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
 
         $cdtrAcct = $dom->createElement('CdtrAcct');
         $cdtrAcctId = $dom->createElement('Id');
-        $cdtrAcctId->appendChild($this->textElement($dom, 'IBAN', $instr->creditorIban));
+        $cdtrAcctId->appendChild($this->textElement($dom, 'IBAN', $this->normalizeIban($instr->creditorIban)));
         $cdtrAcct->appendChild($cdtrAcctId);
         $tx->appendChild($cdtrAcct);
 
@@ -274,15 +300,11 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
     }
 
     /**
-     * Build a `<FinInstnId>` element. Emits `<BICFI>` when a BIC is known
-     * (explicit or derived from a Swiss IID), otherwise falls back to
-     * `<Othr><Id>NOTPROVIDED</Id></Othr>` per ISO 20022.
-     *
-     * Some banks (notably UBS) enforce a strict XSD profile that only
-     * accepts `<BICFI>` here; users on such banks must populate the BIC
-     * field on their bank account / supplier contact.
+     * Build a `<FinInstnId>` element: `<BICFI>` when a BIC is known (explicit or derived from a
+     * Swiss IID), otherwise for a CH/LI IBAN the clearing member id (CHBCC + IID from the IBAN),
+     * otherwise null. The SPS schema has no `<Othr>` for the debtor agent, so `NOTPROVIDED` is gone.
      */
-    private function buildFinInstnId(\DOMDocument $dom, ?string $iban, ?string $explicitBic): \DOMElement
+    private function buildFinInstnId(\DOMDocument $dom, ?string $iban, ?string $explicitBic): ?\DOMElement
     {
         $finInstnId = $dom->createElement('FinInstnId');
         $bic = $this->resolveBic($iban, $explicitBic);
@@ -293,9 +315,16 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
             return $finInstnId;
         }
 
-        $othr = $dom->createElement('Othr');
-        $othr->appendChild($this->textElement($dom, 'Id', 'NOTPROVIDED'));
-        $finInstnId->appendChild($othr);
+        if ($iban === null || ! $this->isSwissIban($iban)) {
+            return null;
+        }
+
+        $clrSysId = $dom->createElement('ClrSysId');
+        $clrSysId->appendChild($this->textElement($dom, 'Cd', 'CHBCC'));
+        $clrSysMmbId = $dom->createElement('ClrSysMmbId');
+        $clrSysMmbId->appendChild($clrSysId);
+        $clrSysMmbId->appendChild($this->textElement($dom, 'MmbId', substr($this->normalizeIban($iban), 4, 5)));
+        $finInstnId->appendChild($clrSysMmbId);
 
         return $finInstnId;
     }
@@ -304,7 +333,7 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
      * Resolve a BIC for a given (optional) IBAN + explicit BIC. Explicit BIC
      * always wins. When absent, falls back to a curated CH/LI IID lookup that
      * only returns a BIC when the issuing institution is unambiguous; returns
-     * `null` otherwise so the caller can emit `Othr/NOTPROVIDED`.
+     * `null` otherwise.
      */
     private function resolveBic(?string $iban, ?string $explicitBic): ?string
     {
@@ -344,16 +373,14 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
             return null;
         }
 
-        $debtorCountry = strtoupper(substr($this->normalizeIban($debtor->iban ?? ''), 0, 2));
-        if (! in_array($debtorCountry, ['CH', 'LI'], true)) {
+        if (! $this->isSwissIban($debtor->iban ?? '')) {
             return null;
         }
 
-        // All creditors must sit in the SEPA zone for the SEPA service level
-        // to be valid. If any single creditor is non-SEPA, drop SvcLvl.
+        // Every creditor must sit in the SEPA zone outside CH/LI: a EUR payment to a CH/LI IBAN is
+        // domestic (type D, where a QR reference is allowed; type S forbids it).
         foreach ($instructions as $instr) {
-            $cdtrCountry = strtoupper(substr($this->normalizeIban($instr->creditorIban), 0, 2));
-            if (! $this->isSepaCountry($cdtrCountry)) {
+            if ($this->isSwissIban($instr->creditorIban) || ! $this->isSepaCountry($this->ibanCountry($instr->creditorIban))) {
                 return null;
             }
         }
@@ -380,6 +407,49 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
     }
 
     /**
+     * Software details recommended by SPS (InitgPty/CtctDtls): name, version, provider and the
+     * SPS version. BCV rejects files without them ("Élément obligatoire manquant").
+     */
+    private function softwareContactDetails(\DOMDocument $dom): \DOMElement
+    {
+        $details = [
+            'NAME' => 'Gaeld',
+            'VRSN' => $this->sanitize($this->softwareVersion(), 35),
+            'PRVD' => 'Gaeld',
+            'SPSV' => self::SPS_VERSION,
+        ];
+
+        $ctct = $dom->createElement('CtctDtls');
+        foreach ($details as $type => $id) {
+            $othr = $dom->createElement('Othr');
+            $othr->appendChild($this->textElement($dom, 'ChanlTp', $type));
+            $othr->appendChild($this->textElement($dom, 'Id', $id));
+            $ctct->appendChild($othr);
+        }
+
+        return $ctct;
+    }
+
+    private function softwareVersion(): string
+    {
+        // The production image writes VERSION at the project root (docker/production/Dockerfile).
+        $file = base_path('VERSION');
+        $version = is_readable($file) ? trim((string) file_get_contents($file)) : '';
+
+        return $version !== '' ? $version : (getenv('APP_VERSION') ?: getenv('GAELD_TAG') ?: 'dev');
+    }
+
+    private function ibanCountry(string $iban): string
+    {
+        return substr($this->normalizeIban($iban), 0, 2);
+    }
+
+    private function isSwissIban(string $iban): bool
+    {
+        return in_array($this->ibanCountry($iban), ['CH', 'LI'], true);
+    }
+
+    /**
      * Element with text content. DOMDocument::createElement($name, $value) does not escape "&"
      * (it silently drops the entity), so the text goes in as a text node.
      */
@@ -396,7 +466,7 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
      */
     private function sanitize(string $value, int $maxLength = 70): string
     {
-        $clean = preg_replace('/[\x00-\x1F\x7F]/', '', $value) ?? $value;
+        $clean = preg_replace('/\p{C}/u', '', $value) ?? $value;
         // SPS allows Latin only: map common typographic characters, drop the rest.
         $clean = strtr($clean, ['’' => "'", '‘' => "'", '‚' => "'", '“' => '"', '”' => '"', '„' => '"', '–' => '-', '—' => '-', '…' => '...']);
         $clean = preg_replace('/[^\x{0020}-\x{007E}\x{00A0}-\x{017F}\x{0218}-\x{021B}\x{20AC}]/u', '', $clean) ?? $clean;

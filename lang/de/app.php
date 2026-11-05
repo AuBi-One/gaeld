@@ -2399,6 +2399,8 @@ return [
     'no_iban' => 'Keine IBAN',
     'no_supplier_address' => 'Adresse unvollständig (Ort, Land)',
     'payment_supplier_address_missing' => 'Adresse unvollständig (Ort, Land) bei: :names. Die Bank weist die Datei sonst zurück.',
+    'payment_creditor_bic_missing' => 'BIC fehlt für die Zahlung ins Ausland an: :names.',
+    'payment_debtor_bic_missing' => 'Das Bankkonto braucht einen BIC.',
 
     // Belegabgleich-Badges
     'justification_missing' => 'Beleg fehlt',

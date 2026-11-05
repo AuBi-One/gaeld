@@ -2403,6 +2403,8 @@ return [
     'no_iban' => 'Nessun IBAN',
     'no_supplier_address' => 'Indirizzo incompleto (località, paese)',
     'payment_supplier_address_missing' => 'Indirizzo incompleto (località, paese) per: :names. La banca rifiuterebbe il file.',
+    'payment_creditor_bic_missing' => 'BIC mancante per il pagamento all\'estero a: :names.',
+    'payment_debtor_bic_missing' => 'Il conto bancario necessita di un BIC.',
 
     // Badge giustificativi
     'justification_missing' => 'Documento giustificativo mancante',

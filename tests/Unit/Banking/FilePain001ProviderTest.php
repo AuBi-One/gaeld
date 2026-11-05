@@ -8,7 +8,7 @@ use App\Domains\Banking\Services\Payments\FilePain001Provider;
 use App\Domains\Banking\Services\SwissBicResolver;
 use App\Domains\Organizations\Models\Organization;
 use Illuminate\Support\Carbon;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 use Symfony\Component\HttpFoundation\Response;
 
 class FilePain001ProviderTest extends TestCase
@@ -228,5 +228,160 @@ class FilePain001ProviderTest extends TestCase
         // A malformed stored BIC is not written.
         $this->assertStringNotContainsString('NOT A BIC', $xml);
         $this->assertStringNotContainsString('NOTABIC', $xml);
+    }
+
+    private function assertValidSps(string $xml): void
+    {
+        $doc = new \DOMDocument;
+        $doc->loadXML($xml);
+        libxml_use_internal_errors(true);
+        $valid = $doc->schemaValidate(dirname(__DIR__, 2).'/fixtures/sps/pain.001.001.09.ch.03.xsd');
+        $errors = array_map(fn ($e) => trim($e->message), libxml_get_errors());
+        libxml_clear_errors();
+        libxml_use_internal_errors(false);
+        $this->assertTrue($valid, implode("\n", $errors));
+    }
+
+    public function test_domestic_file_follows_the_six_example_and_the_sps_schema(): void
+    {
+        $instr = new PaymentInstructionData(
+            endToEndId: 'GAELD-DOM',
+            creditorName: 'Fiduciaire Exemple SA',
+            creditorIban: 'CH93 0076 2011 6238 5295 7',
+            amount: '1243.15',
+            currency: 'CHF',
+            executionDate: Carbon::parse('2026-11-06'),
+            structuredReference: null,
+            unstructuredRemittance: 'Note d honoraires 2025',
+            creditorBic: 'BCVLCH2LXXX',
+            creditorStreet: 'Rue du Lac 1',
+            creditorPostalCode: '1003',
+            creditorTown: 'Lausanne',
+            creditorCountry: 'CH',
+        );
+        $debtor = $this->debtor();
+        $debtor->organization->fill(['address' => 'Avenue Exemple 2', 'postal_code' => '1000', 'city' => 'Lausanne', 'country' => 'CH']);
+        $debtor->bic = 'BCVLCH2LXXX';
+
+        $xml = (string) (new FilePain001Provider(new SwissBicResolver))
+            ->initiate($debtor, [$instr])->download->getContent();
+        $this->assertValidSps($xml);
+
+        $doc = new \DOMDocument;
+        $doc->loadXML($xml);
+        $xp = new \DOMXPath($doc);
+        $xp->registerNamespace('p', 'urn:iso:std:iso:20022:tech:xsd:pain.001.001.09');
+
+        $this->assertStringContainsString('pain.001.001.09.ch.03.xsd', $doc->documentElement->getAttributeNS('http://www.w3.org/2001/XMLSchema-instance', 'schemaLocation'));
+        $this->assertSame(['NAME', 'VRSN', 'PRVD', 'SPSV'], array_map(
+            fn ($n) => $n->textContent,
+            iterator_to_array($xp->query('//p:InitgPty/p:CtctDtls/p:Othr/p:ChanlTp')),
+        ));
+        $this->assertSame('GAELD-DOM', $xp->query('//p:PmtId/p:InstrId')->item(0)?->textContent);
+        $this->assertSame(0, $xp->query('//p:ChrgBr')->length);
+        $this->assertSame(0, $xp->query('//p:CdtrAgt')->length);
+        $this->assertSame(1, $xp->query('//p:DbtrAgt/p:FinInstnId/p:BICFI')->length);
+    }
+
+    public function test_foreign_file_keeps_creditor_agent_and_charge_bearer_and_the_sps_schema(): void
+    {
+        $instr = new PaymentInstructionData(
+            endToEndId: 'GAELD-EUR',
+            creditorName: 'Lieferant GmbH',
+            creditorIban: 'DE89370400440532013000',
+            amount: '50.00',
+            currency: 'EUR',
+            executionDate: Carbon::parse('2026-11-06'),
+            structuredReference: null,
+            unstructuredRemittance: 'Rechnung 7',
+            creditorBic: 'COBADEFFXXX',
+            creditorTown: 'Berlin',
+            creditorCountry: 'DE',
+        );
+
+        $xml = (string) (new FilePain001Provider(new SwissBicResolver))
+            ->initiate($this->debtor(), [$instr])->download->getContent();
+        $this->assertValidSps($xml);
+        $this->assertStringContainsString('<ChrgBr>SLEV</ChrgBr>', $xml);
+        $this->assertStringContainsString('<BICFI>COBADEFFXXX</BICFI>', $xml);
+    }
+
+    public function test_unknown_swiss_bank_uses_the_iid_and_unknown_sepa_bank_is_left_out(): void
+    {
+        $debtor = $this->debtor();
+        $debtor->iban = 'CH5699999012345678009'; // IID 99999: not in the curated table
+        $instr = new PaymentInstructionData(
+            endToEndId: 'GAELD-NOBIC',
+            creditorName: 'Lieferant GmbH',
+            creditorIban: 'DE89 3704 0044 0532 0130 00',
+            amount: '50.00',
+            currency: 'EUR',
+            executionDate: Carbon::parse('2026-11-06'),
+            structuredReference: null,
+            unstructuredRemittance: 'Rechnung 8',
+            creditorTown: 'Berlin',
+            creditorCountry: 'DE',
+        );
+
+        $xml = (string) (new FilePain001Provider(new SwissBicResolver))
+            ->initiate($debtor, [$instr])->download->getContent();
+        $this->assertValidSps($xml);
+        $flat = (string) preg_replace('/>\s+</', '><', $xml);
+        $this->assertStringContainsString('<DbtrAgt><FinInstnId><ClrSysMmbId><ClrSysId><Cd>CHBCC</Cd></ClrSysId><MmbId>99999</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>', $flat);
+        $this->assertStringNotContainsString('CdtrAgt', $xml);
+        $this->assertStringNotContainsString('NOTPROVIDED', $xml);
+        $this->assertStringContainsString('<IBAN>DE89370400440532013000</IBAN>', $xml);
+    }
+
+    public function test_payment_abroad_outside_sepa_without_bic_is_refused(): void
+    {
+        $instr = new PaymentInstructionData(
+            endToEndId: 'GAELD-CHFDE',
+            creditorName: 'Lieferant GmbH',
+            creditorIban: 'DE89370400440532013000',
+            amount: '50.00',
+            currency: 'CHF',
+            executionDate: Carbon::parse('2026-11-06'),
+            structuredReference: null,
+            unstructuredRemittance: 'Rechnung 9',
+            creditorTown: 'Berlin',
+            creditorCountry: 'DE',
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Lieferant GmbH');
+        (new FilePain001Provider(new SwissBicResolver))->initiate($this->debtor(), [$instr]);
+    }
+
+    public function test_eur_payment_to_a_swiss_creditor_is_domestic_not_sepa(): void
+    {
+        $xml = (string) (new FilePain001Provider(new SwissBicResolver))->initiate($this->debtor(), [
+            $this->instruction('GAELD-EURQR', '80.00', 'EUR', '210000000003139471430009017'),
+        ])->download->getContent();
+
+        $this->assertValidSps($xml);
+        $this->assertStringNotContainsString('<Cd>SEPA</Cd>', $xml);
+        $this->assertStringNotContainsString('ChrgBr', $xml);
+        $this->assertStringContainsString('<Prtry>QRR</Prtry>', $xml);
+    }
+
+    public function test_drops_control_and_format_characters(): void
+    {
+        $instr = new PaymentInstructionData(
+            endToEndId: 'GAELD-SHY',
+            creditorName: "Fidu\u{00AD}ciaire\u{200B} SA",
+            creditorIban: 'CH4431999123000889012',
+            amount: '10.00',
+            currency: 'CHF',
+            executionDate: Carbon::parse('2026-11-06'),
+            structuredReference: null,
+            unstructuredRemittance: 'Note',
+            creditorTown: 'Lausanne',
+            creditorCountry: 'CH',
+        );
+
+        $xml = (string) (new FilePain001Provider(new SwissBicResolver))
+            ->initiate($this->debtor(), [$instr])->download->getContent();
+        $this->assertStringContainsString('<Nm>Fiduciaire SA</Nm>', $xml);
     }
 }
