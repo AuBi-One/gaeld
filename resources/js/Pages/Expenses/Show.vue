@@ -125,7 +125,7 @@ const journalColumns = computed(() => [
         <DropdownMenu v-if="canUpdate || canDelete || canApprove">
           <template #default="{ close }">
             <button
-              v-if="canApprove && expense.status === 'pending'"
+              v-if="canUpdate && canApprove && expense.status === 'pending'"
               class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]"
               :disabled="approveForm.processing"
               @click="approve(); close()"
@@ -134,7 +134,7 @@ const journalColumns = computed(() => [
               {{ t('approve') }}
             </button>
             <button
-              v-if="canUpdate && expense.status === 'approved'"
+              v-if="canUpdate && canApprove && expense.status === 'approved'"
               class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]"
               :disabled="unapproveForm.processing"
               @click="unapprove(); close()"

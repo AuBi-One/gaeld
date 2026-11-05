@@ -13,6 +13,7 @@ use App\Domains\Expenses\Actions\UpdateExpenseAction;
 use App\Domains\Expenses\DTOs\CreateExpenseData;
 use App\Domains\Expenses\DTOs\UpdateExpenseData;
 use App\Domains\Expenses\Exceptions\InvalidExpenseStateException;
+use App\Domains\Expenses\Enums\ExpenseStatus;
 use App\Domains\Expenses\Models\Expense;
 use App\Domains\Expenses\Models\ReceiptScan;
 use App\Domains\Expenses\Notifications\ExpenseSubmittedNotification;
@@ -51,9 +52,21 @@ class ExpenseController extends Controller
     public function index(Request $request): Response
     {
         $this->authorize('viewAny', Expense::class);
+        $user = $request->user();
+
+        // What the row actions may show; the workflow routes check the same policies.
+        $expenses = ExpenseQuery::list($request);
+        foreach ($expenses->items() as $expense) {
+            $expense->setAttribute('can', [
+                'update' => $user->can('update', $expense),
+                'delete' => $user->can('delete', $expense),
+                'approve' => $expense->status === ExpenseStatus::Pending && $user->can('approve', $expense) && $user->can('update', $expense),
+                'post' => $expense->status === ExpenseStatus::Approved && $user->can('update', $expense),
+            ]);
+        }
 
         return Inertia::render('Expenses/Index', [
-            'expenses' => ExpenseQuery::list($request),
+            'expenses' => $expenses,
             'query' => [
                 'sort' => $request->input('sort', 'date'),
                 'direction' => $request->input('direction', 'desc'),

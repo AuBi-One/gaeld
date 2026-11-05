@@ -7,7 +7,7 @@ import DataTable from '@/Components/UI/DataTable.vue'
 import ConfirmDialog from '@/Components/UI/ConfirmDialog.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
-import { Plus, Pencil, Trash2, Eye, Receipt } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Eye, Receipt, CheckCircle, BookCheck } from 'lucide-vue-next'
 import HelpText from '@/Components/HelpText.vue'
 import QuickReceiptButton from '@/Components/QuickReceiptButton.vue'
 import EmptyState from '@/Components/UI/EmptyState.vue'
@@ -23,6 +23,28 @@ const props = defineProps({
 
 const deleteTarget = ref(null)
 const deleting = ref(false)
+const postTarget = ref(null)
+const busy = ref(null)
+
+function approve(expense) {
+  busy.value = expense.id
+  router.post(`/expenses/${expense.id}/approve`, {}, {
+    preserveScroll: true,
+    onFinish: () => { busy.value = null },
+  })
+}
+
+function executePost() {
+  if (!postTarget.value) return
+  busy.value = postTarget.value.id
+  router.post(`/expenses/${postTarget.value.id}/post`, {}, {
+    preserveScroll: true,
+    onFinish: () => {
+      busy.value = null
+      postTarget.value = null
+    },
+  })
+}
 
 const { t } = useTranslations()
 const { formatCurrency, formatDate } = useFormatters()
@@ -127,6 +149,9 @@ const statusFilters = computed(() => [
       @search="handleSearch"
       @filter="handleFilter"
     >
+      <template #cell-vendor="{ row }">
+        {{ row.supplier?.name || row.vendor }}
+      </template>
       <template #cell-status="{ value }">
         <Badge :variant="statusVariant[value] ?? 'secondary'">
           {{ t(`expense_status_${value}`) }}
@@ -146,7 +171,29 @@ const statusFilters = computed(() => [
             <Eye class="h-4 w-4" />
           </Button>
           <Button
-            v-if="row.status !== 'posted'"
+            v-if="row.can?.approve"
+            variant="ghost"
+            size="icon"
+            :aria-label="t('approve')"
+            :title="t('approve')"
+            :disabled="busy === row.id"
+            @click.stop="approve(row)"
+          >
+            <CheckCircle class="h-4 w-4" />
+          </Button>
+          <Button
+            v-if="row.can?.post"
+            variant="ghost"
+            size="icon"
+            :aria-label="t('post_to_ledger')"
+            :title="row.expense_account_code ? t('post_to_ledger') : t('expense_account_code_required')"
+            :disabled="busy === row.id || !row.expense_account_code"
+            @click.stop="postTarget = row"
+          >
+            <BookCheck class="h-4 w-4" />
+          </Button>
+          <Button
+            v-if="row.can?.update"
             as="a"
             :href="`/expenses/${row.id}/edit`"
             variant="ghost"
@@ -158,7 +205,7 @@ const statusFilters = computed(() => [
             <Pencil class="h-4 w-4" />
           </Button>
           <Button
-            v-if="row.status === 'pending' || row.status === 'approved'"
+            v-if="row.can?.delete"
             variant="ghost"
             size="icon"
             :aria-label="t('delete')"
@@ -173,6 +220,16 @@ const statusFilters = computed(() => [
         <EmptyState :icon="Receipt" :title="t('no_expenses_yet')" :description="t('no_expenses_yet_desc')" :action-label="t('new_expense')" action-href="/expenses/create" />
       </template>
     </DataTable>
+
+    <ConfirmDialog
+      :open="!!postTarget"
+      :title="t('post_expense_ledger')"
+      :message="t('post_expense_confirm')"
+      :confirm-label="t('post')"
+      :processing="busy !== null && busy === postTarget?.id"
+      @confirm="executePost"
+      @cancel="postTarget = null"
+    />
 
     <ConfirmDialog
       :open="!!deleteTarget"

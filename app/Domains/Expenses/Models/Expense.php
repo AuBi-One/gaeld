@@ -2,6 +2,7 @@
 
 namespace App\Domains\Expenses\Models;
 
+use App\Domains\Expenses\Exceptions\InvalidExpenseStateException;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Contacts\Models\Contact;
@@ -145,5 +146,23 @@ class Expense extends Model
     public function shouldBeSearchable(): bool
     {
         return ! $this->trashed();
+    }
+
+    /**
+     * This row again, under a row lock (call inside a transaction): status changes from two tabs
+     * (list and detail) then run one after the other and see each other's result.
+     */
+    public function lockForWorkflow(): self
+    {
+        if (! $this->exists) {
+            return $this;
+        }
+
+        $locked = static::withoutGlobalScopes()->whereKey($this->getKey())->lockForUpdate()->firstOrFail();
+        if ($locked->trashed()) {
+            throw new InvalidExpenseStateException('Expense was deleted.');
+        }
+
+        return $locked;
     }
 }

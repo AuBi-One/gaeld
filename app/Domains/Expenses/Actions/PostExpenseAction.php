@@ -13,6 +13,7 @@ use App\Domains\Expenses\Services\ExpenseService;
 use App\Support\Exceptions\DomainException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Posts an approved expense to the ledger and records the payment journal entry.
@@ -43,6 +44,17 @@ class PostExpenseAction
      * @throws ModelNotFoundException When account code is not found
      */
     public function execute(Expense $expense, string $expenseAccountCode, string $bankAccountCode = AccountCode::BANK_CASH): Expense
+    {
+        // Two tabs (list and detail) can post at once: the row lock makes the second one wait and
+        // then see the posted status.
+        return DB::transaction(function () use ($expense, $expenseAccountCode, $bankAccountCode): Expense {
+            $expense->setRawAttributes($expense->lockForWorkflow()->getAttributes(), true);
+
+            return $this->post($expense, $expenseAccountCode, $bankAccountCode);
+        });
+    }
+
+    private function post(Expense $expense, string $expenseAccountCode, string $bankAccountCode): Expense
     {
         if (! $expense->status->canTransitionTo(ExpenseStatus::Posted)) {
             throw new InvalidExpenseStateException('Expense is already posted.');

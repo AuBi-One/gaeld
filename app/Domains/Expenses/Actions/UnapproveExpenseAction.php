@@ -5,6 +5,7 @@ namespace App\Domains\Expenses\Actions;
 use App\Domains\Expenses\Enums\ExpenseStatus;
 use App\Domains\Expenses\Exceptions\InvalidExpenseStateException;
 use App\Domains\Expenses\Models\Expense;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Reverts an approved expense back to pending, e.g. when an approval was
@@ -15,12 +16,17 @@ class UnapproveExpenseAction
 {
     public function execute(Expense $expense): Expense
     {
-        if (! $expense->status->canTransitionTo(ExpenseStatus::Pending)) {
-            throw new InvalidExpenseStateException('Only approved expenses can be reverted to pending.');
-        }
+        // Locked: an unapprove waiting on a concurrent post must not reset a posted expense.
+        return DB::transaction(function () use ($expense): Expense {
+            $locked = $expense->lockForWorkflow();
+            if (! $locked->status->canTransitionTo(ExpenseStatus::Pending)) {
+                throw new InvalidExpenseStateException('Only approved expenses can be reverted to pending.');
+            }
 
-        $expense->update(['status' => ExpenseStatus::Pending]);
+            $locked->update(['status' => ExpenseStatus::Pending]);
+            $expense->setRawAttributes($locked->getAttributes(), true);
 
-        return $expense->fresh();
+            return $locked->fresh() ?? $locked;
+        });
     }
 }

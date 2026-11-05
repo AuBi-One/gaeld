@@ -26,6 +26,7 @@ class ExpenseWorkflowController extends Controller
     public function approve(Expense $expense, ApproveExpenseAction $action, DashboardService $dashboardService): RedirectResponse
     {
         $this->authorize('update', $expense);
+        $this->authorize('approve', $expense);
 
         try {
             $action->execute($expense);
@@ -41,13 +42,14 @@ class ExpenseWorkflowController extends Controller
             $submitter->notify(new ExpenseApprovedNotification($expense));
         }
 
-        return redirect()->route('expenses.show', $expense)
+        return redirect()->to(url()->previous(route('expenses.show', $expense)))
             ->with('success', __('app.expense_approved'));
     }
 
     public function unapprove(Expense $expense, UnapproveExpenseAction $action, DashboardService $dashboardService): RedirectResponse
     {
         $this->authorize('update', $expense);
+        $this->authorize('approve', $expense);
 
         try {
             $action->execute($expense);
@@ -57,7 +59,7 @@ class ExpenseWorkflowController extends Controller
 
         $dashboardService->flushCache($expense->organization_id);
 
-        return redirect()->route('expenses.show', $expense)
+        return redirect()->to(url()->previous(route('expenses.show', $expense)))
             ->with('success', __('app.expense_unapproved'));
     }
 
@@ -83,7 +85,7 @@ class ExpenseWorkflowController extends Controller
 
         $dashboardService->flushCache($expense->organization_id);
 
-        return redirect()->route('expenses.show', $expense)
+        return redirect()->to(url()->previous(route('expenses.show', $expense)))
             ->with('success', __('app.expense_posted'));
     }
 }
