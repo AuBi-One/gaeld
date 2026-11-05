@@ -57,6 +57,12 @@ function toggleAll() {
   form.expense_ids = allSelected.value ? [] : props.expenses.map(e => e.id)
 }
 
+function toggle(id) {
+  form.expense_ids = form.expense_ids.includes(id)
+    ? form.expense_ids.filter(x => x !== id)
+    : [...form.expense_ids, id]
+}
+
 const hasMultipleCurrencies = computed(() => Object.keys(totalsByCurrency.value).length > 1)
 
 const submitting = ref(false)
@@ -148,14 +154,10 @@ function submit() {
                   v-for="e in expenses"
                   :key="e.id"
                   class="cursor-pointer transition-colors hover:bg-[hsl(var(--muted))]"
-                  @click="
-                    form.expense_ids = form.expense_ids.includes(e.id)
-                      ? form.expense_ids.filter(id => id !== e.id)
-                      : [...form.expense_ids, e.id]
-                  "
+                  @click="toggle(e.id)"
                 >
                   <td class="py-2">
-                    <input type="checkbox" :checked="form.expense_ids.includes(e.id)" @click.stop />
+                    <input type="checkbox" :checked="form.expense_ids.includes(e.id)" @click.stop @change="toggle(e.id)" />
                   </td>
                   <td class="py-2">{{ formatDate(e.date) }}</td>
                   <td class="py-2">
