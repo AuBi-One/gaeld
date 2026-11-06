@@ -230,12 +230,79 @@ class FilePain001ProviderTest extends TestCase
         $this->assertStringNotContainsString('NOTABIC', $xml);
     }
 
+    /** SIX SPS 2025/2026 schema (both versions ship the same file); SIX reserves all rights, so it is not in the repo. */
+    private const SPS_SCHEMA_ZIP = 'https://www.six-group.com/dam/download/banking-services/standardization/sps/ig-credit-transfer-xml-schema-sps-2025-en.zip';
+
+    /** sha256 of the schema after the libxml2 change below: a changed file at SIX is noticed. */
+    private const SPS_SCHEMA_SHA256 = '1f83e28bc799e052e4f88fa2c82269f9ebb7634a9260f36770eb0189e1fb499b';
+
+    /** Why the schema is not available in this process (download tried once), or null. */
+    private static ?string $spsSchemaMissing = null;
+
+    private bool $spsSchemaSkipped = false;
+
+    /**
+     * The SIX schema, downloaded once and cached in the temp folder. libxml2 has no character-class
+     * subtraction, so "-[\p{C}]" (minus control characters) is dropped; the provider strips them itself.
+     * Null when it cannot be had: the test then runs its other checks and ends as skipped (failed in CI).
+     */
+    private function spsSchema(): ?string
+    {
+        $dir = sys_get_temp_dir().'/gaeld-sps';
+        $path = $dir.'/pain.001.001.09.ch.03.libxml.xsd';
+        if (is_file($path) && hash_file('sha256', $path) === self::SPS_SCHEMA_SHA256) {
+            return $path;
+        }
+        if (self::$spsSchemaMissing !== null) {
+            return null;
+        }
+
+        $zip = @file_get_contents(self::SPS_SCHEMA_ZIP, false, stream_context_create(['http' => ['timeout' => 20]]));
+        @mkdir($dir, 0700, true);
+        $part = $dir.'/'.getmypid().'.zip';
+        $xsd = $zip !== false && file_put_contents($part, $zip) !== false
+            ? @file_get_contents('zip://'.$part.'#pain.001.001.09.ch.03.xsd')
+            : false;
+        @unlink($part);
+        if ($xsd === false) {
+            self::$spsSchemaMissing = 'could not download or extract the schema from '.self::SPS_SCHEMA_ZIP;
+
+            return null;
+        }
+
+        $xsd = str_replace('-[\p{C}]]', ']', $xsd);
+        if (hash('sha256', $xsd) !== self::SPS_SCHEMA_SHA256) {
+            self::$spsSchemaMissing = 'the schema at '.self::SPS_SCHEMA_ZIP.' changed; check it and update SPS_SCHEMA_SHA256';
+
+            return null;
+        }
+        file_put_contents($part, $xsd);
+        rename($part, $path);
+
+        return $path;
+    }
+
+    protected function assertPostConditions(): void
+    {
+        if ($this->spsSchemaSkipped) {
+            $message = 'SIX schema check not run: '.self::$spsSchemaMissing;
+            filter_var(getenv('CI'), FILTER_VALIDATE_BOOL) ? $this->fail($message) : $this->markTestSkipped($message);
+        }
+    }
+
     private function assertValidSps(string $xml): void
     {
+        $schema = $this->spsSchema();
+        if ($schema === null) {
+            $this->spsSchemaSkipped = true;
+
+            return;
+        }
+
         $doc = new \DOMDocument;
         $doc->loadXML($xml);
         libxml_use_internal_errors(true);
-        $valid = $doc->schemaValidate(dirname(__DIR__, 2).'/fixtures/sps/pain.001.001.09.ch.03.xsd');
+        $valid = $doc->schemaValidate($schema);
         $errors = array_map(fn ($e) => trim($e->message), libxml_get_errors());
         libxml_clear_errors();
         libxml_use_internal_errors(false);
