@@ -1529,6 +1529,8 @@ return [
     'settings_invoice_footer_placeholder' => 'z.B. Zahlung innerhalb 30 Tagen. Bankverbindung: …',
     'settings_default_invoice_notes' => 'Standard-Rechnungsnotiz',
     'settings_default_invoice_notes_placeholder' => 'z.B. Vielen Dank für die Zusammenarbeit.',
+    'settings_invoice_number_step' => 'Schrittweite der Rechnungsnummer',
+    'settings_invoice_number_step_hint' => 'Eine neue Rechnung erhält die höchste Nummer des Jahres plus diese Schrittweite (1 = fortlaufend). Gutschriften bleiben fortlaufend.',
     'qr_iban' => 'QR-IBAN',
     'qr_iban_moved_title' => 'QR-IBAN wurde verschoben',
     'qr_iban_moved_help' => 'Der QR-IBAN wird jetzt in den Bankkonto-Einstellungen verwaltet.',

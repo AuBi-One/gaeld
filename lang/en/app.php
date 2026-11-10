@@ -1741,6 +1741,8 @@ return [
     'settings_invoice_footer_placeholder' => 'e.g. Payment within 30 days. Bank details: …',
     'settings_default_invoice_notes' => 'Default Invoice Notes',
     'settings_default_invoice_notes_placeholder' => 'e.g. Thank you for your business.',
+    'settings_invoice_number_step' => 'Invoice number step',
+    'settings_invoice_number_step_hint' => 'A new invoice gets the highest number of the year plus this step (1 = consecutive). Credit notes stay consecutive.',
     'qr_iban' => 'QR-IBAN',
     'qr_iban_required' => 'An IBAN or QR-IBAN must be configured on a default invoicing bank account before generating a QR-bill.',
     'qr_iban_placeholder' => 'CH56 0483 5012 3456 7800 9',

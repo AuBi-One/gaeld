@@ -15,6 +15,7 @@ class UpdateInvoiceSettingsRequest extends FormRequest
             'invoice_header_text' => 'nullable|string|max:1000',
             'invoice_footer_text' => 'nullable|string|max:1000',
             'default_invoice_notes' => 'nullable|string|max:1000',
+            'invoice_number_step' => 'sometimes|required|integer|min:1|max:100',
         ];
     }
 }

@@ -148,6 +148,7 @@ const invoiceForm = useForm({
   invoice_header_text: props.organization.invoice_header_text || '',
   invoice_footer_text: props.organization.invoice_footer_text || '',
   default_invoice_notes: props.organization.default_invoice_notes || '',
+  invoice_number_step: props.organization.invoice_number_step ?? 1,
 })
 
 function submitInvoice() {
@@ -672,6 +673,18 @@ const businessTypeOptions = [
                 :label="t('settings_default_invoice_notes')"
                 :placeholder="t('settings_default_invoice_notes_placeholder')"
                 :error="invoiceForm.errors.default_invoice_notes"
+              />
+
+              <FormInput
+                id="invoice_number_step"
+                v-model="invoiceForm.invoice_number_step"
+                type="number"
+                min="1"
+                max="100"
+                class="sm:max-w-xs"
+                :label="t('settings_invoice_number_step')"
+                :hint="t('settings_invoice_number_step_hint')"
+                :error="invoiceForm.errors.invoice_number_step"
               />
 
               <div class="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-3 text-sm">

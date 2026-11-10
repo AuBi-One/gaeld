@@ -1492,6 +1492,8 @@ return [
     'settings_invoice_footer_placeholder' => 'es. Pagamento entro 30 giorni. Coordinate bancarie: …',
     'settings_default_invoice_notes' => 'Note predefinite sulla fattura',
     'settings_default_invoice_notes_placeholder' => 'es. Grazie per la collaborazione.',
+    'settings_invoice_number_step' => 'Passo della numerazione fatture',
+    'settings_invoice_number_step_hint' => 'Una nuova fattura riceve il numero più alto dell’anno più questo passo (1 = consecutivo). Le note di credito restano consecutive.',
     'qr_iban' => 'QR-IBAN',
     'qr_iban_moved_title' => 'Il QR-IBAN è stato spostato',
     'qr_iban_moved_help' => 'Il QR-IBAN è ora gestito nelle impostazioni del conto bancario.',

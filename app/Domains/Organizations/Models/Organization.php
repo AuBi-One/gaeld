@@ -53,6 +53,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $founded_at
  * @property bool $require_two_factor
  * @property int|null $default_payment_terms_days
+ * @property int $invoice_number_step
  * @property Carbon|null $suspended_at
  * @property string|null $suspended_reason
  * @property Carbon|null $deleted_at
@@ -83,6 +84,7 @@ class Organization extends Model
         'require_two_factor',
         'default_payment_terms_days',
         'default_invoice_notes',
+        'invoice_number_step',
         'logo_path',
         'invoice_header_text',
         'invoice_footer_text',
@@ -103,6 +105,7 @@ class Organization extends Model
         return [
             'require_two_factor' => 'boolean',
             'default_payment_terms_days' => 'integer',
+            'invoice_number_step' => 'integer',
             'closed_fiscal_years' => 'array',
             'enabled_modules' => 'array',
             'pdf_layouts' => 'array',

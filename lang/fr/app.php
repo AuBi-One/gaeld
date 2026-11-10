@@ -1645,6 +1645,8 @@ return [
     'settings_invoice_footer_placeholder' => 'p.ex. Règlement à 30 jours. Coordonnées bancaires : …',
     'settings_default_invoice_notes' => 'Notes par défaut sur la facture',
     'settings_default_invoice_notes_placeholder' => 'p.ex. Merci pour votre collaboration.',
+    'settings_invoice_number_step' => 'Pas de numérotation des factures',
+    'settings_invoice_number_step_hint' => 'Une nouvelle facture reçoit le plus haut numéro de l’année plus ce pas (1 = numéros consécutifs). Les notes de crédit restent consécutives.',
     'qr_iban' => 'QR-IBAN',
     'qr_iban_moved_title' => 'Le QR-IBAN a été déplacé',
     'qr_iban_moved_help' => 'Le QR-IBAN est maintenant géré dans les paramètres de votre compte bancaire.',
