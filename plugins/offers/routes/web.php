@@ -27,6 +27,8 @@ Route::middleware(['web', 'auth', 'verified', 'org', 'org-2fa', 'subscription'])
         Route::get('/create', [TemplateController::class, 'create'])->name('create');
         Route::post('/', [TemplateController::class, 'store'])->name('store');
         Route::put('/settings', [TemplateController::class, 'updateSettings'])->name('settings');
+        Route::post('/preview', [TemplateController::class, 'preparePreview'])->middleware('throttle:30,1')->name('preview');
+        Route::get('/preview/{token}', [TemplateController::class, 'preview'])->where('token', '[A-Za-z0-9]{40}')->name('preview.show');
         Route::get('/{template}/edit', [TemplateController::class, 'edit'])->whereUuid('template')->name('edit');
         Route::put('/{template}', [TemplateController::class, 'update'])->whereUuid('template')->name('update');
         Route::delete('/{template}', [TemplateController::class, 'destroy'])->whereUuid('template')->name('destroy');

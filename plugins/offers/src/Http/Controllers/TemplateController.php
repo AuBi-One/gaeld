@@ -3,13 +3,18 @@
 namespace Plugins\Offers\Http\Controllers;
 
 use App\Domains\Organizations\Models\Organization;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Inertia\Response;
 use Plugins\Offers\Models\Offer;
 use Plugins\Offers\Models\OfferSetting;
 use Plugins\Offers\Models\OfferTemplate;
+use Plugins\Offers\Services\TemplatePreview;
 use Plugins\Offers\Support\Layout;
 
 class TemplateController extends PluginController
@@ -30,7 +35,7 @@ class TemplateController extends PluginController
                     'is_default' => $t->is_default,
                     'used' => (int) ($used[$t->id] ?? 0),
                 ]),
-            'settings' => OfferSetting::for($this->orgId())->only(['validity_months']),
+            'settings' => OfferSetting::for($this->orgId())->only(['validity_months', 'number_step']),
         ]);
     }
 
@@ -40,6 +45,7 @@ class TemplateController extends PluginController
         $this->authorizeWrite();
         $data = $request->validate([
             'validity_months' => ['required', 'integer', 'min:1', 'max:24'],
+            'number_step' => ['sometimes', 'required', 'integer', 'min:1', 'max:100'],
         ]);
         OfferSetting::query()->updateOrCreate(['organization_id' => $this->orgId()], $data);
 
@@ -87,6 +93,40 @@ class TemplateController extends PluginController
         return redirect('/offer-templates')->with('success', __('offers::of.template_saved'));
     }
 
+    /**
+     * Draw the PDF of the form (unsaved template) and keep it a few minutes under a random token:
+     * the page then shows it in an iframe from a same-origin URL (the CSP allows no blob: frames).
+     */
+    public function preparePreview(Request $request, TemplatePreview $preview): JsonResponse
+    {
+        $this->authorizeWrite();
+        $pdf = $preview->render($this->orgId(), $this->validated($request, preview: true));
+        $token = Str::random(40);
+        Cache::put(self::previewKey($token), ['organization_id' => $this->orgId(), 'pdf' => base64_encode($pdf)], now()->addMinutes(10));
+
+        return response()->json(['url' => route('offer-templates.preview.show', $token)]);
+    }
+
+    /** The kept preview PDF (nothing saved), shown inline. */
+    public function preview(string $token): HttpResponse
+    {
+        $this->authorizeWrite();
+        $kept = Cache::get(self::previewKey($token));
+        abort_unless(is_array($kept) && $kept['organization_id'] === $this->orgId(), 404);
+
+        return response((string) base64_decode((string) $kept['pdf']), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="preview.pdf"',
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
+    /** Per user: a token is of no use to another account. */
+    private static function previewKey(string $token): string
+    {
+        return 'offers:template-preview:'.request()->user()?->getAuthIdentifier().':'.$token;
+    }
+
     public function destroy(OfferTemplate $template): RedirectResponse
     {
         $this->authorizeWrite();
@@ -125,10 +165,10 @@ class TemplateController extends PluginController
     }
 
     /** @return array<string, mixed> */
-    private function validated(Request $request): array
+    private function validated(Request $request, bool $preview = false): array
     {
         return $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'name' => [$preview ? 'nullable' : 'required', 'string', 'max:255'],
             'title' => ['nullable', 'string', 'max:255'],
             'intro' => ['nullable', 'string', 'max:20000'],
             'closing' => ['nullable', 'string', 'max:20000'],

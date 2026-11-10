@@ -1,4 +1,6 @@
 <script setup>
+import { ref } from 'vue'
+import axios from 'axios'
 import { useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
@@ -9,8 +11,10 @@ import Button from '@/Components/UI/Button.vue'
 import FormInput from '@/Components/UI/FormInput.vue'
 import FormTextarea from '@/Components/UI/FormTextarea.vue'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
+import Modal from '@/Components/UI/Modal.vue'
 import OfferLines from '../../Components/OfferLines.vue'
 import { useTranslations } from '@/lib/useTranslations'
+import { Eye } from 'lucide-vue-next'
 
 const { t } = useTranslations()
 
@@ -33,13 +37,45 @@ const form = useForm({
   lines: (props.template?.lines ?? []).map(l => ({ type: l.type, label: l.label ?? '', description: l.description ?? '', quantity: l.quantity ?? '', unit: l.unit ?? '', unit_price: l.unit_price ?? '' })),
 })
 
+const payload = data => ({
+  ...data,
+  lines: data.lines.map(l => l.type === 'item'
+    ? { type: 'item', label: l.label || null, description: l.description, quantity: String(l.quantity), unit: l.unit || null, unit_price: String(l.unit_price) }
+    : { type: 'text', label: l.label || null, description: l.description }),
+})
+
+// PDF preview of the unsaved form: the server validates it, keeps it a few minutes and draws it
+// for a sample recipient at the returned URL; no template or offer is stored.
+const previewUrl = ref(null)
+const previewing = ref(false)
+const previewError = ref('')
+let previewRequest = 0
+const closePreview = () => {
+  previewRequest++
+  previewUrl.value = null
+}
+
+async function preview() {
+  const request = ++previewRequest
+  previewing.value = true
+  previewError.value = ''
+  form.clearErrors()
+  try {
+    const response = await axios.post('/offer-templates/preview', payload(form.data()))
+    if (request === previewRequest) previewUrl.value = response.data.url
+  } catch (error) {
+    if (request !== previewRequest) return
+    if (error.response?.status === 422) {
+      form.setError(Object.fromEntries(Object.entries(error.response.data.errors ?? {}).map(([key, messages]) => [key, messages[0]])))
+    }
+    previewError.value = t('of_preview_failed')
+  } finally {
+    previewing.value = false
+  }
+}
+
 function submit() {
-  form.transform(data => ({
-    ...data,
-    lines: data.lines.map(l => l.type === 'item'
-      ? { type: 'item', label: l.label || null, description: l.description, quantity: String(l.quantity), unit: l.unit || null, unit_price: String(l.unit_price) }
-      : { type: 'text', label: l.label || null, description: l.description }),
-  }))
+  form.transform(payload)
   if (props.template) form.put(`/offer-templates/${props.template.id}`)
   else form.post('/offer-templates')
 }
@@ -94,10 +130,20 @@ function submit() {
         </CardContent>
       </Card>
 
-      <div class="flex justify-end gap-2">
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <p v-if="previewError" class="mr-auto text-sm text-[hsl(var(--destructive))]" role="alert">{{ previewError }}</p>
+        <Button type="button" variant="outline" :loading="previewing" :title="t('of_preview_hint')" @click="preview"><Eye class="mr-2 h-4 w-4" />{{ t('of_preview_pdf') }}</Button>
         <Button as="a" href="/offer-templates" variant="outline">{{ t('cancel') }}</Button>
         <Button type="submit" :loading="form.processing">{{ t('save') }}</Button>
       </div>
     </form>
+
+    <Modal :open="previewUrl !== null" :title="t('of_preview_pdf')" size="2xl" @close="closePreview">
+      <p class="mb-2 flex flex-wrap justify-between gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+        <span>{{ t('of_preview_hint') }}</span>
+        <a :href="previewUrl" target="_blank" rel="noopener" class="text-[hsl(var(--primary))] underline">{{ t('of_preview_open') }}</a>
+      </p>
+      <iframe v-if="previewUrl" :src="previewUrl" class="h-[75dvh] w-full rounded border border-[hsl(var(--border))]" :title="t('of_preview_pdf')" />
+    </Modal>
   </AppLayout>
 </template>

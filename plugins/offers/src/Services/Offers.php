@@ -150,7 +150,10 @@ class Offers
         }
     }
 
-    /** Next free number {prefix}-{year}-{NNN} for the organisation and year. */
+    /**
+     * Next free number {prefix}-{year}-{NNN} for the organisation and year: the highest
+     * number of the year plus the organisation's number step (default 1).
+     */
     public function nextNumber(string $orgId, int $year): string
     {
         $prefix = config('offers.number_prefix', 'OF')."-{$year}-";
@@ -161,7 +164,9 @@ class Offers
             ->map(fn (string $n): int => (int) substr($n, strlen($prefix)))
             ->max() ?? 0;
 
-        return $prefix.str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+        $step = max(1, OfferSetting::for($orgId)->number_step);
+
+        return $prefix.str_pad((string) ($max + $step), 3, '0', STR_PAD_LEFT);
     }
 
     /**
