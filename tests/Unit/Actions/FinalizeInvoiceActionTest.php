@@ -3,6 +3,7 @@
 namespace Tests\Unit\Actions;
 
 use App\Domains\Invoicing\Actions\FinalizeInvoiceAction;
+use App\Domains\Invoicing\Actions\StoreInvoicePdfAction;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
@@ -21,6 +22,8 @@ class FinalizeInvoiceActionTest extends TestCase
 
     private $qrService;
 
+    private $storePdf;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -28,7 +31,8 @@ class FinalizeInvoiceActionTest extends TestCase
         $this->accountingService = Mockery::mock(InvoiceAccountingService::class);
         $this->qrService = Mockery::mock(SwissQrInvoiceService::class);
         $this->qrService->shouldReceive('ensureQrReference')->byDefault();
-        $this->action = new FinalizeInvoiceAction($this->accountingService, $this->qrService);
+        $this->storePdf = Mockery::mock(StoreInvoicePdfAction::class);
+        $this->action = new FinalizeInvoiceAction($this->accountingService, $this->qrService, $this->storePdf);
     }
 
     public function test_rejects_sent_invoice(): void
@@ -80,6 +84,11 @@ class FinalizeInvoiceActionTest extends TestCase
             ->once()
             ->with($invoice)
             ->andReturn($invoice);
+
+        $this->storePdf
+            ->shouldReceive('execute')
+            ->once()
+            ->with($invoice, true);
 
         $result = $this->action->execute($invoice);
 
