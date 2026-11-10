@@ -195,6 +195,8 @@ class InvoiceController extends Controller
             'justificatifUrl' => $invoice->justificatif_path
                 ? route('invoices.justificatif.download', $invoice)
                 : null,
+            // Removing it needs the update ability (drafts only), as InvoiceDocumentController checks.
+            'canRemoveJustificatif' => $request->user()->can('update', $invoice),
             'hasQrIban' => ! empty($invoice->qr_iban ?: $defaultBankAccount?->qr_iban ?: $defaultBankAccount?->iban),
             'bankAccounts' => BankAccount::query()
                 ->where('is_active', true)

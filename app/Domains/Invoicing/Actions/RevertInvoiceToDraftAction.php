@@ -12,12 +12,15 @@ use Illuminate\Support\Facades\DB;
  * Reverts a sent invoice back to draft so its number, dates, customer or line
  * items can be corrected, then re-finalized. Reverses the invoice's journal
  * entry the same way cancellation does. Only allowed while no payment has
- * been recorded yet, so the accounting trail stays consistent.
+ * been recorded yet, so the accounting trail stays consistent. The stored PDF
+ * moves to the reversed entry (a fresh one is stored on finalizing); an uploaded
+ * justificatif stays on the invoice.
  */
 class RevertInvoiceToDraftAction
 {
     public function __construct(
         private LedgerService $ledgerService,
+        private StoreInvoicePdfAction $storePdf,
     ) {}
 
     public function execute(Invoice $invoice): Invoice
@@ -30,7 +33,8 @@ class RevertInvoiceToDraftAction
             throw new InvalidInvoiceStateException('Cannot revert to draft: a payment has already been recorded for this invoice.');
         }
 
-        return DB::transaction(function () use ($invoice) {
+        $postedEntryId = $invoice->journal_entry_id;
+        $reverted = DB::transaction(function () use ($invoice) {
             if ($invoice->journal_entry_id) {
                 $invoice->loadMissing('journalEntry.lines');
                 $reversal = $this->ledgerService->reverseEntry(
@@ -44,5 +48,9 @@ class RevertInvoiceToDraftAction
 
             return $invoice->fresh();
         });
+
+        DB::afterCommit(fn () => $this->storePdf->moveToEntry($reverted, $postedEntryId));
+
+        return $reverted;
     }
 }

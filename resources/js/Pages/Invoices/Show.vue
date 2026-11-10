@@ -30,6 +30,7 @@ const props = defineProps({
   canManageReminders: { type: Boolean, default: false },
   canRevertToDraft: { type: Boolean, default: false },
   justificatifUrl: { type: String, default: null },
+  canRemoveJustificatif: { type: Boolean, default: false },
   bankAccounts: { type: Array, default: () => [] },
   creditNotes: { type: Array, default: () => [] },
   relatedInvoice: { type: Object, default: null },
@@ -530,6 +531,7 @@ const bankAccountOptions = computed(() =>
               {{ t('justificatif') }}
             </CardTitle>
             <Button
+              v-if="canRemoveJustificatif"
               variant="ghost"
               size="sm"
               @click="removeJustificatif"

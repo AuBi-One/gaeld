@@ -3,6 +3,7 @@
 namespace App\Domains\Invoicing\Services;
 
 use App\Domains\Invoicing\Actions\GenerateQrInvoicePdfAction;
+use App\Domains\Invoicing\Actions\StoreInvoicePdfAction;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Mail\InvoiceMail;
@@ -19,6 +20,7 @@ class InvoiceMailerService
     public function __construct(
         private CurrentOrganization $currentOrg,
         private GenerateQrInvoicePdfAction $pdfAction,
+        private StoreInvoicePdfAction $storePdf,
     ) {}
 
     public function sendInvoice(Invoice $invoice): Invoice
@@ -31,7 +33,9 @@ class InvoiceMailerService
         $organization = $this->currentOrg->get();
         $locale = $organization->locale ?? app()->getLocale();
 
-        $pdf = $this->pdfAction->execute($invoice, $organization, $locale);
+        // The customer gets the PDF stored as the justificatif (stored now if finalizing could not).
+        $this->storePdf->execute($invoice);
+        $pdf = $this->storePdf->storedPdf($invoice) ?? $this->pdfAction->execute($invoice, $organization, $locale);
         $filename = 'invoice-'.($invoice->number ?? $invoice->id).'.pdf';
 
         Mail::to($customerEmail)->send(new InvoiceMail($invoice, $organization, $pdf, $filename));

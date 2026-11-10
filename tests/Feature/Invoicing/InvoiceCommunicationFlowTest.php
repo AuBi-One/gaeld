@@ -11,6 +11,7 @@ use App\Domains\Invoicing\Services\InvoiceMailerService;
 use App\Domains\Invoicing\Services\SwissQrInvoiceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Mockery\MockInterface;
 use Tests\TestCase;
 use Tests\Traits\WithAuthenticatedOrganization;
@@ -71,6 +72,7 @@ class InvoiceCommunicationFlowTest extends TestCase
             $mock->shouldReceive('execute')->once()->andReturn('%PDF-test');
         });
         Mail::fake();
+        Storage::fake('local'); // the mailer stores the PDF of an invoice without a justificatif
 
         app(InvoiceMailerService::class)->sendInvoice($invoice->load('customer'));
 

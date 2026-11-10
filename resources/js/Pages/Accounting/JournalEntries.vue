@@ -245,10 +245,11 @@ function lineError(index, field) {
   return form.errors[`lines.${index}.${field}`]
 }
 
-// The entry's own justificatif, or — when it belongs to an invoice/salary slip — that record's document.
+// The document of the invoice/salary slip the entry belongs to, else the entry's own justificatif
+// (e.g. the invoice PDF kept on an entry whose invoice went back to draft).
 function justificatifUrl(entry) {
   if (entry.source?.documentUrl) return entry.source.documentUrl
-  if (!entry.source && entry.justificatif_path) return `/accounting/journal-entries/${entry.id}/justificatif?inline=1`
+  if (entry.justificatif_path) return `/accounting/journal-entries/${entry.id}/justificatif?inline=1`
   return null
 }
 

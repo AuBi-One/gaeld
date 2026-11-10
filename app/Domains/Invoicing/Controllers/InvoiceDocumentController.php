@@ -3,6 +3,8 @@
 namespace App\Domains\Invoicing\Controllers;
 
 use App\Domains\Invoicing\Actions\GenerateQrInvoicePdfAction;
+use App\Domains\Invoicing\Actions\StoreInvoicePdfAction;
+use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Exceptions\QrBillValidationException;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Support\QrBillValidationMessageFormatter;
@@ -40,7 +42,7 @@ class InvoiceDocumentController extends Controller
             ->with('success', __('app.justificatif_removed'));
     }
 
-    public function downloadJustificatif(Invoice $invoice, Request $request): StreamedResponse|RedirectResponse
+    public function downloadJustificatif(Invoice $invoice, Request $request, StoreInvoicePdfAction $storePdf): StreamedResponse|RedirectResponse
     {
         $this->authorize('view', $invoice);
 
@@ -48,7 +50,7 @@ class InvoiceDocumentController extends Controller
             abort(404);
         }
 
-        $filename = basename($invoice->justificatif_path);
+        $filename = $storePdf->isStoredPdf($invoice) ? $storePdf->fileName($invoice) : basename($invoice->justificatif_path);
 
         if ($request->boolean('inline')) {
             return Storage::disk('local')->response(
@@ -68,8 +70,16 @@ class InvoiceDocumentController extends Controller
         GenerateQrInvoicePdfAction $action,
         CurrentOrganization $currentOrg,
         QrBillValidationMessageFormatter $messageFormatter,
+        StoreInvoicePdfAction $storePdf,
     ): HttpResponse|RedirectResponse {
         $this->authorize('view', $invoice);
+
+        // The PDF stored on finalizing, if any: the download is the document that was issued and mailed
+        // (a draft is drawn from its current data).
+        $stored = $invoice->status === InvoiceStatus::Draft ? null : $storePdf->storedPdf($invoice);
+        if ($stored !== null) {
+            return $this->pdfResponse($stored, $storePdf->fileName($invoice));
+        }
 
         $organization = $currentOrg->get();
 
@@ -88,8 +98,11 @@ class InvoiceDocumentController extends Controller
             return $this->backWithError($messageFormatter->format($e->violations));
         }
 
-        $filename = 'invoice-'.($invoice->number ?? $invoice->id).'.pdf';
+        return $this->pdfResponse($pdf, 'invoice-'.($invoice->number ?? $invoice->id).'.pdf');
+    }
 
+    private function pdfResponse(string $pdf, string $filename): HttpResponse
+    {
         return new HttpResponse($pdf, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
