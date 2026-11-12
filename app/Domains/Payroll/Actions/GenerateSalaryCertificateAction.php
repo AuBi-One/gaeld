@@ -99,7 +99,7 @@ final class GenerateSalaryCertificateAction
         $organization = $employee->organization;
         $present = [
             'app.ahv_number' => $filled($employee->ahv_number),
-            'app.date_of_birth' => $employee->date_of_birth !== null,
+            'app.date_of_birth' => $filled($employee->date_of_birth),
             'app.address' => $filled($employee->address),
             'app.postal_code' => $filled($employee->postal_code),
             'app.city' => $filled($employee->city),

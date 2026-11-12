@@ -19,7 +19,7 @@
         <table>
             <tr><td style="width:30%;">{{ __('exports.salary_certificate.name') }}</td><td>{{ $certificate['employee']->fullName() }}</td></tr>
             <tr><td>{{ __('exports.salary_certificate.address') }}</td><td>{{ $certificate['employee']->address }}, {{ trim($certificate['employee']->postal_code.' '.$certificate['employee']->city) }}@if($certificate['employee']->country && $certificate['employee']->country !== 'CH'), {{ $certificate['employee']->country }}@endif</td></tr>
-            <tr><td>{{ __('exports.salary_certificate.date_of_birth') }}</td><td>{{ $certificate['employee']->date_of_birth?->format('d.m.Y') }}</td></tr>
+            <tr><td>{{ __('exports.salary_certificate.date_of_birth') }}</td><td>{{ $certificate['employee']->date_of_birth ? \Illuminate\Support\Carbon::parse($certificate['employee']->date_of_birth)->format('d.m.Y') : '' }}</td></tr>
             <tr><td>{{ __('exports.salary_certificate.ahv_number') }}</td><td>{{ $certificate['employee']->ahv_number }}</td></tr>
             <tr><td>{{ __('exports.salary_certificate.period') }}</td><td>{{ __('exports.salary_certificate.period_value', ['from' => \Illuminate\Support\Carbon::parse($certificate['period_from'])->format('d.m.Y'), 'to' => \Illuminate\Support\Carbon::parse($certificate['period_to'])->format('d.m.Y')]) }}</td></tr>
             <tr><td>{{ __('exports.salary_certificate.months_covered') }}</td><td>{{ $certificate['months_covered'] }}</td></tr>

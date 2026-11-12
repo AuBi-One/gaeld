@@ -26,7 +26,7 @@ use Illuminate\Support\Carbon;
  * @property string $last_name
  * @property string|null $email
  * @property string|null $ahv_number
- * @property Carbon|null $date_of_birth
+ * @property string|null $date_of_birth Y-m-d, encrypted at rest
  * @property string|null $address
  * @property string|null $postal_code
  * @property string|null $city
@@ -82,7 +82,6 @@ class Employee extends Model
     protected function casts(): array
     {
         return [
-            'date_of_birth' => 'date:Y-m-d',
             'entry_date' => 'date:Y-m-d',
             'exit_date' => 'date:Y-m-d',
             'gross_salary' => 'decimal:2',
@@ -94,6 +93,8 @@ class Employee extends Model
             'ahv_number' => 'encrypted',
             // IBAN is encrypted at rest — same rationale as ahv_number.
             'iban' => 'encrypted',
+            // Date of birth (Y-m-d string, validated on input): encrypted like the AHV number.
+            'date_of_birth' => 'encrypted',
         ];
     }
 

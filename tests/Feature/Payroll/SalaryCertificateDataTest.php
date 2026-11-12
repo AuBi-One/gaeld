@@ -8,6 +8,8 @@ use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Services\PayrollCalculator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 use Tests\Traits\WithAuthenticatedOrganization;
 
@@ -152,7 +154,11 @@ class SalaryCertificateDataTest extends TestCase
             'is_active' => true,
         ])->assertSessionHasNoErrors();
         $employee = Employee::where('last_name', 'Rey')->firstOrFail();
-        $this->assertSame('1995-07-01', $employee->date_of_birth->toDateString());
+        $this->assertSame('1995-07-01', $employee->date_of_birth);
+        // Encrypted at rest, like the AHV number.
+        $stored = (string) DB::table('employees')->where('id', $employee->id)->value('date_of_birth');
+        $this->assertStringNotContainsString('1995', $stored);
+        $this->assertSame('1995-07-01', Crypt::decryptString($stored));
 
         $this->actAsOrg()->put(route('payroll.employees.update', $employee), [
             'first_name' => 'Chloé',
@@ -162,7 +168,7 @@ class SalaryCertificateDataTest extends TestCase
             'gross_salary' => '5000.00',
             'is_active' => true,
         ])->assertSessionHasNoErrors();
-        $this->assertSame('1995-07-02', $employee->fresh()->date_of_birth->toDateString());
+        $this->assertSame('1995-07-02', $employee->fresh()->date_of_birth);
 
         $this->actAsOrg()->put(route('payroll.employees.update', $employee), [
             'first_name' => 'Chloé',
