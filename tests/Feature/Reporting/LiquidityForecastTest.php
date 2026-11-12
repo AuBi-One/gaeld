@@ -280,6 +280,32 @@ class LiquidityForecastTest extends TestCase
         $this->assertSame('100.00', $other['amount']);
     }
 
+    public function test_entries_dated_ahead_do_not_move_the_window_past_the_last_complete_month(): void
+    {
+        $this->fundBank('50000.00');
+        foreach (['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06'] as $month) {
+            $this->spend('6500', $month.'-10', '100.00');
+        }
+        // Booked ahead (today is 2026-07-15): a window ending in October would hold empty months.
+        $this->spend('6500', '2026-10-01', '100.00');
+
+        $forecast = $this->service->forecast($this->org->id);
+
+        $this->assertSame('2026-06-30', $forecast['window']['to']);
+        $this->assertSame('100.00', $forecast['burn']['other']['amount']);
+    }
+
+    public function test_an_employee_who_has_not_started_yet_is_not_counted(): void
+    {
+        $this->fundBank('50000.00');
+        $this->employee('5000.00')->update(['entry_date' => '2026-09-01']);
+
+        $payroll = $this->service->forecast($this->org->id)['burn']['payroll'];
+
+        $this->assertSame(0, $payroll['headcount']);
+        $this->assertSame('ledger', $payroll['source']);
+    }
+
     // ──────────────────────────────────────────────────────────────
     //  Projection
     // ──────────────────────────────────────────────────────────────

@@ -112,6 +112,8 @@ class LiquidityForecastService
             ->where('organization_id', $organizationId)
             ->where('is_active', true)
             ->where(fn ($query) => $query->whereNull('exit_date')->orWhere('exit_date', '>=', now()->toDateString()))
+            // Not yet employed: no salary paid from today's funds yet.
+            ->where(fn ($query) => $query->whereNull('entry_date')->orWhere('entry_date', '<=', now()->toDateString()))
             ->get();
 
         if ($employees->isEmpty()) {
@@ -391,9 +393,11 @@ class LiquidityForecastService
         $latest = $this->ledgerService->latestOperationalEntryDate($organizationId);
         $end = ($latest ? Carbon::parse($latest) : now())->startOfMonth();
 
-        // Drop the closing month when it is the current, still-incomplete one.
-        if ($end->isSameMonth(now())) {
-            $end = $end->subMonth();
+        // At most the last complete month: the current one is unfinished, and
+        // entries dated ahead (prepaid rent, accruals) must not move the window.
+        $lastComplete = now()->startOfMonth()->subMonth();
+        if ($end->greaterThan($lastComplete)) {
+            $end = $lastComplete;
         }
 
         $start = $end->copy()->subMonths(self::RUN_RATE_WINDOW - 1);
