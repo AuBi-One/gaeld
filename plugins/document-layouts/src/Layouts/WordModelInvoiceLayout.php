@@ -5,6 +5,7 @@ namespace Plugins\DocumentLayouts\Layouts;
 use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Invoicing\Contracts\InvoicePdfLayoutInterface;
 use App\Domains\Invoicing\Enums\InvoiceLineType;
+use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Models\Invoice;
@@ -138,6 +139,25 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
     }
 
     /**
+     * Part of an open invoice is paid: the QR slip asks for the rest (core), these rows say why,
+     * as in the core renderer. Label key and formatted amount.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    public static function paymentRows(Invoice $invoice): array
+    {
+        if (! in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue], true)) {
+            return [];
+        }
+        $paid = $invoice->amountPaid();
+        if (! Money::isPositive($paid)) {
+            return [];
+        }
+
+        return [['already_paid', '-'.Format::money($paid)], ['amount_open', Format::money($invoice->amountDue())]];
+    }
+
+    /**
      * The address window: salutation, name, the "Attention" person, street, town and the
      * country (its free-text name when the contact has one, else the code outside Switzerland).
      *
@@ -223,6 +243,9 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
             ['', $hasVat ? $this->t('total_incl_vat') : $this->t('total'), '', '', ($invoice->currency ?? 'CHF').' '.Format::money((string) $invoice->total)],
             11, 7.7, [1 => 'B', 4 => 'B'],
         );
+        foreach (self::paymentRows($invoice) as [$key, $amount]) {
+            $this->row(['', $this->t($key), '', '', ($invoice->currency ?? 'CHF').' '.$amount], 11, 7.7, $key === 'amount_open' ? [1 => 'B', 4 => 'B'] : []);
+        }
         $this->y += 3;
 
         if (($invoice->tax_treatment ?? InvoiceTaxTreatment::Standard) === InvoiceTaxTreatment::ReverseCharge) {

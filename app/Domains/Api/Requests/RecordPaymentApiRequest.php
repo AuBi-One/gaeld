@@ -14,7 +14,7 @@ class RecordPaymentApiRequest extends FormRequest
         return [
             'amount' => 'required|numeric|min:0.01|max:99999999.99',
             'payment_date' => 'required|date',
-            'payment_method' => ['required', Rule::enum(PaymentMethod::class)],
+            'payment_method' => ['required', Rule::enum(PaymentMethod::class)->except(PaymentMethod::WriteOff)],
             'reference' => 'nullable|string|max:100',
             'bank_account_code' => 'nullable|string|max:20',
         ];

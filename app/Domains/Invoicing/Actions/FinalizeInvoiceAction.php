@@ -12,8 +12,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Finalizes a draft invoice: assigns invoice number, posts journal entry, marks as sent, and
- * stores its PDF as the justificatif (if it has none).
+ * Finalizes a draft invoice: freezes the customer's current address as its snapshot, assigns
+ * invoice number, posts journal entry, marks as sent, and stores its PDF as the justificatif
+ * (if it has none).
  */
 class FinalizeInvoiceAction
 {
@@ -21,6 +22,7 @@ class FinalizeInvoiceAction
         private InvoiceAccountingService $accountingService,
         private SwissQrInvoiceService $qrService,
         private StoreInvoicePdfAction $storePdf,
+        private RefreshInvoiceCustomerSnapshotAction $refreshCustomerSnapshot,
     ) {}
 
     public function execute(Invoice $invoice): Invoice
@@ -39,6 +41,13 @@ class FinalizeInvoiceAction
 
         if (Money::isZero((string) $invoice->total)) {
             throw new InvalidInvoiceStateException(__('app.invoice_total_must_not_be_zero'));
+        }
+
+        // The draft showed the customer as it is today: the issued invoice (and its stored PDF)
+        // keeps that address and the chosen contact person.
+        if ($invoice->customer !== null) {
+            $this->refreshCustomerSnapshot->execute($invoice);
+            $invoice->refresh();
         }
 
         $this->qrService->ensureQrReference($invoice, $invoice->organization);

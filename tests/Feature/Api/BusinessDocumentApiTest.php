@@ -10,6 +10,7 @@ use App\Domains\Contacts\Enums\ContactType;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Expenses\Enums\ExpenseStatus;
 use App\Domains\Expenses\Models\Expense;
+use App\Domains\Invoicing\Actions\RevertInvoiceToDraftAction;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Organizations\Services\CurrentOrganization;
@@ -198,6 +199,40 @@ class BusinessDocumentApiTest extends SecurityTestCase
             ->postJson("/api/v1/invoices/{$invoice->id}/finalize");
         $replay->assertOk();
         $this->assertSame($response->json('data.journal_entry.id'), $replay->json('data.journal_entry.id'));
+    }
+
+    public function test_an_invoice_reverted_to_draft_is_finalized_again_without_an_idempotency_key(): void
+    {
+        $customer = Contact::create(['organization_id' => $this->orgA->id, 'type' => ContactType::Organization->value, 'name' => 'Invoice Customer AG']);
+        Account::create(['organization_id' => $this->orgA->id, 'code' => '1100', 'name' => 'Accounts receivable', 'type' => AccountType::Asset->value]);
+        Account::create(['organization_id' => $this->orgA->id, 'code' => AccountCode::REVENUE, 'name' => 'Revenue', 'type' => AccountType::Revenue->value]);
+        $invoice = Invoice::create([
+            'organization_id' => $this->orgA->id,
+            'customer_id' => $customer->id,
+            'number' => 'API-INV-002',
+            'status' => InvoiceStatus::Draft,
+            'issue_date' => '2026-08-21',
+            'due_date' => '2026-09-20',
+            'subtotal' => '100.00',
+            'vat_amount' => '0.00',
+            'total' => '100.00',
+            'currency' => 'CHF',
+        ]);
+        $invoice->lines()->create(['description' => 'Integration service', 'quantity' => '1.00', 'unit_price' => '100.00', 'amount' => '100.00', 'vat_amount' => '0.00']);
+
+        $first = $this->withToken($this->tokenA)->postJson("/api/v1/invoices/{$invoice->id}/finalize")->assertOk();
+        app(CurrentOrganization::class)->set($this->orgA);
+        app(RevertInvoiceToDraftAction::class)->execute($invoice->fresh());
+
+        // The next round is a new request, not a replay of the first one.
+        $second = $this->withToken($this->tokenA)->postJson("/api/v1/invoices/{$invoice->id}/finalize")
+            ->assertOk()->assertJsonPath('data.status', 'sent');
+        $this->assertNotSame($first->json('data.journal_entry.id'), $second->json('data.journal_entry.id'));
+        $this->assertSame('API-INV-002-v2', $invoice->fresh()->journalEntry->reference);
+
+        // A retry within the round still replays.
+        $this->withToken($this->tokenA)->postJson("/api/v1/invoices/{$invoice->id}/finalize")
+            ->assertOk()->assertJsonPath('data.journal_entry.id', $second->json('data.journal_entry.id'));
     }
 
     public function test_it_creates_a_reverse_charge_invoice_for_an_eu_customer(): void

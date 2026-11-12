@@ -3,6 +3,7 @@
 namespace Tests\Feature\Payroll;
 
 use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Exceptions\DuplicateReferenceException;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Payroll\Actions\PostPayrollAction;
@@ -71,6 +72,35 @@ class UnpostPayrollTest extends TestCase
             ->first();
         $this->assertNotNull($reversal);
         $this->assertTrue($reversal->is_posted);
+    }
+
+    public function test_an_unposted_slip_is_posted_again_under_a_versioned_reference(): void
+    {
+        $slip = $this->postedSlip();
+        $originalRef = $slip->journalEntry->reference;
+
+        $slip = app(PostPayrollAction::class)->execute(app(UnpostPayrollAction::class)->execute($slip));
+        $this->assertSame($originalRef.'-v2', $slip->journalEntry->reference);
+
+        $slip = app(PostPayrollAction::class)->execute(app(UnpostPayrollAction::class)->execute($slip));
+        $this->assertSame($originalRef.'-v3', $slip->journalEntry->reference);
+        $this->assertTrue(JournalEntry::where('reference', 'REV-'.$originalRef.'-v2')->where('is_posted', true)->exists());
+    }
+
+    public function test_a_slip_posted_twice_is_not_booked_twice(): void
+    {
+        $slip = app(PayrollCalculator::class)->calculate($this->employee, 3, 2026);
+        $slip->save();
+        $stale = SalarySlip::findOrFail($slip->id);
+        app(PostPayrollAction::class)->execute($slip);
+
+        try {
+            app(PostPayrollAction::class)->execute($stale);
+            $this->fail('The slip was posted twice.');
+        } catch (DuplicateReferenceException) {
+        }
+
+        $this->assertSame(1, JournalEntry::where('organization_id', $this->org->id)->count());
     }
 
     public function test_it_refuses_to_unpost_a_draft_slip(): void

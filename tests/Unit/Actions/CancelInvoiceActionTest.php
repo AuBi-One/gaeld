@@ -9,6 +9,7 @@ use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Mockery;
 use Tests\TestCase;
 
@@ -109,6 +110,9 @@ class CancelInvoiceActionTest extends TestCase
         $invoice->status = $status;
         $invoice->number = 'INV-TEST';
         $invoice->journal_entry_id = $journalEntryId;
+        $payments = Mockery::mock(HasMany::class);
+        $payments->shouldReceive('exists')->andReturnFalse();
+        $invoice->shouldReceive('payments')->andReturn($payments);
 
         if ($journalEntry) {
             $invoice->shouldReceive('loadMissing')->with('journalEntry.lines')->andReturnSelf();

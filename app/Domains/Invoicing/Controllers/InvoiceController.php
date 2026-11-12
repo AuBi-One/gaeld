@@ -14,9 +14,11 @@ use App\Domains\Invoicing\DTOs\UpdateInvoiceData;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Models\InvoicePayment;
 use App\Domains\Invoicing\Queries\InvoiceQuery;
 use App\Domains\Invoicing\Requests\StoreInvoiceRequest;
 use App\Domains\Invoicing\Requests\UpdateInvoiceRequest;
+use App\Domains\Invoicing\Services\InvoiceAccountingService;
 use App\Domains\Invoicing\Services\InvoiceLineSources;
 use App\Domains\Invoicing\Services\InvoiceNumberGenerator;
 use App\Domains\Organizations\Services\CurrentOrganization;
@@ -180,7 +182,7 @@ class InvoiceController extends Controller
             ->with('success', __('app.invoice_created'));
     }
 
-    public function show(Request $request, Invoice $invoice): Response
+    public function show(Request $request, Invoice $invoice, InvoiceAccountingService $accounting): Response
     {
         $this->authorize('view', $invoice);
 
@@ -191,6 +193,12 @@ class InvoiceController extends Controller
             'canForceDelete' => $request->user()->can('forceDelete', $invoice),
             'canRecordPayment' => $request->user()->can('recordPayment', $invoice),
             'canUpdatePayment' => $request->user()->can('updatePayment', $invoice),
+            'canCancel' => $request->user()->can('cancel', $invoice),
+            // Payments from the bank reconciliation are taken back there, not removed here.
+            'bankLinkedPaymentIds' => $invoice->payments
+                ->filter(fn (InvoicePayment $payment): bool => $accounting->isFromBankReconciliation($payment))
+                ->pluck('id')
+                ->values(),
             'canSend' => $request->user()->can('send', $invoice),
             'canSendReminder' => $request->user()->can('sendReminder', $invoice),
             'canRefreshCustomerSnapshot' => $request->user()->can('refreshCustomerSnapshot', $invoice),

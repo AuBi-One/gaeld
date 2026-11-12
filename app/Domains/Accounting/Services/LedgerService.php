@@ -17,6 +17,7 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Services\OrganizationDocumentStorageService;
 use App\Support\Money;
@@ -207,6 +208,18 @@ class LedgerService
                 type: $type ?? 'reversal',
             ));
 
+            // The VAT report reads vat_entries: the reversal takes the original's back, so a
+            // cancelled or corrected invoice no longer counts once the reversal is posted.
+            foreach (VatEntry::query()->where('journal_entry_id', $original->id)->orderBy('id')->get() as $vatEntry) {
+                VatEntry::create([
+                    'journal_entry_id' => $reversalEntry->id,
+                    'vat_rate_id' => $vatEntry->vat_rate_id,
+                    'base_amount' => Money::negate((string) $vatEntry->base_amount),
+                    'vat_amount' => Money::negate((string) $vatEntry->vat_amount),
+                    'type' => $vatEntry->type,
+                ]);
+            }
+
             JournalEntryReversed::dispatch($reversalEntry, $original);
 
             return $reversalEntry;
@@ -371,6 +384,18 @@ class LedgerService
         if (Money::isZero($totalDebit)) {
             throw new InvalidEntryDataException('Journal entry must have non-zero amounts.');
         }
+    }
+
+    /** Whether $date falls in a closed fiscal year (posting on it would be refused). */
+    public function isFiscalYearClosedOn(string $organizationId, string $date): bool
+    {
+        try {
+            $this->guardClosedFiscalYear($organizationId, $date);
+        } catch (FiscalYearClosedException) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Domains\Invoicing\Services;
 
 use App\Domains\Invoicing\Enums\InvoiceLineType;
+use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Models\Invoice;
@@ -291,6 +292,17 @@ class InvoicePdfRenderer
         $tcpdf->Cell(InvoicePdfStyle::TOTALS_LABEL_WIDTH, 7, $this->t('pdf_total').' '.($invoice->currency ?? 'CHF'), 0, 0, 'R');
         $tcpdf->Cell(InvoicePdfStyle::COL_AMOUNT, 7, number_format((float) $invoice->total, 2), 0, 1, 'R');
         $tcpdf->SetTextColor(...InvoicePdfStyle::COLOR_BLACK);
+
+        // Part of an open invoice is paid: the QR slip asks for the rest, the totals say why.
+        $paid = in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue], true) ? $invoice->amountPaid() : '0';
+        if (Money::isPositive($paid)) {
+            $tcpdf->SetFont('Helvetica', '', InvoicePdfStyle::FONT_TOTALS);
+            $tcpdf->Cell(InvoicePdfStyle::TOTALS_LABEL_WIDTH, 5, $this->t('pdf_already_paid'), 0, 0, 'R');
+            $tcpdf->Cell(InvoicePdfStyle::COL_AMOUNT, 5, '-'.number_format((float) $paid, 2), 0, 1, 'R');
+            $tcpdf->SetFont('Helvetica', 'B', InvoicePdfStyle::FONT_TOTALS);
+            $tcpdf->Cell(InvoicePdfStyle::TOTALS_LABEL_WIDTH, 5, $this->t('pdf_amount_open').' '.($invoice->currency ?? 'CHF'), 0, 0, 'R');
+            $tcpdf->Cell(InvoicePdfStyle::COL_AMOUNT, 5, number_format((float) $invoice->amountDue(), 2), 0, 1, 'R');
+        }
 
         // Notes
         if ($invoice->notes) {

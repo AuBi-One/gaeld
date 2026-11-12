@@ -87,7 +87,9 @@ class RefreshInvoiceCustomerSnapshotTest extends TestCase
         ]);
         $originalContact = $this->customer->refresh()->getRawOriginal();
 
-        $this->assertEquals($originalSnapshot, $invoice->fresh()->customerDetailsForDocument());
+        // A draft already shows the customer as it is today; the stored copy is unchanged.
+        $this->assertEquals($this->customer->toInvoiceSnapshot(), $invoice->fresh()->customerDetailsForDocument());
+        $this->assertEquals($originalSnapshot, $invoice->fresh()->customer_snapshot);
 
         config(['activitylog.enabled' => true]);
         activity()->enableLogging();

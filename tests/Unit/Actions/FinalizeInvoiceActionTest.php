@@ -3,6 +3,7 @@
 namespace Tests\Unit\Actions;
 
 use App\Domains\Invoicing\Actions\FinalizeInvoiceAction;
+use App\Domains\Invoicing\Actions\RefreshInvoiceCustomerSnapshotAction;
 use App\Domains\Invoicing\Actions\StoreInvoicePdfAction;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
@@ -32,7 +33,7 @@ class FinalizeInvoiceActionTest extends TestCase
         $this->qrService = Mockery::mock(SwissQrInvoiceService::class);
         $this->qrService->shouldReceive('ensureQrReference')->byDefault();
         $this->storePdf = Mockery::mock(StoreInvoicePdfAction::class);
-        $this->action = new FinalizeInvoiceAction($this->accountingService, $this->qrService, $this->storePdf);
+        $this->action = new FinalizeInvoiceAction($this->accountingService, $this->qrService, $this->storePdf, Mockery::mock(RefreshInvoiceCustomerSnapshotAction::class));
     }
 
     public function test_rejects_sent_invoice(): void
@@ -116,6 +117,7 @@ class FinalizeInvoiceActionTest extends TestCase
 
         $org = Mockery::mock(Organization::class)->makePartial();
         $invoice->shouldReceive('getAttribute')->with('organization')->andReturn($org);
+        $invoice->shouldReceive('getAttribute')->with('customer')->andReturn(null);
 
         $linesRelation = Mockery::mock(HasMany::class);
         $linesRelation->shouldReceive('count')->andReturn($lineCount);

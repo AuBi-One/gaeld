@@ -13,6 +13,8 @@ return [
     'total' => 'Total',
     'vat' => 'MWST',
     'total_incl_vat' => 'Total inkl. MWST',
+    'already_paid' => 'Bereits bezahlt',
+    'amount_open' => 'Noch offen',
     'payment_days' => 'Zahlbar innert :days Tagen.',
     'due_date' => 'Fällig am',
     'reference' => 'Referenz',

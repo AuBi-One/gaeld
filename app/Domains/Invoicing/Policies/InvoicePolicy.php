@@ -145,7 +145,8 @@ class InvoicePolicy extends BasePolicy
     {
         return $this->belongsToOrganization($user, $invoice)
             && $user->hasPermissionTo(Permission::InvoicingEdit)
-            && $invoice->status->canTransitionTo(InvoiceStatus::Cancelled);
+            && $invoice->status->canTransitionTo(InvoiceStatus::Cancelled)
+            && ! $invoice->payments()->exists();
     }
 
     public function forceDelete(User $user, Invoice $invoice): bool

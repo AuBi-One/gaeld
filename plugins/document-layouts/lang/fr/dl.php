@@ -13,6 +13,8 @@ return [
     'total' => 'Total',
     'vat' => 'TVA',
     'total_incl_vat' => 'Total TVA incluse',
+    'already_paid' => 'Déjà payé',
+    'amount_open' => 'Reste à payer',
     'payment_days' => 'Paiement à :days jours.',
     'due_date' => 'Échéance :',
     'reference' => 'Référence',

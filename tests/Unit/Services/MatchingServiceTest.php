@@ -154,6 +154,40 @@ class MatchingServiceTest extends TestCase
         ]);
     }
 
+    public function test_a_second_instalment_matches_the_open_rest_of_an_invoice(): void
+    {
+        $service = app(MatchingService::class);
+        $customer = $this->createCustomer('Initech AG');
+        $invoice = Invoice::create([
+            'organization_id' => $this->organization->id,
+            'customer_id' => $customer->id,
+            'number' => 'INV-2026-020',
+            'status' => InvoiceStatus::Sent,
+            'issue_date' => '2026-03-01',
+            'due_date' => '2026-03-31',
+            'subtotal' => 1000.00,
+            'vat_amount' => 0,
+            'total' => 1000.00,
+            'currency' => 'CHF',
+        ]);
+        $invoice->payments()->create([
+            'organization_id' => $this->organization->id,
+            'amount' => '600.00',
+            'payment_date' => '2026-03-10',
+            'payment_method' => 'bank',
+        ]);
+
+        $matches = $service->findAndStoreMatches($this->createTransaction([
+            'amount' => 400.00,
+            'debtor_name' => 'Initech AG',
+            'reference' => null,
+        ]));
+
+        $this->assertCount(1, $matches);
+        $this->assertSame($invoice->id, $matches->first()->invoice_id);
+        $this->assertSame(MatchConfidence::AmountAndCustomer->value, $matches->first()->confidence);
+    }
+
     public function test_debit_transactions_do_not_create_matches(): void
     {
         $service = app(MatchingService::class);

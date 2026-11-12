@@ -35,6 +35,9 @@ class SyncInvoiceLinesAction
             ]);
 
             if ($lineData->type === InvoiceLineType::Discount && $lineData->discountType === 'percentage') {
+                // The amount follows in the second pass; the column takes no null.
+                $line->amount = '0.00';
+                $line->vat_amount = '0.00';
                 $line->save();
             } else {
                 $line->calculateAndSave();

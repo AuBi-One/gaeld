@@ -2,8 +2,10 @@
 
 namespace App\Domains\Invoicing\Services;
 
+use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Organizations\Models\Organization;
+use App\Support\Money;
 use Sprain\SwissQrBill\DataGroup\Element\AdditionalInformation;
 use Sprain\SwissQrBill\DataGroup\Element\CreditorInformation;
 use Sprain\SwissQrBill\DataGroup\Element\PaymentAmountInformation;
@@ -89,6 +91,12 @@ class SwissQrInvoiceService
 
         $iban = $invoice->qr_iban ?? $organization->qr_iban ?? '';
         if (! $this->isQrIban($iban)) {
+            return;
+        }
+
+        // The reference encodes the invoice number: without one it would be twenty zeros, and
+        // it would stick (a reference found is kept, also on finalizing).
+        if (blank($invoice->number)) {
             return;
         }
 
@@ -188,8 +196,23 @@ class SwissQrInvoiceService
         }
 
         $qrBill->setPaymentAmountInformation(
-            PaymentAmountInformation::create($currency, (float) $invoice->total),
+            PaymentAmountInformation::create($currency, (float) $this->amountToPay($invoice)),
         );
+    }
+
+    /**
+     * What the slip asks for: the open rest once part of an open invoice is paid, otherwise the
+     * total. A settled invoice keeps its total, as it was issued.
+     */
+    public function amountToPay(Invoice $invoice): string
+    {
+        if (! in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue], true)) {
+            return (string) $invoice->total;
+        }
+
+        $due = $invoice->amountDue();
+
+        return Money::isPositive($due) ? $due : (string) $invoice->total;
     }
 
     private function setPaymentReference(QrBill $qrBill, Invoice $invoice, string $iban): void

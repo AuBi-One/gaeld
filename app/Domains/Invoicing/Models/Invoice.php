@@ -147,13 +147,23 @@ class Invoice extends Model
     }
 
     /**
-     * The customer block of the invoice documents: the snapshot taken when the invoice was
-     * saved, or the live contact (with the invoice's contact person) for an old invoice without one.
+     * The customer block of the invoice documents. A draft shows the customer as it is today,
+     * with the invoice's contact person while that is still one of the customer's; finalizing
+     * freezes that as the snapshot (FinalizeInvoiceAction), which an issued invoice keeps. The
+     * live contact also serves an old invoice without a snapshot.
      *
      * @return array{name: string, attention?: string|null, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null}|null
      */
     public function customerDetailsForDocument(): ?array
     {
+        if ($this->status === InvoiceStatus::Draft && $this->customer !== null) {
+            $person = $this->contact_person_id === null
+                ? null
+                : $this->customer->contactPersons()->whereKey($this->contact_person_id)->first();
+
+            return $this->customer->toInvoiceSnapshot($person);
+        }
+
         return $this->customer_snapshot ?? $this->customer?->toInvoiceSnapshot($this->contactPerson);
     }
 
@@ -161,6 +171,50 @@ class Invoice extends Model
     public function journalEntry(): BelongsTo
     {
         return $this->belongsTo(JournalEntry::class);
+    }
+
+    /**
+     * Every posting of this invoice with its reversal, oldest first: the current journal entry and
+     * those of earlier finalizations that were reverted to draft. Those carry the invoice number
+     * as reference, or {number}-v2, -v3, ... (InvoiceAccountingService::postToLedger()); a
+     * reversal carries "REV-" + the reference of the entry it reverses. An invoice renumbered
+     * between two finalizations keeps its earlier, reversed postings under the old number.
+     *
+     * @return list<array{entry: JournalEntry, reversal: JournalEntry|null}>
+     */
+    public function postings(): array
+    {
+        if ($this->journal_entry_id === null) {
+            return [];
+        }
+
+        $entries = JournalEntry::query()->where('organization_id', $this->organization_id);
+        $current = (clone $entries)->find($this->journal_entry_id);
+        $number = (string) $this->number;
+        $earlier = $number === '' ? collect() : (clone $entries)
+            ->where('reference', 'like', addcslashes($number, '%_\\').'%')
+            ->whereKeyNot($this->journal_entry_id)
+            ->get()
+            ->filter(fn (JournalEntry $entry): bool => preg_match('/^'.preg_quote($number, '/').'(-v\d+)?$/', (string) $entry->reference) === 1);
+
+        $originals = $earlier->sortBy('created_at')->values();
+        if ($current !== null) {
+            $originals->push($current);
+        }
+
+        /** @var array<string, JournalEntry> $reversals */
+        $reversals = $originals->isEmpty() ? [] : (clone $entries)
+            ->whereIn('reference', $originals->map(fn (JournalEntry $entry): string => 'REV-'.$entry->reference)->all())
+            ->get()
+            ->keyBy('reference')
+            ->all();
+
+        $postings = [];
+        foreach ($originals as $entry) {
+            $postings[] = ['entry' => $entry, 'reversal' => $reversals['REV-'.$entry->reference] ?? null];
+        }
+
+        return $postings;
     }
 
     /** @return HasMany<InvoiceLine, $this> */
@@ -215,6 +269,21 @@ class Invoice extends Model
             Money::subtract($amount, $tolerance),
             Money::add($amount, $tolerance),
         ]);
+    }
+
+    /**
+     * Invoices whose open amount (total less what is paid or written off) lies within $tolerance
+     * of $amount, so a second instalment finds its invoice too.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeByOpenAmountRange(Builder $query, string $amount, string $tolerance): Builder
+    {
+        return $query->whereRaw(
+            '(invoices.total - (SELECT COALESCE(SUM(invoice_payments.amount), 0) FROM invoice_payments WHERE invoice_payments.invoice_id = invoices.id)) BETWEEN ? AND ?',
+            [Money::subtract($amount, $tolerance), Money::add($amount, $tolerance)],
+        );
     }
 
     /**

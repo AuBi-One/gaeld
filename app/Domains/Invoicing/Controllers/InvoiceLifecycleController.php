@@ -2,14 +2,17 @@
 
 namespace App\Domains\Invoicing\Controllers;
 
+use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Invoicing\Actions\CancelInvoiceAction;
 use App\Domains\Invoicing\Actions\CreateCreditNoteAction;
 use App\Domains\Invoicing\Actions\DuplicateInvoiceAction;
 use App\Domains\Invoicing\Actions\FinalizeInvoiceAction;
 use App\Domains\Invoicing\Actions\PurgeInvoiceAction;
 use App\Domains\Invoicing\Actions\RecordPaymentAction;
+use App\Domains\Invoicing\Actions\RemoveInvoicePaymentAction;
 use App\Domains\Invoicing\Actions\RevertInvoiceToDraftAction;
 use App\Domains\Invoicing\Actions\UpdatePaymentDateAction;
+use App\Domains\Invoicing\Actions\WriteOffInvoiceRemainderAction;
 use App\Domains\Invoicing\DTOs\RecordPaymentData;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Exceptions\InvalidPaymentException;
@@ -18,11 +21,13 @@ use App\Domains\Invoicing\Models\InvoicePayment;
 use App\Domains\Invoicing\Notifications\InvoicePaymentRecordedNotification;
 use App\Domains\Invoicing\Requests\RecordPaymentRequest;
 use App\Domains\Invoicing\Requests\UpdatePaymentDateRequest;
+use App\Domains\Invoicing\Requests\WriteOffInvoiceRemainderRequest;
 use App\Domains\Organizations\Enums\Permission;
 use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
 use App\Http\Controllers\Controller;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -65,6 +70,8 @@ class InvoiceLifecycleController extends Controller
     {
         $this->authorize('revertToDraft', $invoice);
 
+        $posted = $invoice->journalEntry;
+
         try {
             $action->execute($invoice);
         } catch (InvalidInvoiceStateException $e) {
@@ -72,7 +79,21 @@ class InvoiceLifecycleController extends Controller
         }
 
         return redirect()->route('invoices.edit', $invoice)
-            ->with('success', __('app.invoice_reverted_to_draft'));
+            ->with('success', __($this->reversedOnAnotherDate($posted) ? 'app.invoice_reverted_to_draft_settled_period' : 'app.invoice_reverted_to_draft'));
+    }
+
+    /**
+     * Whether the reversal went to another date than the entry it reverses: its VAT period was
+     * settled or its fiscal year closed (InvoiceAccountingService::correctionDate()).
+     */
+    private function reversedOnAnotherDate(?JournalEntry $posted): bool
+    {
+        $reversedOn = $posted === null ? null : JournalEntry::query()
+            ->where('organization_id', $posted->organization_id)
+            ->where('reference', 'REV-'.$posted->reference)
+            ->value('date');
+
+        return $reversedOn !== null && Carbon::parse($reversedOn)->toDateString() !== $posted?->date->toDateString();
     }
 
     public function recordPayment(RecordPaymentRequest $request, Invoice $invoice, RecordPaymentAction $action): RedirectResponse
@@ -119,6 +140,39 @@ class InvoiceLifecycleController extends Controller
 
         return redirect()->route('invoices.show', $invoice)
             ->with('success', __('app.payment_date_updated'));
+    }
+
+    public function writeOff(
+        WriteOffInvoiceRemainderRequest $request,
+        Invoice $invoice,
+        WriteOffInvoiceRemainderAction $action,
+    ): RedirectResponse {
+        $validated = $request->validated();
+
+        try {
+            $action->execute($invoice, $validated['date'], $validated['reason']);
+        } catch (\DomainException $e) {
+            return $this->backWithError($e);
+        } catch (ModelNotFoundException) {
+            return $this->backWithError(__('app.account_not_found', ['code' => '1100 / 2200']));
+        }
+
+        return redirect()->route('invoices.show', $invoice)
+            ->with('success', __('app.write_off_recorded'));
+    }
+
+    public function removePayment(Invoice $invoice, InvoicePayment $payment, RemoveInvoicePaymentAction $action): RedirectResponse
+    {
+        $this->authorize('updatePayment', $invoice);
+
+        try {
+            $action->execute($invoice, $payment);
+        } catch (\DomainException $e) {
+            return $this->backWithError($e);
+        }
+
+        return redirect()->route('invoices.show', $invoice)
+            ->with('success', __('app.payment_removed'));
     }
 
     public function duplicate(Invoice $invoice, DuplicateInvoiceAction $action): RedirectResponse
