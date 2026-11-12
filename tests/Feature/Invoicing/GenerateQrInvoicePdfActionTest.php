@@ -122,6 +122,26 @@ class GenerateQrInvoicePdfActionTest extends TestCase
         $this->assertSame(162.15, $qrBill->getPaymentAmountInformation()->getAmount());
     }
 
+    public function test_a_draft_without_a_number_gets_no_qr_reference(): void
+    {
+        $draft = $this->makeInvoice('INV-NO-NUMBER');
+        $draft->update(['number' => null, 'status' => InvoiceStatus::Draft, 'qr_reference' => null]);
+
+        // The reference encodes the number: without one it would be twenty zeros, kept on
+        // finalizing (ensureQrReference() keeps a reference it finds).
+        try {
+            app(GenerateQrInvoicePdfAction::class)->execute($draft->fresh(), $this->org, 'fr');
+        } catch (QrBillValidationException) {
+            // No reference for a QR-IBAN: the slip cannot be built yet.
+        }
+
+        $this->assertNull($draft->fresh()->qr_reference);
+
+        $draft->update(['number' => 'INV-2026-077']);
+        app(SwissQrInvoiceService::class)->ensureQrReference($draft->fresh(), $this->org);
+        $this->assertNotNull($draft->fresh()->qr_reference);
+    }
+
     public function test_missing_due_date_does_not_cause_a_renderer_error(): void
     {
         $invoice = $this->makeInvoice('INV-PDF-NO-DUE-DATE');
