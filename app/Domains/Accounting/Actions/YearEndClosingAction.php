@@ -8,16 +8,15 @@ use App\Domains\Accounting\Enums\FiscalYearStatus;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
-use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Services\ClosingAccountsService;
 use App\Domains\Accounting\Services\ClosingChecks;
 use App\Domains\Accounting\Services\FiscalYearService;
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Accounting\Services\LegalArchivingService;
+use App\Domains\Accounting\Services\VatSettlementCoverage;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Users\Models\User;
 use App\Support\Money;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -34,6 +33,7 @@ class YearEndClosingAction
         private readonly LedgerService $ledger,
         private readonly LegalArchivingService $archiving,
         private readonly GenerateOpeningBalancesAction $openingBalances,
+        private readonly VatSettlementCoverage $vatSettlements,
     ) {}
 
     /**
@@ -72,7 +72,7 @@ class YearEndClosingAction
             throw new \RuntimeException('No accounts to close for this period.');
         }
 
-        $unsettled = $this->getUnsettledVatPeriods($orgId, $from, $to);
+        $unsettled = $this->vatSettlements->unsettledPeriods($orgId, $from, $to);
         if (! empty($unsettled)) {
             throw new \RuntimeException(__('app.fiscal_year_unsettled_vat', [
                 'year' => $year,
@@ -159,7 +159,7 @@ class YearEndClosingAction
             );
 
             $journalEntry = $this->ledger->postEntry($orgId, $entry, $fiscalYear?->id);
-            $journalEntry->update(['type' => 'year_end_closing']);
+            $journalEntry->update(['type' => JournalEntry::TYPE_YEAR_END_CLOSING]);
 
             $org->closeFiscalYear($year);
 
@@ -222,44 +222,5 @@ class YearEndClosingAction
             ->where('organization_id', $orgId)
             ->whereYear('start_date', $year)
             ->first();
-    }
-
-    /**
-     * Return quarter labels (e.g. "Q1", "Q2") for which no VAT settlement
-     * journal entry exists in the given year.
-     *
-     * @return string[]
-     */
-    private function getUnsettledVatPeriods(string $orgId, string $fromDate, string $toDate): array
-    {
-        $unsettled = [];
-        $periodStart = Carbon::parse($fromDate)->startOfQuarter();
-        $periodEnd = Carbon::parse($toDate)->endOfQuarter();
-
-        for ($quarterStart = $periodStart; $quarterStart->lte($periodEnd); $quarterStart->addQuarter()) {
-            $from = $quarterStart->toDateString();
-            $to = $quarterStart->copy()->endOfQuarter()->toDateString();
-            $hasVatActivity = VatEntry::query()
-                ->whereHas('journalEntry', fn ($jq) => $jq
-                    ->where('organization_id', $orgId)
-                    ->whereBetween('date', [$from, $to])
-                )
-                ->exists();
-
-            if (! $hasVatActivity) {
-                continue;
-            }
-
-            $exists = JournalEntry::where('organization_id', $orgId)
-                ->where('type', 'vat_settlement')
-                ->where('reference', "VAT-SETTLEMENT-{$from}-{$to}")
-                ->exists();
-
-            if (! $exists) {
-                $unsettled[] = 'Q'.$quarterStart->quarter.' '.$quarterStart->year;
-            }
-        }
-
-        return $unsettled;
     }
 }

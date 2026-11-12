@@ -7,11 +7,11 @@ use App\Domains\Accounting\Actions\YearEndClosingAction;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
-use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Requests\ReopenFiscalYearRequest;
 use App\Domains\Accounting\Requests\StoreYearEndClosingRequest;
 use App\Domains\Accounting\Services\ClosingAccountsService;
 use App\Domains\Accounting\Services\ClosingChecks;
+use App\Domains\Accounting\Services\VatSettlementCoverage;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Organizations\Models\Organization;
@@ -19,7 +19,6 @@ use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Users\Models\User;
 use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
 use App\Http\Controllers\Controller;
-use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +36,7 @@ class YearEndClosingController extends Controller
         private readonly ClosingAccountsService $closingAccounts,
         private readonly YearEndClosingAction $closingAction,
         private readonly ReopenFiscalYearAction $reopenAction,
+        private readonly VatSettlementCoverage $vatSettlements,
     ) {}
 
     public function index(Request $request, CurrentOrganization $currentOrg): Response
@@ -134,7 +134,7 @@ class YearEndClosingController extends Controller
             'netResult' => $netResult,
             'closedYears' => $org->closed_fiscal_years ?? [],
             'canReopenYear' => $request->user()?->can('reopenYear', Account::class) ?? false,
-            'unsettledVatPeriods' => $this->getUnsettledVatPeriods($from, $to),
+            'unsettledVatPeriods' => $this->vatSettlements->unsettledPeriods($orgId, $from, $to),
             'outstandingInvoices' => $outstandingInvoices,
             'closingChecks' => app(ClosingChecks::class)->run($orgId, $from, $to),
         ]);
@@ -183,49 +183,5 @@ class YearEndClosingController extends Controller
 
         return redirect()->route('accounting.closing', ['year' => $year])
             ->with('success', __('app.fiscal_year_reopened', ['year' => $year]));
-    }
-
-    // ──────────────────────────────────────────────────────────────
-    //  Helpers
-    // ──────────────────────────────────────────────────────────────
-
-    /**
-     * Return quarter labels (e.g. "Q1", "Q2") for which no VAT settlement
-     * journal entry exists in the given year.
-     *
-     * @return string[]
-     */
-    private function getUnsettledVatPeriods(string $fromDate, string $toDate): array
-    {
-        $unsettled = [];
-        $periodStart = Carbon::parse($fromDate)->startOfQuarter();
-        $periodEnd = Carbon::parse($toDate)->endOfQuarter();
-
-        for ($quarterStart = $periodStart; $quarterStart->lte($periodEnd); $quarterStart->addQuarter()) {
-            $from = $quarterStart->toDateString();
-            $to = $quarterStart->copy()->endOfQuarter()->toDateString();
-            // Skip quarters that have no VAT-bearing activity at all.
-            // JournalEntry's BelongsToOrganization global scope applies inside whereHas in HTTP context.
-            $hasVatActivity = VatEntry::query()
-                ->whereHas('journalEntry', fn ($jq) => $jq
-                    ->whereBetween('date', [$from, $to])
-                )
-                ->exists();
-
-            if (! $hasVatActivity) {
-                continue;
-            }
-
-            $exists = JournalEntry::query()
-                ->where('type', 'vat_settlement')
-                ->where('reference', "VAT-SETTLEMENT-{$from}-{$to}")
-                ->exists();
-
-            if (! $exists) {
-                $unsettled[] = 'Q'.$quarterStart->quarter.' '.$quarterStart->year;
-            }
-        }
-
-        return $unsettled;
     }
 }

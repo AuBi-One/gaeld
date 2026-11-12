@@ -28,6 +28,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $description
  * @property string|null $justificatif_path
  * @property bool $is_posted
+ * @property string|null $reversal_of_entry_id
  * @property string|null $type
  * @property Carbon|null $vat_period_start
  * @property Carbon|null $vat_period_end
@@ -42,6 +43,13 @@ class JournalEntry extends Model
     /** @use HasFactory<Factory<static>> */
     use Auditable, BelongsToOrganization, HasFactory, HasUuids;
 
+    /**
+     * The year-end closing entry: empties every revenue and expense account
+     * into the result account. Statements of trading (profit and loss, tax
+     * return figures, dashboard) leave it out; the balance sheet keeps it.
+     */
+    public const TYPE_YEAR_END_CLOSING = 'year_end_closing';
+
     protected $fillable = [
         'organization_id',
         'date',
@@ -49,6 +57,7 @@ class JournalEntry extends Model
         'description',
         'justificatif_path',
         'is_posted',
+        'reversal_of_entry_id',
         'type',
         'vat_period_start',
         'vat_period_end',

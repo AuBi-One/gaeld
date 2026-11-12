@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Accounting;
 
+use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Policies\JournalEntryPolicy;
 use App\Domains\Expenses\Models\Expense;
 use App\Domains\Expenses\Policies\ExpensePolicy;
@@ -78,6 +81,94 @@ class ArchivedRecordLockTest extends TestCase
 
         $this->expectException(ArchivedRecordException::class);
         $entry->update(['description' => 'cannot change']);
+    }
+
+    public function test_archived_entry_lines_cannot_be_updated(): void
+    {
+        [, $line] = $this->archivedEntryWithLine();
+
+        $this->expectException(ArchivedRecordException::class);
+        $line->update(['debit' => '999.00']);
+    }
+
+    public function test_archived_entry_lines_cannot_be_deleted(): void
+    {
+        [, $line] = $this->archivedEntryWithLine();
+
+        $this->expectException(ArchivedRecordException::class);
+        $line->delete();
+    }
+
+    public function test_lines_cannot_be_added_to_an_archived_entry(): void
+    {
+        [$entry, $line] = $this->archivedEntryWithLine();
+
+        $this->expectException(ArchivedRecordException::class);
+        $entry->lines()->create([
+            'account_id' => $line->account_id,
+            'debit' => '0',
+            'credit' => '1.00',
+        ]);
+    }
+
+    public function test_a_line_cannot_be_moved_onto_an_archived_entry(): void
+    {
+        [$archived] = $this->archivedEntryWithLine();
+        $open = JournalEntry::create([
+            'organization_id' => $this->organization->id,
+            'date' => now()->toDateString(),
+            'reference' => 'JE-LINE-MOVE',
+            'description' => 'open entry',
+            'is_posted' => false,
+        ]);
+        $line = $open->lines()->create(['account_id' => Account::query()->value('id'), 'debit' => '5.00', 'credit' => '0']);
+
+        $this->expectException(ArchivedRecordException::class);
+        $line->update(['journal_entry_id' => $archived->id]);
+    }
+
+    public function test_lines_of_a_non_archived_entry_remain_editable(): void
+    {
+        $account = $this->lockTestAccount();
+        $entry = JournalEntry::create([
+            'organization_id' => $this->organization->id,
+            'date' => now()->toDateString(),
+            'reference' => 'JE-LINE-OPEN',
+            'description' => 'open entry',
+            'is_posted' => false,
+        ]);
+        $line = $entry->lines()->create(['account_id' => $account->id, 'debit' => '10.00', 'credit' => '0']);
+
+        $line->update(['debit' => '20.00']);
+
+        $this->assertSame('20.00', (string) $line->fresh()?->debit);
+    }
+
+    /** @return array{0: JournalEntry, 1: TransactionLine} */
+    private function archivedEntryWithLine(): array
+    {
+        $account = $this->lockTestAccount();
+        $entry = JournalEntry::create([
+            'organization_id' => $this->organization->id,
+            'date' => now()->toDateString(),
+            'reference' => 'JE-LINE-LOCK',
+            'description' => 'archived entry',
+            'is_posted' => true,
+        ]);
+        $line = $entry->lines()->create(['account_id' => $account->id, 'debit' => '10.00', 'credit' => '0']);
+        $entry->update(['archived_at' => now()]);
+
+        return [$entry->refresh(), $line->refresh()];
+    }
+
+    private function lockTestAccount(): Account
+    {
+        return Account::create([
+            'organization_id' => $this->organization->id,
+            'code' => '1020',
+            'name' => 'Bank',
+            'type' => AccountType::Asset->value,
+        ]);
     }
 
     public function test_salary_slip_lock_blocks_update(): void

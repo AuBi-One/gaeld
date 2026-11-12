@@ -399,7 +399,7 @@ function doDelete() {
           </template>
           <template #cell-reference="{ value, row }">
             <span class="inline-flex items-center gap-2">
-              {{ value }}
+              <Link :href="`/accounting/journal-entries/${row.id}`" class="hover:underline" data-testid="journal-entry-link">{{ value || t('journal_entry') }}</Link>
               <Badge v-if="row.type === 'historical_summary'" variant="secondary">{{ t('historical_summary_badge') }}</Badge>
             </span>
             <!-- Owned by another feature (e.g. a salary slip): edited or deleted there -->
@@ -560,6 +560,7 @@ function doDelete() {
                   <FormInput
                     :id="`line_desc_${index}`"
                     v-model="line.description"
+                    maxlength="255"
                     :label="index === 0 ? t('description') : ''"
                     :error="lineError(index, 'description')"
                   />

@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Tests\Security\SecurityTestCase;
 
@@ -83,6 +84,57 @@ class ApiIdempotencyTest extends SecurityTestCase
 
         $response->assertStatus(422)->assertJsonPath('code', 'idempotency_key_required');
         $this->assertDatabaseCount('journal_entries', 0);
+    }
+
+    public function test_reusing_a_key_on_another_entry_conflicts_instead_of_replaying(): void
+    {
+        $first = $this->withToken($this->tokenA)
+            ->withHeader('Idempotency-Key', 'draft-a')
+            ->postJson('/api/v1/journal-entries', [...$this->payload('IDEMP-PATH-A'), 'status' => 'draft'])
+            ->assertCreated()
+            ->json('data.id');
+        $second = $this->withToken($this->tokenA)
+            ->withHeader('Idempotency-Key', 'draft-b')
+            ->postJson('/api/v1/journal-entries', [...$this->payload('IDEMP-PATH-B'), 'status' => 'draft'])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->withToken($this->tokenA)
+            ->withHeader('Idempotency-Key', 'post-once')
+            ->postJson("/api/v1/journal-entries/{$first}/post")
+            ->assertOk();
+
+        // Same key, same route name and empty body, but another entry.
+        $this->withToken($this->tokenA)
+            ->withHeader('Idempotency-Key', 'post-once')
+            ->postJson("/api/v1/journal-entries/{$second}/post")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'idempotency_conflict');
+
+        $this->assertFalse((bool) JournalEntry::query()->findOrFail($second)->is_posted);
+    }
+
+    public function test_an_api_reference_cannot_take_a_system_prefix(): void
+    {
+        $this->withToken($this->tokenA)
+            ->withHeader('Idempotency-Key', 'reserved-prefix')
+            ->postJson('/api/v1/journal-entries', $this->payload('REV-VAT-SETTLEMENT-2025-01-01-2025-06-30'))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('reference');
+
+        $this->assertDatabaseCount('journal_entries', 0);
+    }
+
+    public function test_an_api_line_text_longer_than_its_column_is_refused(): void
+    {
+        $payload = $this->payload('IDEMP-LONG');
+        $payload['lines'][0]['description'] = str_repeat('x', 256);
+
+        $this->withToken($this->tokenA)
+            ->withHeader('Idempotency-Key', 'long-line')
+            ->postJson('/api/v1/journal-entries', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('lines.0.description');
     }
 
     public function test_a_duplicate_reference_with_a_new_key_returns_a_reference_conflict(): void

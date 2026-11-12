@@ -42,15 +42,17 @@ class ReportingService
         ?string $compareFrom = null,
         ?string $compareTo = null,
     ): array {
-        $cacheKey = "pnl:{$organizationId}:{$fromDate}:{$toDate}";
+        // v2: the year-end closing is no longer counted (a closed year read zero).
+        $cacheKey = "pnl:v2:{$organizationId}:{$fromDate}:{$toDate}";
         if ($compareFrom && $compareTo) {
             $cacheKey .= ":vs:{$compareFrom}:{$compareTo}";
         }
         $orgTag = "org:{$organizationId}:reports";
 
         return Cache::tags([$orgTag])->remember($cacheKey, now()->addMinutes(30), function () use ($organizationId, $fromDate, $toDate, $compareFrom, $compareTo) {
-            $revenue = $this->accountsWithBalances($organizationId, AccountType::Revenue, $fromDate, $toDate);
-            $expenses = $this->accountsWithBalances($organizationId, AccountType::Expense, $fromDate, $toDate);
+            // What the period earned and spent: without the year-end closing.
+            $revenue = $this->accountsWithBalances($organizationId, AccountType::Revenue, $fromDate, $toDate, withYearEndClosing: false);
+            $expenses = $this->accountsWithBalances($organizationId, AccountType::Expense, $fromDate, $toDate, withYearEndClosing: false);
 
             $totalRevenue = $revenue->sum('balance');
             $totalExpenses = $expenses->sum('balance');
@@ -130,6 +132,8 @@ class ReportingService
         // Compute current-year net income (revenue − expenses) and add it
         // as a synthetic row in the equity section so the balance sheet balances.
         $fiscalYearStart = $this->resolveFiscalYearStart($organizationId, $asOfDate);
+        // With the closing on purpose: once the year is closed these net to zero
+        // and no synthetic row is added, as the result account already holds it.
         $revenue = $this->accountsWithBalances($organizationId, AccountType::Revenue, $fiscalYearStart, $asOfDate);
         $expenses = $this->accountsWithBalances($organizationId, AccountType::Expense, $fiscalYearStart, $asOfDate);
         $currentYearResult = Money::subtract((string) $revenue->sum('balance'), (string) $expenses->sum('balance'));
@@ -198,8 +202,8 @@ class ReportingService
      */
     private function computeComparison(array $result, string $organizationId, string $compareFrom, string $compareTo): array
     {
-        $compRevenue = $this->accountsWithBalances($organizationId, AccountType::Revenue, $compareFrom, $compareTo);
-        $compExpenses = $this->accountsWithBalances($organizationId, AccountType::Expense, $compareFrom, $compareTo);
+        $compRevenue = $this->accountsWithBalances($organizationId, AccountType::Revenue, $compareFrom, $compareTo, withYearEndClosing: false);
+        $compExpenses = $this->accountsWithBalances($organizationId, AccountType::Expense, $compareFrom, $compareTo, withYearEndClosing: false);
 
         $compTotalRevenue = $compRevenue->sum('balance');
         $compTotalExpenses = $compExpenses->sum('balance');
@@ -241,7 +245,7 @@ class ReportingService
     /**
      * @return Collection<int, mixed>
      */
-    private function accountsWithBalances(string $organizationId, AccountType $type, ?string $fromDate, ?string $toDate): Collection
+    private function accountsWithBalances(string $organizationId, AccountType $type, ?string $fromDate, ?string $toDate, bool $withYearEndClosing = true): Collection
     {
         return Account::where('organization_id', $organizationId)
             ->where('type', $type->value)
@@ -250,7 +254,7 @@ class ReportingService
             ->map(fn (Account $account) => [
                 'code' => $account->code,
                 'name' => $account->name,
-                'balance' => $this->ledgerService->accountBalance($account->id, $fromDate, $toDate),
+                'balance' => $this->ledgerService->accountBalance($account->id, $fromDate, $toDate, $withYearEndClosing),
             ])
             ->filter(fn ($accountRow) => ! Money::isZero((string) $accountRow['balance']));
     }

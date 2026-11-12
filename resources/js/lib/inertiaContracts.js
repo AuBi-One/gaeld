@@ -32,6 +32,22 @@ const dashboardSchema = z.object({
     expenseItems: z.array(z.array(z.string())).optional(),
     forecastItems: z.array(z.array(z.string())).optional(),
   }).passthrough().optional(),
+  hasActivity: z.boolean().optional(),
+  liquidityForecast: z.object({
+    availableFunds: moneyValue.optional(),
+    liquidAssets: moneyValue.optional(),
+    shortTermLiabilities: moneyValue.optional(),
+    burn: z.object({
+      payroll: z.record(z.string(), z.unknown()).optional(),
+      recurring: z.record(z.string(), z.unknown()).optional(),
+      other: z.record(z.string(), z.unknown()).optional(),
+      total: moneyValue.optional(),
+    }).passthrough().optional(),
+    monthlyRevenue: z.record(z.string(), z.unknown()).optional(),
+    scenarios: z.record(z.string(), z.unknown()).optional(),
+    window: z.record(z.string(), z.unknown()).optional(),
+    horizonMonths: z.coerce.number().optional(),
+  }).passthrough().nullable().optional(),
   pendingOcrScans: z.coerce.number().optional(),
   displayYear: z.coerce.number().optional(),
 }).passthrough()
@@ -129,6 +145,8 @@ const DASHBOARD_FALLBACK = {
     expenseItems: [],
     forecastItems: [],
   },
+  hasActivity: false,
+  liquidityForecast: null,
   pendingOcrScans: 0,
   displayYear: new Date().getFullYear(),
 }

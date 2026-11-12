@@ -38,9 +38,9 @@ class ReportingServiceTest extends TestCase
         $expense = $this->makeAccount('6530', 'Software', AccountType::Expense);
 
         $ledgerService = Mockery::mock(LedgerQueryService::class);
-        $ledgerService->shouldReceive('accountBalance')->once()->with($revenue->id, '2026-01-01', '2026-03-31')->andReturn('1200.00');
-        $ledgerService->shouldReceive('accountBalance')->once()->with($zeroRevenue->id, '2026-01-01', '2026-03-31')->andReturn('0.00');
-        $ledgerService->shouldReceive('accountBalance')->once()->with($expense->id, '2026-01-01', '2026-03-31')->andReturn('350.50');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($revenue->id, '2026-01-01', '2026-03-31', false)->andReturn('1200.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($zeroRevenue->id, '2026-01-01', '2026-03-31', false)->andReturn('0.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($expense->id, '2026-01-01', '2026-03-31', false)->andReturn('350.50');
 
         $service = new ReportingService($ledgerService);
 
@@ -66,12 +66,12 @@ class ReportingServiceTest extends TestCase
 
         $ledgerService = Mockery::mock(LedgerQueryService::class);
         // Balance sheet accounts (cumulative since inception)
-        $ledgerService->shouldReceive('accountBalance')->once()->with($asset->id, null, '2026-03-31')->andReturn('1500.00');
-        $ledgerService->shouldReceive('accountBalance')->once()->with($liability->id, null, '2026-03-31')->andReturn('600.00');
-        $ledgerService->shouldReceive('accountBalance')->once()->with($equity->id, null, '2026-03-31')->andReturn('500.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($asset->id, null, '2026-03-31', true)->andReturn('1500.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($liability->id, null, '2026-03-31', true)->andReturn('600.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($equity->id, null, '2026-03-31', true)->andReturn('500.00');
         // P&L accounts for current year result (fiscal year starts 2026-01-01)
-        $ledgerService->shouldReceive('accountBalance')->once()->with($revenue->id, '2026-01-01', '2026-03-31')->andReturn('800.00');
-        $ledgerService->shouldReceive('accountBalance')->once()->with($expense->id, '2026-01-01', '2026-03-31')->andReturn('400.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($revenue->id, '2026-01-01', '2026-03-31', true)->andReturn('800.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($expense->id, '2026-01-01', '2026-03-31', true)->andReturn('400.00');
 
         $service = new ReportingService($ledgerService);
 
@@ -102,8 +102,8 @@ class ReportingServiceTest extends TestCase
         $expense = $this->makeAccount('6530', 'Software', AccountType::Expense);
 
         $ledgerService = Mockery::mock(LedgerQueryService::class);
-        $ledgerService->shouldReceive('accountBalance')->with($revenue->id, '2026-01-01', '2026-03-31')->andReturn('1000.00');
-        $ledgerService->shouldReceive('accountBalance')->with($expense->id, '2026-01-01', '2026-03-31')->andReturn('400.00');
+        $ledgerService->shouldReceive('accountBalance')->with($revenue->id, '2026-01-01', '2026-03-31', false)->andReturn('1000.00');
+        $ledgerService->shouldReceive('accountBalance')->with($expense->id, '2026-01-01', '2026-03-31', false)->andReturn('400.00');
 
         $service = new ReportingService($ledgerService);
         $report = $service->profitAndLoss($this->organization->id, '2026-01-01', '2026-03-31');
@@ -120,12 +120,12 @@ class ReportingServiceTest extends TestCase
         $ledgerService = Mockery::mock(LedgerQueryService::class);
 
         // Current period
-        $ledgerService->shouldReceive('accountBalance')->with($revenue->id, '2026-01-01', '2026-12-31')->andReturn('12000.00');
-        $ledgerService->shouldReceive('accountBalance')->with($expense->id, '2026-01-01', '2026-12-31')->andReturn('8000.00');
+        $ledgerService->shouldReceive('accountBalance')->with($revenue->id, '2026-01-01', '2026-12-31', false)->andReturn('12000.00');
+        $ledgerService->shouldReceive('accountBalance')->with($expense->id, '2026-01-01', '2026-12-31', false)->andReturn('8000.00');
 
         // Comparison period (previous year)
-        $ledgerService->shouldReceive('accountBalance')->with($revenue->id, '2025-01-01', '2025-12-31')->andReturn('10000.00');
-        $ledgerService->shouldReceive('accountBalance')->with($expense->id, '2025-01-01', '2025-12-31')->andReturn('7000.00');
+        $ledgerService->shouldReceive('accountBalance')->with($revenue->id, '2025-01-01', '2025-12-31', false)->andReturn('10000.00');
+        $ledgerService->shouldReceive('accountBalance')->with($expense->id, '2025-01-01', '2025-12-31', false)->andReturn('7000.00');
 
         $service = new ReportingService($ledgerService);
         $report = $service->profitAndLoss(
@@ -158,7 +158,7 @@ class ReportingServiceTest extends TestCase
         $asset = $this->makeAccount('1020', 'Bank', AccountType::Asset);
 
         $ledgerService = Mockery::mock(LedgerQueryService::class);
-        $ledgerService->shouldReceive('accountBalance')->with($asset->id, null, '2026-03-31')->andReturn('1500.00');
+        $ledgerService->shouldReceive('accountBalance')->with($asset->id, null, '2026-03-31', true)->andReturn('1500.00');
 
         $service = new ReportingService($ledgerService);
         $report = $service->balanceSheet($this->organization->id, '2026-03-31');
@@ -175,14 +175,14 @@ class ReportingServiceTest extends TestCase
         $ledgerService = Mockery::mock(LedgerQueryService::class);
 
         // Current as-of date: 2026-03-31 (fiscal year starts 2026-01-01)
-        $ledgerService->shouldReceive('accountBalance')->once()->with($asset->id, null, '2026-03-31')->andReturn('1500.00');
-        $ledgerService->shouldReceive('accountBalance')->once()->with($revenue->id, '2026-01-01', '2026-03-31')->andReturn('800.00');
-        $ledgerService->shouldReceive('accountBalance')->once()->with($expense->id, '2026-01-01', '2026-03-31')->andReturn('400.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($asset->id, null, '2026-03-31', true)->andReturn('1500.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($revenue->id, '2026-01-01', '2026-03-31', true)->andReturn('800.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($expense->id, '2026-01-01', '2026-03-31', true)->andReturn('400.00');
 
         // Comparison as-of date: 2025-03-31 (fiscal year starts 2025-01-01)
-        $ledgerService->shouldReceive('accountBalance')->once()->with($asset->id, null, '2025-03-31')->andReturn('1000.00');
-        $ledgerService->shouldReceive('accountBalance')->once()->with($revenue->id, '2025-01-01', '2025-03-31')->andReturn('500.00');
-        $ledgerService->shouldReceive('accountBalance')->once()->with($expense->id, '2025-01-01', '2025-03-31')->andReturn('300.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($asset->id, null, '2025-03-31', true)->andReturn('1000.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($revenue->id, '2025-01-01', '2025-03-31', true)->andReturn('500.00');
+        $ledgerService->shouldReceive('accountBalance')->once()->with($expense->id, '2025-01-01', '2025-03-31', true)->andReturn('300.00');
 
         $service = new ReportingService($ledgerService);
         $report = $service->balanceSheet($this->organization->id, '2026-03-31', '2025-03-31');

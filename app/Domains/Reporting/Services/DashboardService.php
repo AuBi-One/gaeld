@@ -75,17 +75,21 @@ class DashboardService
     {
         $year = $this->resolveDisplayYear($organizationId);
 
-        $totalRevenue = $this->invoiceQuery->yearlyRevenue($organizationId, $year);
-        $totalExpenses = $this->expenseService->yearlyTotal($organizationId, $year);
+        $totals = $this->ledgerService->periodTotals($organizationId, ...$this->yearBounds($year));
+        $totalRevenue = $totals['revenue'];
+        $totalExpenses = $totals['expenses'];
         $cashBalance = $this->cashBalance($organizationId);
 
         $unpaidInvoices = $this->invoiceQuery->unpaidSummary($organizationId);
 
         $pendingExpenses = $this->expenseService->pendingSummary($organizationId);
 
+        $recentTransactions = $this->recentTransactions($organizationId);
+
         // Year-over-year comparison
-        $previousRevenue = $this->invoiceQuery->yearlyRevenue($organizationId, $year - 1);
-        $previousExpenses = $this->expenseService->yearlyTotal($organizationId, $year - 1);
+        $previousTotals = $this->ledgerService->periodTotals($organizationId, ...$this->yearBounds($year - 1));
+        $previousRevenue = $previousTotals['revenue'];
+        $previousExpenses = $previousTotals['expenses'];
         $hasPreviousYearData = $this->hasActivityInYear($organizationId, $year - 1);
 
         return [
@@ -105,9 +109,10 @@ class DashboardService
             'previousExpenses' => $previousExpenses,
             'previousBalance' => Money::subtract($previousRevenue, $previousExpenses),
             'hasPreviousYearData' => $hasPreviousYearData,
-            'recentTransactions' => $this->recentTransactions($organizationId),
+            'recentTransactions' => $recentTransactions,
+            'hasActivity' => $recentTransactions->isNotEmpty() || $this->hasCapturedDocuments($organizationId),
             'monthlyBreakdown' => $this->monthlyBreakdown($organizationId, $year),
-            'budgetSummary' => $this->budgetSummary($organizationId, $year),
+            'budgetSummary' => $this->budgetSummary($organizationId, $year, $totalRevenue, $totalExpenses),
             'vatSummary' => $this->currentQuarterVat($organizationId),
             'receivablesAging' => $this->agingSummary($organizationId),
             'pendingOcrScans' => $this->pendingOcrScans($organizationId),
@@ -162,55 +167,70 @@ class DashboardService
     }
 
     /**
+     * Monthly revenue/expense series for the dashboard chart.
+     *
+     * Revenue and expenses come from the ledger, so the chart adds up to the
+     * KPI cards above it. The forecast series stays invoice-based: expected
+     * income from sent and overdue invoices has no ledger equivalent, because
+     * nothing has been booked for it yet.
+     *
      * @return array<string, mixed>
      */
     private function monthlyBreakdown(string $organizationId, int $year): array
     {
-        // Fetch all data for the year in 3 queries instead of 6*12
-        $paidInvoices = $this->invoiceQuery->paidInYear($organizationId, $year)
-            ->groupBy(fn ($i) => Carbon::parse($i->issue_date)->month);
-
-        $expenses = $this->expenseService->inYear($organizationId, $year)
-            ->groupBy(fn ($e) => Carbon::parse($e->date)->month);
+        $totals = $this->ledgerService->monthlyTotals($organizationId, $year);
+        $byAccount = $this->ledgerService->monthlyTotalsByAccount($organizationId, $year);
 
         $forecastInvoices = $this->invoiceQuery->sentOrOverdueDueInYear($organizationId, $year)
             ->groupBy(fn ($i) => Carbon::parse($i->due_date)->month);
 
-        $monthlyData = collect(range(1, 12))->map(function ($month) use ($paidInvoices, $expenses, $forecastInvoices) {
-            $monthPaid = $paidInvoices->get($month, collect());
-            $monthExpenses = $expenses->get($month, collect());
-            $monthForecast = $forecastInvoices->get($month, collect());
-
-            return [
-                'monthIndex' => $month,
-                'revenue' => (string) $monthPaid->sum('total'),
-                'expenses' => (string) $monthExpenses->sum('amount'),
-                'forecast' => (string) $monthForecast->sum('total'),
-                'revenueItems' => $monthPaid->map(fn ($i) => $i->number.': '.number_format((float) $i->total, 2, '.', "'"))->values(),
-                'expenseItems' => $monthExpenses->map(fn ($e) => $e->description.': '.number_format((float) $e->amount, 2, '.', "'"))->values(),
-                'forecastItems' => $monthForecast->map(fn ($i) => $i->number.': '.number_format((float) $i->total, 2, '.', "'"))->values(),
-            ];
-        });
+        $months = collect(range(1, 12));
 
         return [
-            'monthIndices' => $monthlyData->pluck('monthIndex')->values(),
-            'revenue' => $monthlyData->pluck('revenue')->values(),
-            'expenses' => $monthlyData->pluck('expenses')->values(),
-            'forecast' => $monthlyData->pluck('forecast')->values(),
-            'revenueItems' => $monthlyData->pluck('revenueItems')->values(),
-            'expenseItems' => $monthlyData->pluck('expenseItems')->values(),
-            'forecastItems' => $monthlyData->pluck('forecastItems')->values(),
+            'monthIndices' => $months->values(),
+            'revenue' => $months->map(fn ($m) => $totals['revenue'][$m])->values(),
+            'expenses' => $months->map(fn ($m) => $totals['expenses'][$m])->values(),
+            'forecast' => $months->map(fn ($m) => (string) $forecastInvoices->get($m, collect())->sum('total'))->values(),
+            'revenueItems' => $months->map(fn ($m) => $this->formatItems($byAccount['revenue'][$m]))->values(),
+            'expenseItems' => $months->map(fn ($m) => $this->formatItems($byAccount['expenses'][$m]))->values(),
+            'forecastItems' => $months->map(fn ($m) => $forecastInvoices->get($m, collect())
+                ->map(fn ($i) => $i->number.': '.$this->formatAmount((string) $i->total))
+                ->values())->values(),
         ];
+    }
+
+    /**
+     * Render tooltip items as "label: amount" strings, the shape the chart
+     * already expects.
+     *
+     * @param  list<array{label: string, amount: string, overflow?: int}>  $items
+     * @return list<string>
+     */
+    private function formatItems(array $items): array
+    {
+        return array_map(
+            fn (array $item): string => $item['label'].': '.$this->formatAmount($item['amount']),
+            $items,
+        );
+    }
+
+    private function formatAmount(string $amount): string
+    {
+        return number_format((float) $amount, 2, '.', "'");
     }
 
     /**
      * Budget vs actual summary for the current fiscal year.
      *
+     * The actuals are passed in rather than re-queried: they are the same
+     * ledger totals the KPI cards show, and recomputing them here would let
+     * the budget card drift from the cards above it.
+     *
      * Returns null when no budgets are configured.
      *
      * @return array{budgetedRevenue: string, budgetedExpenses: string, actualRevenue: string, actualExpenses: string, revenueVariance: string, expenseVariance: string, monthsElapsed: int}|null
      */
-    private function budgetSummary(string $organizationId, int $year): ?array
+    private function budgetSummary(string $organizationId, int $year, string $actualRevenue, string $actualExpenses): ?array
     {
         $budgets = Budget::withoutGlobalScope('organization')
             ->where('organization_id', $organizationId)
@@ -237,10 +257,6 @@ class DashboardService
                 $budgetedExpenses = Money::add($budgetedExpenses, $annualBudget);
             }
         }
-
-        // Actual YTD figures are already in the main metrics
-        $actualRevenue = $this->invoiceQuery->yearlyRevenue($organizationId, $year);
-        $actualExpenses = $this->expenseService->yearlyTotal($organizationId, $year);
 
         // Pro-rated budget based on months elapsed
         $proRatedRevenue = Money::multiply2(Money::divide4($budgetedRevenue, '12'), (string) $monthsElapsed);
@@ -380,24 +396,29 @@ class DashboardService
      * Resolve the fiscal year to display on the dashboard.
      *
      * Priority order:
-     * 1. Most recent year with posted journal entries (capped at current year).
-     * 2. Most recent year with any expense or invoice activity (capped at current year).
+     * 1. Most recent year with operational ledger activity (capped at the
+     *    current year).
+     * 2. Most recent year with expense or invoice activity, for organizations
+     *    that record documents before posting them.
      * 3. Current calendar year (no data at all).
      *
-     * This prevents the dashboard from showing 0.00 CHF when an org has
-     * expenses/invoices dated in a prior year but has not yet posted any
-     * journal entries.
+     * Structural entries are deliberately excluded from step 1: year-end
+     * closing and opening-balance entries are dated in the *next* calendar
+     * year, so counting them would send the dashboard to a year that has no
+     * real bookkeeping in it yet and show all-zero KPIs right after a closing.
      */
     private function resolveDisplayYear(string $organizationId): int
     {
         $currentYear = now()->year;
 
-        // Invoice and expense dates are the real business-activity signals.
-        // Journal entries are checked first in a naive implementation, but they
-        // include technical bookkeeping entries (opening balances, year-end
-        // closing) that can fall in the *next* calendar year — causing the
-        // dashboard to display an empty year with all-zero KPIs immediately
-        // after a year-end closing.
+        $latestDate = $this->ledgerService->latestOperationalEntryDate($organizationId);
+
+        if ($latestDate) {
+            return min((int) Carbon::parse($latestDate)->year, $currentYear);
+        }
+
+        // No posted bookkeeping yet — fall back to document dates so an org
+        // that has captured invoices or expenses still lands on the right year.
         $latestExpenseDate = Expense::where('organization_id', $organizationId)->max('date');
         $latestInvoiceDate = Invoice::where('organization_id', $organizationId)->max('issue_date');
 
@@ -410,24 +431,34 @@ class DashboardService
             return min(max($activityYears), $currentYear);
         }
 
-        // No invoice/expense activity yet — fall back to the most recent posted
-        // journal entry (covers manual-journal-entry-only organisations).
-        $latestDate = $this->ledgerService->latestPostedEntryDate($organizationId);
-
-        if ($latestDate) {
-            return min((int) Carbon::parse($latestDate)->year, $currentYear);
-        }
-
         return $currentYear;
     }
 
     /**
-     * Whether the organization recorded any invoice or expense activity
-     * during the given calendar year. Used to suppress year-over-year
-     * trend indicators when there is no real comparison baseline.
+     * Whether the organization has captured any invoice or expense, posted
+     * or not.
+     *
+     * This is what decides the onboarding empty state: someone who has
+     * entered a document has started working, even though the KPI cards
+     * stay at zero until it is booked.
+     */
+    private function hasCapturedDocuments(string $organizationId): bool
+    {
+        return Invoice::where('organization_id', $organizationId)->exists()
+            || Expense::where('organization_id', $organizationId)->exists();
+    }
+
+    /**
+     * Whether the organization recorded any activity during the given
+     * calendar year. Used to suppress year-over-year trend indicators when
+     * there is no real comparison baseline.
      */
     private function hasActivityInYear(string $organizationId, int $year): bool
     {
+        if ($this->ledgerService->hasOperationalActivityInYear($organizationId, $year)) {
+            return true;
+        }
+
         $hasInvoice = Invoice::where('organization_id', $organizationId)
             ->whereYear('issue_date', $year)
             ->exists();
@@ -439,6 +470,17 @@ class DashboardService
         return Expense::where('organization_id', $organizationId)
             ->whereYear('date', $year)
             ->exists();
+    }
+
+    /**
+     * Calendar-year date bounds, spread into the from/to arguments of the
+     * ledger queries.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function yearBounds(int $year): array
+    {
+        return ["{$year}-01-01", "{$year}-12-31"];
     }
 
     private function pendingOcrScans(string $organizationId): int

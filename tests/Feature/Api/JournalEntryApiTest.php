@@ -141,4 +141,23 @@ class JournalEntryApiTest extends SecurityTestCase
             ->assertJsonPath('code', 'validation_error')
             ->assertJsonStructure(['errors' => ['status', 'per_page']]);
     }
+
+    public function test_the_year_end_closing_entry_cannot_be_reversed(): void
+    {
+        $closing = JournalEntry::create([
+            'organization_id' => $this->orgA->id,
+            'date' => '2025-12-31',
+            'reference' => 'BOUCL-2025',
+            'description' => 'Year-end closing',
+            'is_posted' => true,
+            'type' => JournalEntry::TYPE_YEAR_END_CLOSING,
+        ]);
+
+        $this->withToken($this->tokenA)
+            ->withHeader('Idempotency-Key', 'reverse-closing')
+            ->postJson("/api/v1/journal-entries/{$closing->id}/reverse")
+            ->assertForbidden();
+
+        $this->assertSame(1, JournalEntry::where('organization_id', $this->orgA->id)->count());
+    }
 }

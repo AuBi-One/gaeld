@@ -33,6 +33,10 @@ class ApiIdempotencyService
         $payloadHash = hash('sha256', json_encode([
             'method' => $request->method(),
             'route' => $route,
+            // The route name is shared by every entry; the path carries the
+            // entry id, so a key reused on another entry conflicts instead of
+            // replaying the first entry's response.
+            'path' => $request->path(),
             'payload' => $this->payloadForHash($request),
         ], JSON_THROW_ON_ERROR));
 

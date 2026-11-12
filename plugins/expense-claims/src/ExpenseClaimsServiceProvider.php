@@ -5,6 +5,7 @@ namespace Plugins\ExpenseClaims;
 use App\Domains\Accounting\Contracts\ClosingCheckInterface;
 use App\Domains\Accounting\Events\JournalDraftPosted;
 use App\Domains\Accounting\Services\JournalEntryReferences;
+use App\Domains\Accounting\Support\SystemReferencePrefixes;
 use App\Domains\Payroll\Contracts\ReimbursementSourceInterface;
 use App\Support\Plugins\PluginNavigation;
 use Illuminate\Auth\Events\Login;
@@ -37,6 +38,8 @@ class ExpenseClaimsServiceProvider extends ServiceProvider
         Event::listen(JournalDraftPosted::class, PostRepaymentDrafts::class);
         // Entries of claims and debts are changed here, not in the journal.
         $this->callAfterResolving(JournalEntryReferences::class, fn (JournalEntryReferences $references) => JournalOwners::register($references));
+        // EC-PAY-, EC-DEBT-, EC-ADJ-…: references of this plugin's entries cannot be typed by hand.
+        $this->callAfterResolving(SystemReferencePrefixes::class, fn (SystemReferencePrefixes $prefixes) => $prefixes->extend('EC-'));
 
         $navigation = $this->app->make(PluginNavigation::class);
         // Own claims: everyone who can enter expenses; balances: managers only (§8.2, D39).

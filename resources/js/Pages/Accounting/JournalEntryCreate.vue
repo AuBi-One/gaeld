@@ -169,6 +169,7 @@ function lineError(index, field) {
                 <FormInput
                   :id="`line_desc_${index}`"
                   v-model="line.description"
+                  maxlength="255"
                   :label="index === 0 ? t('description') : ''"
                   :error="lineError(index, 'description')"
                 />
