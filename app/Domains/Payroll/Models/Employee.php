@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use Spatie\Activitylog\Support\LogOptions;
 
 /**
  * Employee record within an organization's payroll module.
@@ -96,6 +97,21 @@ class Employee extends Model
             // Date of birth (Y-m-d string, validated on input): encrypted like the AHV number.
             'date_of_birth' => 'encrypted',
         ];
+    }
+
+    /**
+     * Audit trail without the personal data kept encrypted at rest: the
+     * activity log (Settings > Activity log) would store the AHV number, IBAN
+     * and date of birth in clear text on every change.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logAll()
+            ->logExcept(['ahv_number', 'iban', 'date_of_birth'])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges()
+            ->setDescriptionForEvent(fn (string $event) => 'Employee '.$event);
     }
 
     /** @return BelongsTo<Organization, $this> */

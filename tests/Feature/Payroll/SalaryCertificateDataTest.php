@@ -10,6 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Spatie\Activitylog\Models\Activity;
 use Tests\TestCase;
 use Tests\Traits\WithAuthenticatedOrganization;
 
@@ -141,6 +142,28 @@ class SalaryCertificateDataTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('certificateMissing', [])
                 ->where('employee.date_of_birth', '1988-02-29'));
+    }
+
+    public function test_the_activity_log_keeps_no_ahv_number_iban_or_date_of_birth(): void
+    {
+        $employee = $this->employee(['iban' => 'CH9300762011623852957']);
+        $employee->update([
+            'ahv_number' => '756.9217.0769.85',
+            'iban' => 'CH5604835012345678009',
+            'date_of_birth' => '1988-03-01',
+            'city' => 'Morges',
+        ]);
+
+        $activities = Activity::query()->where('subject_type', $employee->getMorphClass())->where('subject_id', $employee->id)->get();
+        $this->assertCount(2, $activities, 'One row for the creation, one for the update.');
+        foreach ($activities as $activity) {
+            $logged = json_encode($activity->getAttributes());
+            foreach (['ahv_number', 'iban', 'date_of_birth', '756.', 'CH93', 'CH56', '1988-'] as $needle) {
+                $this->assertStringNotContainsString($needle, (string) $logged);
+            }
+        }
+        // The update itself is still logged.
+        $this->assertStringContainsString('Morges', (string) json_encode($activities->last()->getAttributes()));
     }
 
     public function test_the_date_of_birth_is_saved_from_the_forms_and_not_listed_on_the_run_page(): void
