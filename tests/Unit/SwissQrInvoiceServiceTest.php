@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Invoicing\Actions\RefreshInvoiceCustomerSnapshotAction;
+use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Services\SwissQrInvoiceService;
 use App\Domains\Organizations\Models\Organization;
@@ -284,6 +285,8 @@ class SwissQrInvoiceServiceTest extends TestCase
         $invoice = Invoice::factory()->for($this->org)->create([
             'customer_id' => $this->client->id,
             'customer_snapshot' => $this->client->toInvoiceSnapshot(),
+            // A sent invoice keeps its copy; a draft follows the contact.
+            'status' => InvoiceStatus::Sent,
         ]);
         $this->client->update(['address' => null, 'postal_code' => null, 'city' => null]);
 
@@ -295,6 +298,8 @@ class SwissQrInvoiceServiceTest extends TestCase
         $this->assertSame('8004', $debtor->getPostalCode());
         $this->assertSame('Zürich', $debtor->getCity());
 
+        // Only a draft's copy is refreshed (back to draft as after a revert).
+        $invoice->update(['status' => InvoiceStatus::Draft]);
         $invoice = app(RefreshInvoiceCustomerSnapshotAction::class)->execute($invoice);
         $qrBill = $this->service->buildQrBill($invoice, $this->org);
 

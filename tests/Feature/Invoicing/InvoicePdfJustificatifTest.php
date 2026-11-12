@@ -10,6 +10,7 @@ use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Accounting\Services\JournalEntryReferences;
 use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Invoicing\Actions\CancelInvoiceAction;
 use App\Domains\Invoicing\Actions\CreateCreditNoteAction;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
@@ -100,6 +101,28 @@ class InvoicePdfJustificatifTest extends TestCase
 
         $reference = app(JournalEntryReferences::class)->for($invoice->journalEntry);
         $this->assertSame(route('invoices.justificatif.download', [$invoice, 'inline' => 1]), $reference?->documentUrl);
+    }
+
+    public function test_a_draft_shows_the_customer_as_it_is_today_and_finalizing_freezes_it(): void
+    {
+        $person = ContactPerson::query()->create(['contactable_type' => Contact::class, 'contactable_id' => $this->customer->id, 'first_name' => 'Jean', 'last_name' => 'Dupont']);
+        $draft = $this->draft('INV-PDF-030');
+        $draft->update(['contact_person_id' => $person->id]);
+        $this->customer->update(['address' => 'Neue Strasse 9']);
+        $person->update(['last_name' => 'Durand']);
+
+        $shown = $draft->fresh()->customerDetailsForDocument();
+        $this->assertSame('Neue Strasse 9', $shown['address']);
+        $this->assertSame('Jean Durand', $shown['attention']);
+
+        $invoice = $this->finalize($draft->fresh());
+        $this->assertSame('Neue Strasse 9', $invoice->fresh()->customer_snapshot['address']);
+        $this->assertSame('Jean Durand', $invoice->fresh()->customer_snapshot['attention']);
+        $this->assertSame($person->id, $invoice->fresh()->contact_person_id);
+
+        // The issued invoice keeps the address it was sent to.
+        $this->customer->update(['address' => 'Später 1']);
+        $this->assertSame('Neue Strasse 9', $invoice->fresh()->customerDetailsForDocument()['address']);
     }
 
     public function test_an_existing_justificatif_is_kept(): void

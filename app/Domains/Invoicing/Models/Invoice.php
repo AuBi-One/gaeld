@@ -147,13 +147,23 @@ class Invoice extends Model
     }
 
     /**
-     * The customer block of the invoice documents: the snapshot taken when the invoice was
-     * saved, or the live contact (with the invoice's contact person) for an old invoice without one.
+     * The customer block of the invoice documents. A draft shows the customer as it is today,
+     * with the invoice's contact person while that is still one of the customer's; finalizing
+     * freezes that as the snapshot (FinalizeInvoiceAction), which an issued invoice keeps. The
+     * live contact also serves an old invoice without a snapshot.
      *
      * @return array{name: string, attention?: string|null, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null}|null
      */
     public function customerDetailsForDocument(): ?array
     {
+        if ($this->status === InvoiceStatus::Draft && $this->customer !== null) {
+            $person = $this->contact_person_id === null
+                ? null
+                : $this->customer->contactPersons()->whereKey($this->contact_person_id)->first();
+
+            return $this->customer->toInvoiceSnapshot($person);
+        }
+
         return $this->customer_snapshot ?? $this->customer?->toInvoiceSnapshot($this->contactPerson);
     }
 
