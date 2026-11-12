@@ -7,6 +7,7 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
+use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Actions\PostPayrollAction;
 use App\Domains\Payroll\Actions\SendSalarySlipEmailAction;
 use App\Domains\Payroll\Contracts\SourceTaxServiceInterface;
@@ -130,6 +131,8 @@ class PostPayrollActionTest extends TestCase
         $slip->gross_salary = $grossSalary;
         $slip->net_salary = $netSalary;
         $slip->deductions = $deductions;
+        // Journal texts and the payday come from the organization (no database here).
+        $slip->setRelation('organization', new Organization(['locale' => 'en']));
 
         $employee = Mockery::mock(Employee::class)->makePartial();
         $employee->shouldReceive('fullName')->andReturn('John Doe');

@@ -24,6 +24,8 @@ const props = defineProps({
   payrollWritable: { type: Boolean, default: true },
   salarySlips: { type: Array, default: () => [] },
   certificateYears: { type: Array, default: () => [] },
+  // Labels of what a salary certificate still needs (refused until complete).
+  certificateMissing: { type: Array, default: () => [] },
 })
 
 
@@ -70,6 +72,10 @@ const salaryColumns = computed(() => [
             <div>
               <p class="text-[hsl(var(--muted-foreground))]">{{ t('ahv_number') }}</p>
               <p class="font-medium font-mono tracking-wider">{{ employee.ahv_number ?? '—' }}</p>
+            </div>
+            <div>
+              <p class="text-[hsl(var(--muted-foreground))]">{{ t('date_of_birth') }}</p>
+              <p class="font-medium">{{ employee.date_of_birth ? formatDate(employee.date_of_birth) : '—' }}</p>
             </div>
             <div>
               <p class="text-[hsl(var(--muted-foreground))]">{{ t('start_date') }}</p>
@@ -122,6 +128,9 @@ const salaryColumns = computed(() => [
             <FileText class="mr-2 h-4 w-4" />
             {{ t('download_salary_certificate', { year: certificateYear }) }}
           </Button>
+          <p v-if="certificateYears.length && certificateMissing.length" class="text-xs text-[hsl(var(--destructive))]">
+            {{ t('salary_certificate_missing_hint', { fields: certificateMissing.join(', ') }) }}
+          </p>
         </CardContent>
       </Card>
     </div>

@@ -26,9 +26,10 @@ class GeneratePayrollRunAction
     /**
      * @param  array<int, string>  $employeeIds  Optional subset of employee UUIDs to process. Empty array = all active employees.
      * @param  array<int, array{employee_id: string, unpaid_leave_days?: int|string, reimbursement_amount?: string|int|float, reimbursement_item_ids?: array<int, string>}>  $adjustments
+     * @param  string|null  $postingDate  Y-m-d the run's entries are posted on; null leaves it to the organization's payday
      * @return Collection<int, SalarySlip>
      */
-    public function execute(string $orgId, int $month, int $year, bool $shouldPost = false, array $employeeIds = [], array $adjustments = []): Collection
+    public function execute(string $orgId, int $month, int $year, bool $shouldPost = false, array $employeeIds = [], array $adjustments = [], ?string $postingDate = null): Collection
     {
         $employees = $this->employees($orgId, $month, $year, $employeeIds);
         $adjustmentsByEmployee = collect($adjustments)->keyBy('employee_id');
@@ -50,7 +51,7 @@ class GeneratePayrollRunAction
 
         // One transaction for the whole run: a calculation or posting error
         // for any employee leaves no slip and no entry of this run behind.
-        return DB::transaction(function () use ($employees, $month, $year, $shouldPost, $adjustmentsByEmployee, $items): Collection {
+        return DB::transaction(function () use ($employees, $month, $year, $shouldPost, $adjustmentsByEmployee, $items, $postingDate): Collection {
             $slips = collect();
             foreach ($employees as $employee) {
                 $exists = SalarySlip::where('employee_id', $employee->id)
@@ -64,7 +65,7 @@ class GeneratePayrollRunAction
 
                 $adjustment = $adjustmentsByEmployee->get($employee->id, []);
                 $resolved = $items[$employee->id];
-                $slip = DB::transaction(function () use ($employee, $month, $year, $shouldPost, $adjustment, $resolved): SalarySlip {
+                $slip = DB::transaction(function () use ($employee, $month, $year, $shouldPost, $adjustment, $resolved, $postingDate): SalarySlip {
                     $slip = $this->calculator->calculate(
                         $employee,
                         $month,
@@ -73,6 +74,7 @@ class GeneratePayrollRunAction
                         (string) ($adjustment['reimbursement_amount'] ?? '0.00'),
                         $resolved,
                     );
+                    $slip->posting_date = $postingDate !== null ? Carbon::parse($postingDate) : null;
                     $slip->save();
 
                     if ($shouldPost) {

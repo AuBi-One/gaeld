@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use Spatie\Activitylog\Support\LogOptions;
 
 /**
  * Employee record within an organization's payroll module.
@@ -26,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property string $last_name
  * @property string|null $email
  * @property string|null $ahv_number
+ * @property string|null $date_of_birth Y-m-d, encrypted at rest
  * @property string|null $address
  * @property string|null $postal_code
  * @property string|null $city
@@ -46,8 +48,8 @@ class Employee extends Model
 
     protected $appends = ['status'];
 
-    // ahv_number is hidden from array/JSON serialization; access explicitly only.
-    protected $hidden = ['ahv_number'];
+    // ahv_number and date_of_birth are hidden from array/JSON serialization; access explicitly only.
+    protected $hidden = ['ahv_number', 'date_of_birth'];
 
     protected $attributes = [
         'has_thirteenth_salary' => false,
@@ -65,6 +67,7 @@ class Employee extends Model
         'city',
         'country',
         'ahv_number',
+        'date_of_birth',
         'entry_date',
         'exit_date',
         'gross_salary',
@@ -91,7 +94,24 @@ class Employee extends Model
             'ahv_number' => 'encrypted',
             // IBAN is encrypted at rest — same rationale as ahv_number.
             'iban' => 'encrypted',
+            // Date of birth (Y-m-d string, validated on input): encrypted like the AHV number.
+            'date_of_birth' => 'encrypted',
         ];
+    }
+
+    /**
+     * Audit trail without the personal data kept encrypted at rest: the
+     * activity log (Settings > Activity log) would store the AHV number, IBAN
+     * and date of birth in clear text on every change.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logAll()
+            ->logExcept(['ahv_number', 'iban', 'date_of_birth'])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges()
+            ->setDescriptionForEvent(fn (string $event) => 'Employee '.$event);
     }
 
     /** @return BelongsTo<Organization, $this> */

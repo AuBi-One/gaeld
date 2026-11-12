@@ -43,6 +43,7 @@ class PayrollRunController extends Controller
         return Inertia::render('Payroll/Run', [
             'employees' => $employees,
             'fiscalYears' => $fiscalYears,
+            'defaultPayday' => $currentOrg->get()->payroll_payday,
             'withholdingTaxEnabled' => FeatureFlag::enabledForOrg('withholding_tax', $currentOrg->get()),
             'reimbursementItems' => $employees
                 ->mapWithKeys(fn (Employee $employee): array => [
@@ -98,6 +99,7 @@ class PayrollRunController extends Controller
             'month' => ['required', 'integer', 'min:1', 'max:12'],
             'year' => ['required', 'integer', 'min:2000'],
             'post' => ['boolean'],
+            'posting_date' => PayrollAdjustmentRules::postingDate($request),
             'employee_ids' => ['nullable', 'array', 'max:500'],
             'employee_ids.*' => [
                 'uuid',
@@ -114,6 +116,7 @@ class PayrollRunController extends Controller
             $validated['post'] ?? false,
             $validated['employee_ids'] ?? [],
             $validated['adjustments'] ?? [],
+            $validated['posting_date'] ?? null,
         );
 
         if ($request->wantsJson()) {

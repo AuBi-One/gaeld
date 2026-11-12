@@ -3,10 +3,12 @@
 namespace App\Domains\Payroll\Actions;
 
 use App\Domains\Organizations\Models\Organization;
+use App\Domains\Payroll\Exceptions\IncompleteSalaryCertificateException;
 use App\Domains\Payroll\Models\DeductionRate;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
 final class GenerateSalaryCertificateAction
@@ -16,6 +18,8 @@ final class GenerateSalaryCertificateAction
      *     employee: Employee,
      *     organization: Organization,
      *     year: int,
+     *     period_from: string,
+     *     period_to: string,
      *     months_covered: int,
      *     gross_salary: string,
      *     social_contributions: string,
@@ -38,6 +42,11 @@ final class GenerateSalaryCertificateAction
 
         $employee->loadMissing('organization');
 
+        $missing = self::missingData($employee);
+        if ($missing !== []) {
+            throw new IncompleteSalaryCertificateException($missing);
+        }
+
         $slips = SalarySlip::query()
             ->where('employee_id', $employee->id)
             ->where('organization_id', $employee->organization_id)
@@ -59,6 +68,7 @@ final class GenerateSalaryCertificateAction
             'employee' => $employee,
             'organization' => $employee->organization,
             'year' => $year,
+            ...$this->period($employee, $year),
             'months_covered' => $slips->pluck('period_month')->unique()->count(),
             'gross_salary' => $grossSalary,
             'social_contributions' => $boxes['9'],
@@ -72,6 +82,58 @@ final class GenerateSalaryCertificateAction
             'net_salary' => $netSalary,
             'total_paid' => $totalPaid,
             'employer_charges' => $this->sumDeduction($slips, 'total_employer'),
+        ];
+    }
+
+    /**
+     * Labels of the data a certificate must show that the employee or the
+     * employer record still lacks (empty when it can be issued): the
+     * employee's AHV number, date of birth and address, the employer's
+     * address.
+     *
+     * @return list<string>
+     */
+    public static function missingData(Employee $employee): array
+    {
+        $filled = fn (mixed $value): bool => $value !== null && trim((string) $value) !== '';
+        $organization = $employee->organization;
+        $present = [
+            'app.ahv_number' => $filled($employee->ahv_number),
+            'app.date_of_birth' => $filled($employee->date_of_birth),
+            'app.address' => $filled($employee->address),
+            'app.postal_code' => $filled($employee->postal_code),
+            'app.city' => $filled($employee->city),
+            'app.salary_certificate_employer_address' => $organization !== null
+                && $filled($organization->address) && $filled($organization->postal_code) && $filled($organization->city),
+        ];
+
+        $missing = [];
+        foreach ($present as $label => $isPresent) {
+            if (! $isPresent) {
+                $missing[] = (string) __($label);
+            }
+        }
+
+        return $missing;
+    }
+
+    /**
+     * The employment period within the year (certificate box "from/to"): from
+     * the entry date if the employee joined during the year, to the exit date
+     * if they left during it.
+     *
+     * @return array{period_from: string, period_to: string}
+     */
+    private function period(Employee $employee, int $year): array
+    {
+        $yearStart = CarbonImmutable::create($year, 1, 1);
+        $yearEnd = CarbonImmutable::create($year, 12, 31);
+        $entry = CarbonImmutable::parse($employee->entry_date);
+        $exit = $employee->exit_date !== null ? CarbonImmutable::parse($employee->exit_date) : null;
+
+        return [
+            'period_from' => ($entry->greaterThan($yearStart) ? $entry : $yearStart)->toDateString(),
+            'period_to' => ($exit !== null && $exit->lessThan($yearEnd) ? $exit : $yearEnd)->toDateString(),
         ];
     }
 

@@ -9,10 +9,13 @@ use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
+use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Contracts\ReimbursementSourceInterface;
 use App\Domains\Payroll\Contracts\SourceTaxServiceInterface;
+use App\Domains\Payroll\Exceptions\PostingDateOutsidePeriodException;
 use App\Domains\Payroll\Models\SalarySlip;
 use App\Domains\Payroll\Services\NullReimbursementSource;
+use App\Domains\Payroll\Services\PayrollPeriod;
 use App\Support\Money;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -52,7 +55,16 @@ class PostPayrollAction
         $orgId = $slip->organization_id;
 
         $employee = $slip->employee;
-        $description = "Salary {$employee->fullName()} — {$slip->period_month}/{$slip->period_year}";
+        // Explicitly, not lazily: lazy loading is refused outside production.
+        $organization = $slip->relationLoaded('organization')
+            ? $slip->organization
+            : Organization::query()->find($orgId);
+        // Journal texts in the organization's language, not the language of
+        // whoever posts: they are written once and read for years.
+        $locale = $organization?->locale ?: app()->getLocale();
+        $name = $employee->fullName();
+        $text = fn (string $key, array $replace = []): string => __('app.'.$key, $replace + ['name' => $name], $locale);
+        $description = $text('payroll_journal_description', ['period' => "{$slip->period_month}/{$slip->period_year}"]);
 
         // Resolve accounts
         $salaryAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::SALARIES);
@@ -68,7 +80,7 @@ class PostPayrollAction
             accountId: (string) $salaryAccount->id,
             debit: $slip->gross_salary,
             credit: '0',
-            description: "Gross salary: {$employee->fullName()}",
+            description: $text('payroll_journal_gross_salary'),
         );
 
         // Debit: Employer social charges
@@ -78,7 +90,7 @@ class PostPayrollAction
                 accountId: (string) $socialChargesAccount->id,
                 debit: $totalEmployer,
                 credit: '0',
-                description: "Employer social charges: {$employee->fullName()}",
+                description: $text('payroll_journal_employer_charges'),
             );
         }
 
@@ -87,7 +99,7 @@ class PostPayrollAction
             accountId: (string) $bankAccount->id,
             debit: '0',
             credit: $slip->net_salary,
-            description: "Net salary paid: {$employee->fullName()}",
+            description: $text('payroll_journal_net_salary'),
         );
 
         // Itemised reimbursements are re-checked against their source (still
@@ -108,7 +120,7 @@ class PostPayrollAction
                 accountId: (string) $this->ledgerQuery->resolveAccount($orgId, (string) $accountCode)->id,
                 debit: array_reduce($group, fn (string $sum, array $item): string => Money::add($sum, $item['amount']), Money::zero()),
                 credit: '0',
-                description: mb_strimwidth("Expense reimbursement: {$employee->fullName()} — ".implode(', ', array_column($group, 'label')), 0, 255, '…'),
+                description: mb_strimwidth($text('payroll_journal_reimbursement').' — '.implode(', ', array_column($group, 'label')), 0, 255, '…'),
             );
         }
         if (Money::isPositive($reimbursementAmount)) {
@@ -117,7 +129,7 @@ class PostPayrollAction
                 accountId: (string) $reimbursementAccount->id,
                 debit: $reimbursementAmount,
                 credit: '0',
-                description: "Expense reimbursement: {$employee->fullName()}",
+                description: $text('payroll_journal_reimbursement'),
             );
         }
 
@@ -128,7 +140,7 @@ class PostPayrollAction
         // by resolved account, not by code, keeps the entry balanced however
         // many distinct deduction codes or accounts are involved: every code
         // present in `deductions` lands in exactly one credit line here.
-        foreach ($this->creditsByAccount($slip) as $accountId => $credit) {
+        foreach ($this->creditsByAccount($slip, $locale) as $accountId => $credit) {
             $lines[] = new JournalLineData(
                 accountId: (string) $accountId,
                 debit: '0',
@@ -143,7 +155,7 @@ class PostPayrollAction
                 accountId: (string) $sourceTaxAccount->id,
                 debit: '0',
                 credit: $sourceTaxAmount,
-                description: 'Withholding tax payable',
+                description: $text('payroll_journal_withholding_tax'),
             );
         }
 
@@ -158,7 +170,7 @@ class PostPayrollAction
         $monthPad = str_pad((string) $slip->period_month, 2, '0', STR_PAD_LEFT);
 
         $entry = new JournalEntryData(
-            date: Carbon::create($slip->period_year, $slip->period_month)->endOfMonth()->toDateString(),
+            date: self::postingDate($slip, $organization),
             // A slip unposted and posted again: the reversed entry keeps the first reference.
             reference: $this->ledgerQuery->nextReferenceAfterReversals($orgId, "PAY-{$tag}-{$slip->period_year}-{$monthPad}"),
             description: $description,
@@ -185,6 +197,35 @@ class PostPayrollAction
     }
 
     /**
+     * The date the slip's entry is posted on: the slip's own posting date,
+     * else the organization's payday in the slip's month (a payday past the
+     * end of a short month is its last day), else the month's last day, as
+     * before posting dates existed.
+     *
+     * @throws PostingDateOutsidePeriodException when the slip's date is outside its month
+     */
+    public static function postingDate(SalarySlip $slip, ?Organization $organization): string
+    {
+        $monthStart = Carbon::create($slip->period_year, $slip->period_month, 1);
+
+        if ($slip->posting_date !== null) {
+            $date = $slip->posting_date->toDateString();
+            if (! PayrollPeriod::contains($date, $slip->period_month, $slip->period_year)) {
+                throw new PostingDateOutsidePeriodException(__('app.payroll_posting_date_outside_period'));
+            }
+
+            return $date;
+        }
+
+        $payday = $organization?->payroll_payday;
+        if ($payday === null || $payday < 1) {
+            return $monthStart->copy()->endOfMonth()->toDateString();
+        }
+
+        return $monthStart->copy()->day(min($payday, $monthStart->daysInMonth))->toDateString();
+    }
+
+    /**
      * Every per-line deduction amount on the slip, grouped by the
      * chart-of-accounts entry it should credit: the account mapped on the
      * rate line the slip was calculated with (its snapshot), never the
@@ -192,7 +233,7 @@ class PostPayrollAction
      *
      * @return array<int, array{amount: string, description: string}>
      */
-    private function creditsByAccount(SalarySlip $slip): array
+    private function creditsByAccount(SalarySlip $slip, string $locale): array
     {
         $orgId = $slip->organization_id;
         $lines = $slip->rateLines();
@@ -225,7 +266,7 @@ class PostPayrollAction
         return array_map(
             fn (array $credit): array => [
                 'amount' => $credit['amount'],
-                'description' => 'Social charges: '.implode(', ', $credit['names']),
+                'description' => __('app.payroll_journal_social_charges', ['names' => implode(', ', $credit['names'])], $locale),
             ],
             $credits,
         );

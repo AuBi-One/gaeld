@@ -56,10 +56,16 @@ class PayrollFlowTest extends TestCase
             'last_name' => 'Muster',
             'email' => 'max@example.com',
             'ahv_number' => '756.1234.5678.90',
+            // Required on a salary certificate.
+            'date_of_birth' => '1990-05-17',
+            'address' => 'Rue du Lac 1',
+            'postal_code' => '1003',
+            'city' => 'Lausanne',
             'entry_date' => '2025-01-01',
             'gross_salary' => '6000.00',
             'is_active' => true,
         ]);
+        $this->org->update(['address' => 'Avenue de la Gare 2', 'postal_code' => '1003', 'city' => 'Lausanne']);
     }
 
     #[Test]

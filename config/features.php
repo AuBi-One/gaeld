@@ -18,6 +18,12 @@ return [
     // CE features (enabled by default)
     'bank_import' => env('FEATURE_BANK_IMPORT', true),
 
+    // Public self-registration via /register (default on, as upstream). Off
+    // closes /register server-side and hides the link on the login page;
+    // invited people still get in through their invitation link, and /setup
+    // still provisions an empty installation.
+    'self_registration' => env('FEATURE_SELF_REGISTRATION', true),
+
     // Per-organization toggleable modules — defaults preserve current behavior.
     // Owners override these from Settings → Modules.
     'budgets' => env('FEATURE_BUDGETS', true),

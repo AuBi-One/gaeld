@@ -2,6 +2,8 @@
 
 namespace App\Domains\Payroll\Requests;
 
+use App\Domains\Payroll\Models\SalarySlip;
+use App\Domains\Payroll\Services\PayrollPeriod;
 use Carbon\Carbon;
 use Closure;
 use Illuminate\Http\Request;
@@ -32,6 +34,51 @@ final class PayrollAdjustmentRules
                         'attribute' => __('app.unpaid_leave_days'),
                         'max' => $daysInMonth,
                     ]));
+                }
+            },
+        ];
+    }
+
+    /**
+     * The date a run's entries are posted on: within the payroll month (a
+     * typo would otherwise land the salary in an already settled VAT period,
+     * which the ledger does not refuse).
+     *
+     * @return array<int, mixed>
+     */
+    public static function postingDate(Request $request): array
+    {
+        return [
+            // bail: the closure parses the date, so it must not see a malformed one.
+            'bail',
+            'nullable',
+            'date_format:Y-m-d',
+            function (string $attribute, mixed $value, Closure $fail) use ($request): void {
+                $month = (int) $request->input('month');
+                $year = (int) $request->input('year');
+
+                if ($month >= 1 && $month <= 12 && $year >= 1 && ! PayrollPeriod::contains((string) $value, $month, $year)) {
+                    $fail(__('app.payroll_posting_date_outside_period'));
+                }
+            },
+        ];
+    }
+
+    /**
+     * The same bound for a slip that knows its own period.
+     *
+     * @return array<int, mixed>
+     */
+    public static function postingDateForSlip(SalarySlip $slip): array
+    {
+        return [
+            // bail: the closure parses the date, so it must not see a malformed one.
+            'bail',
+            'nullable',
+            'date_format:Y-m-d',
+            function (string $attribute, mixed $value, Closure $fail) use ($slip): void {
+                if (! PayrollPeriod::contains((string) $value, $slip->period_month, $slip->period_year)) {
+                    $fail(__('app.payroll_posting_date_outside_period'));
                 }
             },
         ];

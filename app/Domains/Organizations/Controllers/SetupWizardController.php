@@ -16,7 +16,9 @@ use Inertia\Response;
 /**
  * Initial setup wizard: creates the first user and organization.
  *
- * Only accessible when no organization exists in the database.
+ * Only accessible while no organization has ever existed: soft-deleted ones
+ * count, or deleting the last organization would reopen the wizard to anyone
+ * and let them create a new owner account.
  * Disabled in SaaS mode — tenants must use /signup instead.
  */
 class SetupWizardController extends Controller
@@ -28,7 +30,7 @@ class SetupWizardController extends Controller
         }
 
         // Redirect if already set up
-        if (Organization::exists()) {
+        if (self::isSetUp()) {
             return redirect()->route('dashboard');
         }
 
@@ -41,7 +43,7 @@ class SetupWizardController extends Controller
             return redirect()->route('signup');
         }
 
-        if (Organization::exists()) {
+        if (self::isSetUp()) {
             return redirect()->route('dashboard');
         }
 
@@ -52,5 +54,10 @@ class SetupWizardController extends Controller
 
         return redirect()->route('onboarding.wizard')
             ->with('success', __('app.welcome_setup'));
+    }
+
+    private static function isSetUp(): bool
+    {
+        return Organization::withTrashed()->exists();
     }
 }
