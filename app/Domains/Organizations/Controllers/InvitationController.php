@@ -11,6 +11,7 @@ use App\Domains\Users\Models\User;
 use App\Domains\Users\Services\UserService;
 use App\Http\Controllers\Controller;
 use Illuminate\Auth\Events\Registered;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
@@ -92,7 +93,7 @@ class InvitationController extends Controller
         }
 
         abort_if(
-            $user->email !== $invitation->email,
+            ! InvitationService::sameAddress($user->email, $invitation->email),
             403,
             __('app.invitation_wrong_account'),
         );
@@ -149,19 +150,25 @@ class InvitationController extends Controller
         $locale = $request->session()->get('guest_locale') ?: ($invitation->organization->locale ?: app()->getLocale());
 
         // Account and membership together, or neither.
-        [$user, $organization] = DB::transaction(function () use ($userService, $validated, $invitation, $locale, $token): array {
-            $user = $userService->create(new CreateUserData(
-                name: $validated['name'],
-                email: $invitation->email,
-                password: $validated['password'],
-                locale: $locale,
-                emailVerifiedAt: now(),
-            ));
-            // Joining an organization someone else set up: no owner onboarding.
-            $user->forceFill(['onboarding_completed_at' => now()])->save();
+        try {
+            [$user, $organization] = DB::transaction(function () use ($userService, $validated, $invitation, $locale, $token): array {
+                $user = $userService->create(new CreateUserData(
+                    name: $validated['name'],
+                    email: $invitation->email,
+                    password: $validated['password'],
+                    locale: $locale,
+                    emailVerifiedAt: now(),
+                ));
+                // Joining an organization someone else set up: no owner onboarding.
+                $user->forceFill(['onboarding_completed_at' => now()])->save();
 
-            return [$user, $this->invitationService->accept($token)];
-        });
+                return [$user, $this->invitationService->accept($token)];
+            });
+        } catch (UniqueConstraintViolationException) {
+            // A second submit (double click, two tabs) lost the race to the first:
+            // the account exists now, so the accept link asks to sign in.
+            return redirect()->route('invitations.accept', $token);
+        }
 
         event(new Registered($user));
         Auth::login($user);

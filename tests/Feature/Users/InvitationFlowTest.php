@@ -243,6 +243,65 @@ class InvitationFlowTest extends TestCase
         $this->assertDatabaseMissing('users', ['email' => 'late@example.com']);
     }
 
+    public function test_an_invitation_typed_in_another_case_reaches_the_existing_account(): void
+    {
+        $user = User::factory()->create(['email' => 'Known@Example.com', 'password' => 'password123']);
+        $plainToken = $this->createInvitation('known@example.com');
+
+        $this->get("/invitations/{$plainToken}/accept")
+            ->assertRedirect('/login')
+            ->assertSessionHas('url.intended', route('invitations.accept', $plainToken));
+
+        $this->post('/login', ['email' => 'Known@Example.com', 'password' => 'password123'])
+            ->assertRedirect(route('invitations.accept', $plainToken));
+        $this->assertAuthenticatedAs($user);
+
+        $this->get("/invitations/{$plainToken}/accept")->assertRedirect('/dashboard');
+        $this->assertDatabaseHas('organization_users', [
+            'organization_id' => $this->organization->id,
+            'user_id' => $user->id,
+        ]);
+    }
+
+    public function test_a_second_submit_that_loses_the_race_is_sent_to_accept_not_a_500(): void
+    {
+        $plainToken = $this->createInvitation('race@example.com');
+        // The first submit's account appears between the existence check and the insert.
+        $raced = false;
+        User::creating(function () use (&$raced): void {
+            if (! $raced) {
+                $raced = true;
+                User::factory()->create(['email' => 'race@example.com']);
+            }
+        });
+
+        $this->post("/invitations/{$plainToken}/register", [
+            'name' => 'Second Tab',
+            'password' => 'Correct-Horse-9-Battery',
+            'password_confirmation' => 'Correct-Horse-9-Battery',
+        ])->assertRedirect("/invitations/{$plainToken}/accept");
+
+        $this->assertGuest();
+        $this->assertNull(OrganizationInvitation::where('email', 'race@example.com')->first()->accepted_at);
+    }
+
+    public function test_an_invitation_to_a_deleted_organization_is_invalid(): void
+    {
+        $plainToken = $this->createInvitation('gone@example.com');
+        $this->organization->delete();
+
+        $this->get("/invitations/{$plainToken}/accept")
+            ->assertRedirect('/login')->assertSessionHas('error', __('app.invitation_invalid'));
+        $this->get("/invitations/{$plainToken}/register")->assertRedirect('/login');
+        $this->post("/invitations/{$plainToken}/register", [
+            'name' => 'Too Late',
+            'password' => 'Correct-Horse-9-Battery',
+            'password_confirmation' => 'Correct-Horse-9-Battery',
+        ])->assertRedirect('/login');
+
+        $this->assertDatabaseMissing('users', ['email' => 'gone@example.com']);
+    }
+
     public function test_signed_in_user_is_sent_from_the_password_form_to_accept(): void
     {
         $plainToken = $this->createInvitation('someone@example.com');

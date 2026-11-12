@@ -93,18 +93,28 @@ class InvitationService
         return OrganizationInvitation::query()
             ->where('token', hash('sha256', $token))
             ->whereNull('accepted_at')
+            // An invitation to a deleted organization is no longer valid.
+            ->whereHas('organization')
             ->with('organization')
             ->first();
+    }
+
+    /** E-mail addresses compared without regard to case. */
+    public static function sameAddress(string $a, string $b): bool
+    {
+        return mb_strtolower($a) === mb_strtolower($b);
     }
 
     public function accept(string $token): Organization
     {
         $invitation = OrganizationInvitation::where('token', hash('sha256', $token))
             ->whereNull('accepted_at')
+            ->whereHas('organization')
             ->firstOrFail();
 
         // Defense-in-depth: verify the authenticated user's email matches the invitation
-        if (auth()->check() && auth()->user()->email !== $invitation->email) {
+        // (case-insensitive: the invited address may be typed differently from the account's)
+        if (auth()->check() && ! self::sameAddress(auth()->user()->email, $invitation->email)) {
             abort(403, __('app.invitation_wrong_account'));
         }
 
@@ -114,7 +124,7 @@ class InvitationService
             ]);
         }
 
-        $user = User::where('email', $invitation->email)->first();
+        $user = User::query()->whereRaw('LOWER(email) = ?', [mb_strtolower($invitation->email)])->first();
 
         if (! $user) {
             throw ValidationException::withMessages([
