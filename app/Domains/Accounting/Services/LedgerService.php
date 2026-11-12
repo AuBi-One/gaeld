@@ -208,7 +208,7 @@ class LedgerService
             $reversalEntry = $this->createDraft($original->organization_id, new JournalEntryData(
                 date: $date ?? now()->toDateString(),
                 reference: $reversalReference,
-                description: $description ?? 'Reversal of '.$original->reference,
+                description: $description ?? mb_strimwidth('Reversal of '.((string) $original->reference !== '' ? $original->reference : $original->date->toDateString().' '.$original->description), 0, 255),
                 lines: $lines,
                 type: $type ?? 'reversal',
             ));

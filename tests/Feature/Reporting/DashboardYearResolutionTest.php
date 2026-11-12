@@ -150,6 +150,15 @@ class DashboardYearResolutionTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_metrics_are_cached_per_locale(): void
+    {
+        app()->setLocale('de');
+        $this->service->metrics($this->org->id);
+
+        $this->assertTrue(Cache::tags(["org:{$this->org->id}:dashboard"])->has("dashboard_metrics:{$this->org->id}:de"));
+        $this->assertFalse(Cache::tags(["org:{$this->org->id}:dashboard"])->has("dashboard_metrics:{$this->org->id}:fr"));
+    }
+
     public function test_display_year_falls_back_to_current_year_when_no_activity(): void
     {
         Carbon::setTestNow('2026-04-12 10:00:00');

@@ -187,7 +187,7 @@ class JournalEntryApiController extends Controller
         return $this->executeMutation(
             $request,
             $currentOrganization->id(),
-            'REV-'.(string) $journalEntry->reference,
+            'REV-'.((string) $journalEntry->reference !== '' ? $journalEntry->reference : $journalEntry->id),
             $idempotency,
             function () use ($request, $journalEntry, $ledger): JsonResponse {
                 $entry = $ledger->reverseEntry(

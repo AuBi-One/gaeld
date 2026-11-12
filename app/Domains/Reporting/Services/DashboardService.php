@@ -44,7 +44,8 @@ class DashboardService
     public function metrics(string $organizationId): array
     {
         return Cache::tags(["org:{$organizationId}:dashboard"])->remember(
-            "dashboard_metrics:{$organizationId}",
+            // Labels inside (account names) are translated: one entry per locale.
+            "dashboard_metrics:{$organizationId}:".app()->getLocale(),
             300, // 5 minutes
             fn () => $this->computeMetrics($organizationId)
         );

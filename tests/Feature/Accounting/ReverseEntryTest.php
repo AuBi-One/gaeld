@@ -61,6 +61,7 @@ class ReverseEntryTest extends TestCase
         $this->assertNull($two->reference);
         $this->assertSame($first->id, $one->reversal_of_entry_id);
         $this->assertSame($second->id, $two->reversal_of_entry_id);
+        $this->assertStringStartsWith('Reversal of '.$first->date->toDateString(), $one->description);
     }
 
     public function test_a_full_length_line_text_is_shortened_in_the_reversal(): void
