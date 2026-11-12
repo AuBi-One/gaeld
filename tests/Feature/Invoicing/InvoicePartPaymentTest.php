@@ -134,20 +134,90 @@ class InvoicePartPaymentTest extends TestCase
         app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Skonto');
     }
 
-    public function test_an_invoice_with_a_credit_note_is_not_written_off(): void
+    public function test_an_invoice_covered_by_a_credit_note_is_settled_without_a_booking(): void
     {
         $invoice = $this->finalizedInvoice('INV-WO-CN');
-        $creditNote = app(CreateCreditNoteAction::class)->execute($invoice->fresh());
-        app(FinalizeInvoiceAction::class)->execute($creditNote->fresh());
+        app(FinalizeInvoiceAction::class)->execute(app(CreateCreditNoteAction::class)->execute($invoice->fresh())->fresh());
+        $entries = JournalEntry::count();
 
-        try {
-            app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Verlust');
-            $this->fail('The rest was written off after a credit note.');
-        } catch (InvalidPaymentException $e) {
-            $this->assertSame(__('app.write_off_has_credit_note'), $e->getMessage());
-        }
+        $response = $this->actAsOrg()->post(route('invoices.writeOff', $invoice), ['date' => now()->toDateString(), 'reason' => 'Gutschrift']);
 
+        $response->assertSessionHas('success', __('app.write_off_settled_by_credit_note'));
+        $this->assertSame(InvoiceStatus::Paid, $invoice->fresh()->status);
+        $this->assertSame($entries, JournalEntry::count());
+        $this->assertSame(0, $invoice->payments()->count());
         $this->assertSame('0.00', $this->balance('1100'));
+    }
+
+    public function test_a_partial_credit_note_and_the_rest_paid_settle_the_invoice(): void
+    {
+        $invoice = $this->finalizedInvoice('INV-WO-PCN'); // 1621.50
+        $this->partialCreditNote($invoice, 2); // 2 of 10 hours: 324.30
+        $this->pay($invoice->fresh(), '1297.20');
+        $this->assertSame('0.00', $this->balance('1100'));
+        $this->assertSame(InvoiceStatus::Sent, $invoice->fresh()->status);
+
+        $this->assertNull(app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Gutschrift'));
+
+        $this->assertSame(InvoiceStatus::Paid, $invoice->fresh()->status);
+        $this->assertSame('0.00', $this->balance('1100'));
+    }
+
+    public function test_after_a_partial_credit_note_only_the_net_rest_is_written_off(): void
+    {
+        $invoice = $this->finalizedInvoice('INV-WO-PCN2'); // 1621.50
+        $this->partialCreditNote($invoice, 2); // 324.30
+        $this->pay($invoice->fresh(), '1275.70'); // 21.50 left after the credit note
+
+        $writeOff = app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Skonto');
+
+        $this->assertSame('21.50', (string) $writeOff->amount);
+        $vat = VatEntry::where('journal_entry_id', $writeOff->journal_entry_id)->sole();
+        $this->assertSame('-1.61', (string) $vat->vat_amount);
+        $this->assertSame('-19.89', (string) $vat->base_amount);
+        $this->assertSame('0.00', $this->balance('1100'));
+        // Invoice 121.50, credit note -24.30, write-off -1.61.
+        $this->assertSame('95.59', Money::absoluteAmount($this->balance('2200')));
+        $this->assertSame(InvoiceStatus::Paid, $invoice->fresh()->status);
+    }
+
+    public function test_cancelling_the_partial_credit_note_of_a_settled_invoice_opens_it_again(): void
+    {
+        $invoice = $this->finalizedInvoice('INV-WO-PCN3'); // 1621.50
+        $creditNote = $this->partialCreditNote($invoice, 2); // 324.30
+        $this->pay($invoice->fresh(), '1297.20');
+        app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Gutschrift');
+        $this->assertSame(InvoiceStatus::Paid, $invoice->fresh()->status);
+
+        app(CancelInvoiceAction::class)->execute($creditNote->fresh());
+
+        $this->assertSame(InvoiceStatus::Sent, $invoice->fresh()->status);
+        $this->assertSame('324.30', $invoice->fresh()->amountDue());
+        $this->assertSame('324.30', $this->balance('1100'));
+    }
+
+    public function test_cancelling_the_full_credit_note_of_a_settled_invoice_opens_it_again(): void
+    {
+        $invoice = $this->finalizedInvoice('INV-WO-FCN');
+        $invoice->update(['due_date' => now()->subDay()->toDateString()]);
+        $creditNote = app(FinalizeInvoiceAction::class)->execute(app(CreateCreditNoteAction::class)->execute($invoice->fresh())->fresh());
+        app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Gutschrift');
+        $this->assertSame(InvoiceStatus::Paid, $invoice->fresh()->status);
+
+        app(CancelInvoiceAction::class)->execute($creditNote->fresh());
+
+        $this->assertSame(InvoiceStatus::Overdue, $invoice->fresh()->status);
+        $this->assertSame('1621.50', $invoice->fresh()->amountDue());
+        $this->assertSame('1621.50', $this->balance('1100'));
+    }
+
+    private function partialCreditNote(Invoice $invoice, int $hours): Invoice
+    {
+        $creditNote = app(CreateCreditNoteAction::class)->execute($invoice->fresh());
+        $creditNote->lines()->first()->update(['quantity' => $hours, 'amount' => Money::negate(Money::multiply('150.00', (string) $hours)), 'vat_amount' => Money::negate(Money::percentage(Money::multiply('150.00', (string) $hours), '8.1'))]);
+        $creditNote->recalculate();
+
+        return app(FinalizeInvoiceAction::class)->execute($creditNote->fresh());
     }
 
     public function test_a_migrated_invoice_without_vat_entries_gets_none_on_its_write_off(): void

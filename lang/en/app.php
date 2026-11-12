@@ -1135,7 +1135,7 @@ return [
     'write_off_recorded' => 'Rest written off. The invoice is settled.',
     'write_off_rest' => 'Write off rest',
     'invoice_delete_closed_period' => 'An entry of this invoice (:date) lies in a settled VAT period or a closed fiscal year: it cannot be deleted.',
-    'write_off_has_credit_note' => 'A credit note was issued for this invoice: its rest cannot be written off as well.',
+    'write_off_settled_by_credit_note' => 'Nothing left to write off: payments and credit notes cover the invoice. It is marked as paid, without a booking.',
     'write_off_hint' => 'For a rest that will not be paid: cash discount, rounding or a loss. Gäld books it as a reduction of the invoice\'s revenue and takes its share of VAT off the output tax, in the VAT period of the date.',
     'write_off_reason' => 'Reason',
     'write_off_reason_placeholder' => 'e.g. 2% cash discount, rounding, bad debt',

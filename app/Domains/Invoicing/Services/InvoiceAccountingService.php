@@ -406,11 +406,13 @@ class InvoiceAccountingService
      * The VAT share leaves the output tax of the VAT period of $date, as a reduction of the
      * consideration does; with the net tax rate method the period's settlement then moves the
      * lower 2200 balance. Recorded as a payment of the kind "write-off", so the invoice counts as
-     * settled everywhere. Only for an invoice in the ledger currency.
+     * settled everywhere. Only for an invoice in the ledger currency. The rest is the open amount
+     * less the posted credit notes for the invoice; when they cover it, the invoice is marked paid
+     * without a booking and null is returned.
      */
-    public function writeOffRemainder(Invoice $invoice, string $date, string $reason): InvoicePayment
+    public function writeOffRemainder(Invoice $invoice, string $date, string $reason): ?InvoicePayment
     {
-        return DB::transaction(function () use ($invoice, $date, $reason): InvoicePayment {
+        return DB::transaction(function () use ($invoice, $date, $reason): ?InvoicePayment {
             $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
             $orgId = $invoice->organization_id;
             if ($invoice->type !== InvoiceType::Invoice
@@ -421,17 +423,13 @@ class InvoiceAccountingService
             if (! Money::isPositive($rest)) {
                 throw new InvalidPaymentException(__('app.write_off_nothing_open'));
             }
-            // A credit note already reduced the revenue but not the open amount: writing the rest
-            // off as well would reduce it twice.
-            $hasCreditNote = Invoice::query()->withoutGlobalScopes()
-                ->where('organization_id', $orgId)
-                ->where('related_invoice_id', $invoice->id)
-                ->where('type', InvoiceType::CreditNote)
-                ->whereNotNull('journal_entry_id')
-                ->whereNotIn('status', [InvoiceStatus::Draft, InvoiceStatus::Cancelled])
-                ->exists();
-            if ($hasCreditNote) {
-                throw new InvalidPaymentException(__('app.write_off_has_credit_note'));
+            // A credit note already reduced revenue, VAT and the receivable, but not the invoice's
+            // open amount: only what it leaves is written off. Nothing left: the invoice is settled.
+            $rest = Money::subtract($rest, $invoice->creditedByCreditNotes());
+            if (! Money::isPositive($rest)) {
+                $invoice->update(['status' => InvoiceStatus::Paid]);
+
+                return null;
             }
             $invoice->load('lines.vatRate', 'organization');
             $ledgerCurrency = strtoupper((string) ($invoice->organization->currency ?: 'CHF'));

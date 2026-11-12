@@ -1078,7 +1078,7 @@ return [
     'write_off_recorded' => 'Solde passé en perte. La facture est réglée.',
     'write_off_rest' => 'Passer le solde en perte',
     'invoice_delete_closed_period' => 'Une écriture de cette facture (:date) se trouve dans une période TVA décomptée ou un exercice clôturé : elle ne peut pas être supprimée.',
-    'write_off_has_credit_note' => 'Une note de crédit a été émise pour cette facture : son solde ne peut pas en plus être passé en perte.',
+    'write_off_settled_by_credit_note' => 'Plus rien à passer en perte : les paiements et les notes de crédit couvrent la facture. Elle est marquée comme payée, sans écriture.',
     'write_off_hint' => 'Pour un solde qui ne sera pas payé : escompte, arrondi ou perte. Gäld le comptabilise en diminution du produit de la facture et retire sa part de TVA de l\'impôt dû, dans la période TVA de la date.',
     'write_off_reason' => 'Motif',
     'write_off_reason_placeholder' => 'p. ex. escompte 2 %, arrondi, perte sur débiteur',

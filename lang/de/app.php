@@ -1082,7 +1082,7 @@ return [
     'write_off_recorded' => 'Restbetrag ausgebucht. Die Rechnung ist erledigt.',
     'write_off_rest' => 'Rest ausbuchen',
     'invoice_delete_closed_period' => 'Eine Buchung dieser Rechnung (:date) liegt in einer abgerechneten MWST-Periode oder einem abgeschlossenen Geschäftsjahr: sie lässt sich nicht löschen.',
-    'write_off_has_credit_note' => 'Zu dieser Rechnung wurde eine Gutschrift erstellt: ihr Rest lässt sich nicht zusätzlich ausbuchen.',
+    'write_off_settled_by_credit_note' => 'Nichts mehr auszubuchen: Zahlungen und Gutschriften decken die Rechnung. Sie ist als bezahlt markiert, ohne Buchung.',
     'write_off_hint' => 'Für einen Rest, der nicht mehr bezahlt wird: Skonto, Rundung oder ein Verlust. Gäld bucht ihn als Minderung des Erlöses der Rechnung und nimmt den MWST-Anteil aus der geschuldeten Steuer, in der MWST-Periode des Datums.',
     'write_off_reason' => 'Grund',
     'write_off_reason_placeholder' => 'z. B. Skonto 2 %, Rundung, Forderungsverlust',
