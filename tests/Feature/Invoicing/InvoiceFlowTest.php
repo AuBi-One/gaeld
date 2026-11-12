@@ -130,6 +130,18 @@ class InvoiceFlowTest extends TestCase
         ));
     }
 
+    public function test_a_percentage_discount_is_saved_and_reduces_the_total(): void
+    {
+        $invoice = $this->createInvoice([], [
+            ['description' => 'Workshop', 'quantity' => 2, 'unit_price' => 1000, 'vat_rate_id' => $this->vatRate->id],
+            ['type' => 'discount', 'discount_type' => 'percentage', 'description' => 'Rabatt', 'quantity' => 1, 'unit_price' => 10, 'vat_rate_id' => $this->vatRate->id],
+        ]);
+
+        $this->assertSame('1800.00', (string) $invoice->subtotal);
+        $this->assertSame('145.80', (string) $invoice->vat_amount);
+        $this->assertSame('1945.80', (string) $invoice->total);
+    }
+
     public function test_reverse_charge_requires_an_eu_vat_customer_and_excludes_swiss_vat(): void
     {
         $this->customer->update([
