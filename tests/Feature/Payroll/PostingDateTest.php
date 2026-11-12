@@ -157,6 +157,22 @@ class PostingDateTest extends TestCase
         $this->assertNull($other->fresh()->posted_at);
     }
 
+    public function test_a_malformed_posting_date_is_a_validation_error_on_every_endpoint(): void
+    {
+        $this->actAsOrg()->postJson(route('payroll.run.generate'), ['month' => 3, 'year' => 2026, 'posting_date' => 'abc'])
+            ->assertUnprocessable()->assertJsonValidationErrors('posting_date');
+
+        $this->actAsOrg()->postJson(route('payroll.salarySlips.generate'), ['employee_id' => $this->employee->id, 'month' => 3, 'year' => 2026, 'posting_date' => 'abc'])
+            ->assertUnprocessable()->assertJsonValidationErrors('posting_date');
+
+        $slip = $this->draft(4);
+        $this->actAsOrg()->postJson("/payroll/salary-slips/{$slip->id}/post", ['posting_date' => 'abc'])
+            ->assertUnprocessable()->assertJsonValidationErrors('posting_date');
+
+        $this->assertNull($slip->fresh()->posted_at);
+        $this->assertSame(1, SalarySlip::count());
+    }
+
     public function test_the_slip_page_shows_the_date_it_would_post_on(): void
     {
         $this->org->update(['payroll_payday' => 25]);

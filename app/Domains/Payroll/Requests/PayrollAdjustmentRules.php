@@ -48,6 +48,8 @@ final class PayrollAdjustmentRules
     public static function postingDate(Request $request): array
     {
         return [
+            // bail: the closure parses the date, so it must not see a malformed one.
+            'bail',
             'nullable',
             'date_format:Y-m-d',
             function (string $attribute, mixed $value, Closure $fail) use ($request): void {
@@ -69,6 +71,8 @@ final class PayrollAdjustmentRules
     public static function postingDateForSlip(SalarySlip $slip): array
     {
         return [
+            // bail: the closure parses the date, so it must not see a malformed one.
+            'bail',
             'nullable',
             'date_format:Y-m-d',
             function (string $attribute, mixed $value, Closure $fail) use ($slip): void {
