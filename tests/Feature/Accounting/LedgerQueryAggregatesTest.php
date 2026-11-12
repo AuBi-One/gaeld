@@ -143,6 +143,30 @@ class LedgerQueryAggregatesTest extends TestCase
         $this->assertSame('2026-02-10', $this->service->latestOperationalEntryDate($this->org->id));
     }
 
+    public function test_latest_operational_entry_date_skips_opening_balances(): void
+    {
+        $this->postSale('2025-11-20', '900.00');
+        $this->postJournalEntry('2026-01-01', [
+            $this->journalLine($this->account('1020'), '900.00', '0.00'),
+            $this->journalLine($this->account('3000'), '0.00', '900.00'),
+        ], 'OPENING-2026');
+
+        $this->assertSame('2025-11-20', $this->service->latestOperationalEntryDate($this->org->id));
+    }
+
+    public function test_chart_labels_use_the_translated_account_name(): void
+    {
+        app()->setLocale('fr');
+        // Stored under a name Gäld seeded for the code: shown translated.
+        Account::create(['organization_id' => $this->org->id, 'code' => '6500', 'name' => 'Büromaterial', 'type' => AccountType::Expense->value]);
+        $this->postCost('2026-03-05', '750.00');
+
+        $items = $this->service->monthlyTotalsByAccount($this->org->id, 2026)['expenses'][3];
+
+        $this->assertSame('6500 '.__('accounts.6500'), $items[0]['label']);
+        $this->assertNotSame('6500 Büromaterial', $items[0]['label']);
+    }
+
     public function test_has_operational_activity_in_year(): void
     {
         $this->postSale('2026-02-10', '2000.00');

@@ -6,6 +6,7 @@ use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Accounting\Support\AccountDisplayName;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Carbon;
@@ -192,7 +193,8 @@ class LedgerQueryService
      */
     public function monthlyTotalsByAccount(string $organizationId, int $year): array
     {
-        $cacheKey = "monthly_totals_by_account:{$organizationId}:{$year}";
+        // Per locale: the labels are translated account names.
+        $cacheKey = "monthly_totals_by_account:{$organizationId}:{$year}:".app()->getLocale();
 
         return Cache::tags(["org:{$organizationId}:ledger"])->remember(
             $cacheKey,
@@ -235,6 +237,10 @@ class LedgerQueryService
             ->where(fn ($query) => $query
                 ->whereNull('type')
                 ->orWhereNotIn('type', self::STRUCTURAL_ENTRY_TYPES))
+            // Opening balances are dated on the first day of the next year.
+            ->where(fn ($query) => $query
+                ->whereNull('reference')
+                ->orWhere('reference', 'not like', 'OPENING-%'))
             ->orderByDesc('date')
             ->value('date');
 
@@ -488,7 +494,7 @@ class LedgerQueryService
                 $credit = (string) $row->total_credit;
 
                 return [
-                    'label' => $row->code.' '.$row->name,
+                    'label' => $row->code.' '.AccountDisplayName::for((string) $row->code, (string) $row->name),
                     'amount' => $type->isDebitNormal()
                         ? bcsub($debit, $credit, 2)
                         : bcsub($credit, $debit, 2),
