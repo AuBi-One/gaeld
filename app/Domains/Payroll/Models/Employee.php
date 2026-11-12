@@ -26,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property string $last_name
  * @property string|null $email
  * @property string|null $ahv_number
+ * @property Carbon|null $date_of_birth
  * @property string|null $address
  * @property string|null $postal_code
  * @property string|null $city
@@ -46,8 +47,8 @@ class Employee extends Model
 
     protected $appends = ['status'];
 
-    // ahv_number is hidden from array/JSON serialization; access explicitly only.
-    protected $hidden = ['ahv_number'];
+    // ahv_number and date_of_birth are hidden from array/JSON serialization; access explicitly only.
+    protected $hidden = ['ahv_number', 'date_of_birth'];
 
     protected $attributes = [
         'has_thirteenth_salary' => false,
@@ -65,6 +66,7 @@ class Employee extends Model
         'city',
         'country',
         'ahv_number',
+        'date_of_birth',
         'entry_date',
         'exit_date',
         'gross_salary',
@@ -80,6 +82,7 @@ class Employee extends Model
     protected function casts(): array
     {
         return [
+            'date_of_birth' => 'date:Y-m-d',
             'entry_date' => 'date:Y-m-d',
             'exit_date' => 'date:Y-m-d',
             'gross_salary' => 'decimal:2',

@@ -41,6 +41,7 @@ const form = useForm({
   first_name: '',
   last_name: '',
   ahv_number: '',
+  date_of_birth: '',
   email: '',
   entry_date: new Date().toISOString().slice(0, 10),
   gross_salary: '',
@@ -69,6 +70,7 @@ function submit() {
     city: data.city || null,
     country: data.country || null,
     ahv_number: data.ahv_number || null,
+    date_of_birth: data.date_of_birth || null,
     entry_date: data.entry_date,
     gross_salary: data.gross_salary,
     is_active: data.status === 'active',
@@ -140,6 +142,16 @@ function submit() {
             <Tooltip :content="t('tooltip_ahv_number')" side="top" class="absolute right-0 top-0">
               <HelpCircle class="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
             </Tooltip>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormInput
+              id="date_of_birth"
+              v-model="form.date_of_birth"
+              type="date"
+              :label="t('date_of_birth')"
+              :error="form.errors.date_of_birth"
+            />
           </div>
 
           <!-- Employment -->

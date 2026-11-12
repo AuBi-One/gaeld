@@ -26,6 +26,8 @@ class SalarySlipDeductionLabelsTest extends TestCase
     {
         parent::setUp();
         $this->setUpOrganization();
+        // Required on a salary certificate.
+        $this->org->update(['address' => 'Avenue de la Gare 2', 'postal_code' => '1003', 'city' => 'Lausanne']);
     }
 
     #[Test]
@@ -316,6 +318,12 @@ class SalarySlipDeductionLabelsTest extends TestCase
             'entry_date' => '2025-01-01',
             'gross_salary' => '6000.00',
             'is_active' => true,
+            // Required on a salary certificate.
+            'ahv_number' => '756.1234.5678.97',
+            'date_of_birth' => '1988-02-29',
+            'address' => 'Rue Centrale 5',
+            'postal_code' => '1003',
+            'city' => 'Lausanne',
             ...$attributes,
         ]);
     }

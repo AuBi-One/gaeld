@@ -4,6 +4,7 @@ namespace App\Domains\Payroll\Controllers;
 
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Payroll\Actions\CreateEmployeeAction;
+use App\Domains\Payroll\Actions\GenerateSalaryCertificateAction;
 use App\Domains\Payroll\Actions\UpdateEmployeeAction;
 use App\Domains\Payroll\Controllers\Concerns\EnsuresPayrollWritable;
 use App\Domains\Payroll\DTOs\CreateEmployeeData;
@@ -67,7 +68,7 @@ class EmployeeController extends Controller
     {
         $this->authorize('view', $employee);
 
-        $employee->makeVisible('ahv_number');
+        $employee->makeVisible(['ahv_number', 'date_of_birth']);
         $employee->load(['salarySlips' => fn ($query) => $query->with('employee')
             ->orderByDesc('period_year')
             ->orderByDesc('period_month')]);
@@ -83,6 +84,8 @@ class EmployeeController extends Controller
                 ->sortDesc()
                 ->values(),
             'payrollWritable' => FeatureFlag::enabledForOrg('payroll', $employee->organization),
+            // What a salary certificate still needs (it is refused until then).
+            'certificateMissing' => GenerateSalaryCertificateAction::missingData($employee),
         ]);
     }
 
@@ -91,7 +94,7 @@ class EmployeeController extends Controller
         $this->ensurePayrollWritable($employee->organization);
         $this->authorize('update', $employee);
 
-        $employee->makeVisible('ahv_number');
+        $employee->makeVisible(['ahv_number', 'date_of_birth']);
 
         return Inertia::render('Payroll/Employees/Edit', [
             'employee' => $employee,

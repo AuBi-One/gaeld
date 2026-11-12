@@ -26,6 +26,7 @@ trait EmployeeRules
             'email' => ['nullable', 'email', 'max:255'],
             'iban' => ['nullable', 'string', 'max:34', new Iban],
             'ahv_number' => ['nullable', 'string', 'max:16'],
+            'date_of_birth' => ['nullable', 'date_format:Y-m-d', 'after:1900-01-01', 'before:today'],
             'address' => ['nullable', 'string', 'max:255'],
             'postal_code' => ['nullable', 'string', 'max:10'],
             'city' => ['nullable', 'string', 'max:255'],

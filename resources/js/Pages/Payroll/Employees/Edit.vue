@@ -45,6 +45,7 @@ const form = useForm({
   first_name: props.employee.first_name ?? '',
   last_name: props.employee.last_name ?? '',
   ahv_number: props.employee.ahv_number ?? '',
+  date_of_birth: dateInputValue(props.employee.date_of_birth),
   email: props.employee.email ?? '',
   entry_date: dateInputValue(props.employee.entry_date),
   exit_date: dateInputValue(props.employee.exit_date),
@@ -126,6 +127,16 @@ function submit() {
             <Tooltip :content="t('tooltip_ahv_number')" side="top" class="absolute right-0 top-0">
               <HelpCircle class="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
             </Tooltip>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormInput
+              id="date_of_birth"
+              v-model="form.date_of_birth"
+              type="date"
+              :label="t('date_of_birth')"
+              :error="form.errors.date_of_birth"
+            />
           </div>
 
           <!-- Employment -->

@@ -3,9 +3,11 @@
 namespace App\Domains\Payroll\Controllers;
 
 use App\Domains\Payroll\Actions\GenerateSalaryCertificateAction;
+use App\Domains\Payroll\Exceptions\IncompleteSalaryCertificateException;
 use App\Domains\Payroll\Models\Employee;
 use App\Http\Controllers\Controller;
 use App\Support\PdfExportService;
+use Illuminate\Http\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
 final class SalaryCertificateController extends Controller
@@ -15,10 +17,14 @@ final class SalaryCertificateController extends Controller
         int $year,
         GenerateSalaryCertificateAction $action,
         PdfExportService $pdf,
-    ): HttpResponse {
+    ): HttpResponse|RedirectResponse {
         $this->authorize('view', $employee);
 
-        $certificate = $action->execute($employee, $year);
+        try {
+            $certificate = $action->execute($employee, $year);
+        } catch (IncompleteSalaryCertificateException $e) {
+            return redirect()->route('payroll.employees.show', $employee)->with('error', $e->getMessage());
+        }
 
         return $pdf->download(
             'exports.salary-certificate',
