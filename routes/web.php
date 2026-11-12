@@ -71,10 +71,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
 // onboarding.wizard / onboarding.wizard.store / onboarding.wizard.skip are registered
 // in routes/web/organizations.php (post-signup landing route, org already exists).
 
-// Invitation accept (authenticated but no org middleware needed)
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/invitations/{token}/accept', [InvitationController::class, 'accept'])->name('invitations.accept');
-});
+// Invitation links: outside the auth middleware, as the invited person may
+// have no account yet; the token from the mail is their only credential. The
+// sign-up form ignores FEATURE_SELF_REGISTRATION: it can only create the
+// address an admin invited.
+Route::get('/invitations/{token}/accept', [InvitationController::class, 'accept'])
+    ->middleware('throttle:20,1')
+    ->name('invitations.accept');
+Route::get('/invitations/{token}/register', [InvitationController::class, 'createRegistration'])
+    ->middleware('throttle:20,1')
+    ->name('invitations.register');
+Route::post('/invitations/{token}/register', [InvitationController::class, 'storeRegistration'])
+    ->middleware('throttle:10,60')
+    ->name('invitations.register.store');
 
 // Logout (available to any authenticated user)
 Route::middleware('auth')->post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');

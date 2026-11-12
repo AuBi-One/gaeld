@@ -38,7 +38,9 @@ class HandleInertiaRequests extends Middleware
 
         return array_merge(parent::share($request), [
             'auth' => $user ? $this->resolveAuth($user, $request) : null,
-            'locale' => App::getLocale(),
+            // Lazy like the translations: a controller may still switch the
+            // locale (the invitation sign-up speaks the invitation's language).
+            'locale' => fn () => App::getLocale(),
             'translations' => fn () => trans('app'),
             'features' => fn () => $this->resolveFeatures(),
             'routeCapabilities' => fn () => $this->resolveRouteCapabilities(),

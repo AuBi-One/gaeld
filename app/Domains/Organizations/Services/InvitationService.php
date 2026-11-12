@@ -84,6 +84,19 @@ class InvitationService
         return $invitation;
     }
 
+    /**
+     * The pending (not yet accepted) invitation behind a plain token, or null.
+     * Expiry is left to the caller, which tells an expired link from a bogus one.
+     */
+    public function findByToken(string $token): ?OrganizationInvitation
+    {
+        return OrganizationInvitation::query()
+            ->where('token', hash('sha256', $token))
+            ->whereNull('accepted_at')
+            ->with('organization')
+            ->first();
+    }
+
     public function accept(string $token): Organization
     {
         $invitation = OrganizationInvitation::where('token', hash('sha256', $token))

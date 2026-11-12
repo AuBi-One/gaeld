@@ -3,6 +3,7 @@
 namespace Tests\Feature\Organizations;
 
 use App\Domains\Organizations\Models\Organization;
+use App\Domains\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -86,5 +87,21 @@ class SetupModeTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors('setup_mode');
+    }
+
+    public function test_setup_wizard_owner_has_a_verified_email(): void
+    {
+        $this->post('/setup', [
+            'user_name' => 'Verified Owner',
+            'user_email' => 'verified-owner@example.com',
+            'user_password' => 'password123',
+            'user_password_confirmation' => 'password123',
+            'org_name' => 'Verified Org',
+            'currency' => 'CHF',
+            'locale' => 'en',
+        ]);
+
+        // email_verified_at is not fillable: UserService sets it explicitly.
+        $this->assertNotNull(User::where('email', 'verified-owner@example.com')->firstOrFail()->email_verified_at);
     }
 }

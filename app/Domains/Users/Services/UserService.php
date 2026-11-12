@@ -22,15 +22,23 @@ class UserService
 
     public function create(CreateUserData $data): User
     {
-        return User::create([
+        $user = User::create([
             'name' => $data->name,
             'email' => $data->email,
             'password' => Hash::make($data->password),
             'locale' => $data->locale,
-            'email_verified_at' => $data->emailVerifiedAt,
             'accepted_privacy_at' => $data->acceptedPrivacyAt,
             'accepted_terms_at' => $data->acceptedTermsAt,
         ]);
+
+        // email_verified_at is not fillable (no request may set it), so the
+        // mass assignment above dropped it silently. Callers that vouch for
+        // the address (installer, setup wizard, invitation sign-up) pass it here.
+        if ($data->emailVerifiedAt !== null) {
+            $user->forceFill(['email_verified_at' => $data->emailVerifiedAt])->save();
+        }
+
+        return $user;
     }
 
     public function updateProfile(User $user, UpdateUserProfileData $data): User
