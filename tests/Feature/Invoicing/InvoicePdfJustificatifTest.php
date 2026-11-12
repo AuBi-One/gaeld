@@ -367,6 +367,27 @@ class InvoicePdfJustificatifTest extends TestCase
         $this->assertSame(0, $this->bytesUsed());
     }
 
+    public function test_each_finalization_stores_a_fresh_pdf_and_each_revert_keeps_it_on_its_entry(): void
+    {
+        $first = $this->finalize($this->draft('INV-PDF-022'));
+        $firstPdf = (string) $first->justificatif_path;
+        $second = $this->finalize(app(RevertInvoiceToDraftAction::class)->execute($first));
+        $secondPdf = (string) $second->justificatif_path;
+        $draft = app(RevertInvoiceToDraftAction::class)->execute($second);
+
+        $this->assertNotSame($firstPdf, $secondPdf);
+        $this->assertNull($draft->fresh()->justificatif_path);
+        $this->assertSame($firstPdf, JournalEntry::where('reference', 'INV-PDF-022')->value('justificatif_path'));
+        $this->assertSame($secondPdf, JournalEntry::where('reference', 'INV-PDF-022-v2')->value('justificatif_path'));
+        $this->assertCount(2, $this->storedFiles());
+
+        app(DeleteInvoiceAction::class)->execute($draft->fresh());
+
+        $this->assertSame([], $this->storedFiles());
+        $this->assertSame(0, $this->bytesUsed());
+        $this->assertSame(0, JournalEntry::where('organization_id', $this->org->id)->count());
+    }
+
     public function test_finalizing_replaces_a_stored_pdf_left_on_the_draft(): void
     {
         $invoice = $this->finalize($this->draft('INV-PDF-021'));

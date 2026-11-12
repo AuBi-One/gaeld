@@ -1125,6 +1125,7 @@ return [
     // Invoice cancel
     'invoice_cancelled' => 'Facture annulée.',
     'invoice_reverted_to_draft' => 'Facture repassée en brouillon. Vous pouvez la corriger puis la finaliser à nouveau.',
+    'invoice_reverted_to_draft_settled_period' => 'Facture repassée en brouillon. Sa période TVA est déjà décomptée ou son exercice clôturé : l\'extourne et la nouvelle écriture sont datées d\'aujourd\'hui, la période décomptée reste telle que déposée. Tenez compte de la correction lors de la concordance annuelle.',
     'cancel_invoice' => 'Annuler la facture',
     'cancel_invoice_confirm' => 'Êtes-vous sûr de vouloir annuler la facture :number ? Cette action est irréversible.',
     'revert_to_draft' => 'Repasser en brouillon',

@@ -5,6 +5,7 @@ namespace App\Http\Middleware\Api;
 use App\Domains\Api\Exceptions\ApiIdempotencyConflictException;
 use App\Domains\Api\Models\PersonalAccessToken;
 use App\Domains\Api\Services\ApiIdempotencyService;
+use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Closure;
 use Illuminate\Http\JsonResponse;
@@ -104,6 +105,10 @@ class HandleApiIdempotency
         }
 
         foreach ($request->route()?->parameters() ?? [] as $parameter) {
+            if ($parameter instanceof Invoice) {
+                return $parameter->id.':'.$this->invoiceRound($request, $parameter);
+            }
+
             if (is_object($parameter) && isset($parameter->id)) {
                 return (string) $parameter->id;
             }
@@ -121,6 +126,20 @@ class HandleApiIdempotency
         }
 
         return 'payload:'.hash('sha256', $request->getContent());
+    }
+
+    /**
+     * An invoice reverted to draft and finalized again goes through the same calls a second
+     * time: new requests, not retries of the first round. Finalizing opens a new posting after
+     * each reversal; every other call acts on the current posting. A retry within one round
+     * still replays.
+     */
+    private function invoiceRound(Request $request, Invoice $invoice): string
+    {
+        $postings = $invoice->postings();
+        $reversed = count(array_filter($postings, fn (array $posting): bool => $posting['reversal'] !== null));
+
+        return 'round'.($request->route()?->getName() === 'api.invoices.finalize' ? $reversed : count($postings));
     }
 
     private function logOutcome(Request $request, int $status, bool $replayed, float $startedAt): void

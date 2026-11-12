@@ -1205,6 +1205,7 @@ return [
     // Invoice cancel
     'invoice_cancelled' => 'Invoice cancelled.',
     'invoice_reverted_to_draft' => 'Invoice reverted to draft. You can now correct it and re-finalize when ready.',
+    'invoice_reverted_to_draft_settled_period' => 'Invoice reverted to draft. Its VAT period is already settled or its fiscal year closed: the reversal and the new posting are dated today, and the settled period stays as filed. Take the correction into account in the annual reconciliation.',
     'cancel_invoice' => 'Cancel Invoice',
     'cancel_invoice_confirm' => 'Are you sure you want to cancel invoice :number? This action cannot be undone.',
     'revert_to_draft' => 'Revert to Draft',

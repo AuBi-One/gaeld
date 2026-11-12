@@ -1091,6 +1091,7 @@ return [
     // Invoice cancel
     'invoice_cancelled' => 'Fattura annullata.',
     'invoice_reverted_to_draft' => 'Fattura riportata in bozza. Ora puoi correggerla e finalizzarla di nuovo.',
+    'invoice_reverted_to_draft_settled_period' => 'Fattura riportata in bozza. Il suo periodo IVA è già rendicontato o il suo esercizio chiuso: lo storno e la nuova registrazione hanno la data odierna, il periodo rendicontato resta come inoltrato. Tenete conto della correzione nella concordanza annuale.',
     'cancel_invoice' => 'Annulla fattura',
     'cancel_invoice_confirm' => 'Sei sicuro di voler annullare la fattura :number? Questa azione non può essere annullata.',
     'revert_to_draft' => 'Riporta in bozza',

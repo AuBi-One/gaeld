@@ -127,6 +127,25 @@ class LedgerQueryService
     }
 
     /**
+     * The reference itself, or the first free versioned one ({reference}-v2, -v3, ...) when an
+     * entry (draft or posted) already carries it, e.g. a document posted again after its first
+     * entry was reversed: the reversed entry keeps its reference, and references are unique.
+     */
+    public function nextFreeReference(string $organizationId, string $reference): string
+    {
+        if (! $this->isDuplicateReferenceAny($organizationId, $reference)) {
+            return $reference;
+        }
+
+        $version = 2;
+        while ($this->isDuplicateReferenceAny($organizationId, "{$reference}-v{$version}")) {
+            $version++;
+        }
+
+        return "{$reference}-v{$version}";
+    }
+
+    /**
      * Resolve an account by its chart-of-accounts code within an organization.
      *
      * @throws ModelNotFoundException

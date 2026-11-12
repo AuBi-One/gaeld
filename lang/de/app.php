@@ -1128,6 +1128,7 @@ return [
     // Invoice cancel
     'invoice_cancelled' => 'Rechnung storniert.',
     'invoice_reverted_to_draft' => 'Rechnung in Entwurf zurückgesetzt. Sie können sie nun korrigieren und erneut finalisieren.',
+    'invoice_reverted_to_draft_settled_period' => 'Rechnung in Entwurf zurückgesetzt. Ihre MWST-Periode ist bereits abgerechnet oder ihr Geschäftsjahr abgeschlossen: Storno und neue Buchung erhalten das heutige Datum, die abgerechnete Periode bleibt wie eingereicht. Berücksichtigen Sie die Korrektur in der jährlichen Abstimmung (Finalisierung).',
     'cancel_invoice' => 'Rechnung stornieren',
     'cancel_invoice_confirm' => 'Möchten Sie die Rechnung :number wirklich stornieren? Diese Aktion kann nicht rückgängig gemacht werden.',
     'revert_to_draft' => 'In Entwurf zurücksetzen',

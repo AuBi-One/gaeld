@@ -163,6 +163,50 @@ class Invoice extends Model
         return $this->belongsTo(JournalEntry::class);
     }
 
+    /**
+     * Every posting of this invoice with its reversal, oldest first: the current journal entry and
+     * those of earlier finalizations that were reverted to draft. Those carry the invoice number
+     * as reference, or {number}-v2, -v3, ... (InvoiceAccountingService::postToLedger()); a
+     * reversal carries "REV-" + the reference of the entry it reverses. An invoice renumbered
+     * between two finalizations keeps its earlier, reversed postings under the old number.
+     *
+     * @return list<array{entry: JournalEntry, reversal: JournalEntry|null}>
+     */
+    public function postings(): array
+    {
+        if ($this->journal_entry_id === null) {
+            return [];
+        }
+
+        $entries = JournalEntry::query()->where('organization_id', $this->organization_id);
+        $current = (clone $entries)->find($this->journal_entry_id);
+        $number = (string) $this->number;
+        $earlier = $number === '' ? collect() : (clone $entries)
+            ->where('reference', 'like', addcslashes($number, '%_\\').'%')
+            ->whereKeyNot($this->journal_entry_id)
+            ->get()
+            ->filter(fn (JournalEntry $entry): bool => preg_match('/^'.preg_quote($number, '/').'(-v\d+)?$/', (string) $entry->reference) === 1);
+
+        $originals = $earlier->sortBy('created_at')->values();
+        if ($current !== null) {
+            $originals->push($current);
+        }
+
+        /** @var array<string, JournalEntry> $reversals */
+        $reversals = $originals->isEmpty() ? [] : (clone $entries)
+            ->whereIn('reference', $originals->map(fn (JournalEntry $entry): string => 'REV-'.$entry->reference)->all())
+            ->get()
+            ->keyBy('reference')
+            ->all();
+
+        $postings = [];
+        foreach ($originals as $entry) {
+            $postings[] = ['entry' => $entry, 'reversal' => $reversals['REV-'.$entry->reference] ?? null];
+        }
+
+        return $postings;
+    }
+
     /** @return HasMany<InvoiceLine, $this> */
     public function lines(): HasMany
     {

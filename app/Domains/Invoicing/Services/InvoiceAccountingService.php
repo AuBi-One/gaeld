@@ -133,9 +133,12 @@ class InvoiceAccountingService
             $fxNote = $documentCurrency === $ledgerCurrency
                 ? ''
                 : sprintf(' [%s %s @ %s %s]', $invoice->total, $documentCurrency, $rate, $ledgerCurrency);
+            // Finalized again after a revert to draft: the reversed entry keeps the number, so
+            // this posting takes {number}-v2, -v3, ... and its date follows correctionDate().
+            $issueDate = $invoice->issue_date->toDateString();
             $journalEntry = $this->ledgerService->postEntry($orgId, new JournalEntryData(
-                date: $invoice->issue_date->toDateString(),
-                reference: $invoice->number,
+                date: $invoice->journal_entry_id === null ? $issueDate : $this->correctionDate($orgId, $issueDate),
+                reference: $this->ledgerQuery->nextFreeReference($orgId, (string) $invoice->number),
                 description: "{$docType} {$invoice->number} — ".($invoice->customer->name ?? 'N/A').$fxNote,
                 lines: $lines,
             ));
@@ -198,6 +201,22 @@ class InvoiceAccountingService
         }
 
         return $this->chartTemplates->ensureRevenueAccount($invoice->organization);
+    }
+
+    /**
+     * The date a correction of an issued invoice (the reversal on a revert to draft, the new
+     * posting on finalizing again) is posted on: $date itself while its VAT period is not
+     * settled and its fiscal year is open, so that period shows the corrected invoice only;
+     * otherwise today, and the settled period stays as filed.
+     */
+    public function correctionDate(string $organizationId, string $date): string
+    {
+        if ($this->vatPeriodLocks->isLocked($organizationId, $date)
+            || $this->ledgerService->isFiscalYearClosedOn($organizationId, $date)) {
+            return now()->toDateString();
+        }
+
+        return $date;
     }
 
     /**

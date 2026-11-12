@@ -73,6 +73,19 @@ class UnpostPayrollTest extends TestCase
         $this->assertTrue($reversal->is_posted);
     }
 
+    public function test_an_unposted_slip_is_posted_again_under_a_versioned_reference(): void
+    {
+        $slip = $this->postedSlip();
+        $originalRef = $slip->journalEntry->reference;
+
+        $slip = app(PostPayrollAction::class)->execute(app(UnpostPayrollAction::class)->execute($slip));
+        $this->assertSame($originalRef.'-v2', $slip->journalEntry->reference);
+
+        $slip = app(PostPayrollAction::class)->execute(app(UnpostPayrollAction::class)->execute($slip));
+        $this->assertSame($originalRef.'-v3', $slip->journalEntry->reference);
+        $this->assertTrue(JournalEntry::where('reference', 'REV-'.$originalRef.'-v2')->where('is_posted', true)->exists());
+    }
+
     public function test_it_refuses_to_unpost_a_draft_slip(): void
     {
         $slip = app(PayrollCalculator::class)->calculate($this->employee, 3, 2026);
