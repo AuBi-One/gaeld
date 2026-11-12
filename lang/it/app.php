@@ -254,6 +254,7 @@ return [
     'dashboard_empty_state_desc' => 'Nessuna attività ancora. Crea la tua prima fattura o registra una spesa per iniziare.',
     'dashboard_create_first_invoice' => 'Crea la mia prima fattura',
     'dashboard_export_for_accountant' => 'Esporta per il mio contabile',
+    'dashboard_other_accounts' => ':count altri conti',
 
     // Invoices
     'create_invoice' => 'Crea fattura',

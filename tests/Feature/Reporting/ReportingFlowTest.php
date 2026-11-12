@@ -131,13 +131,18 @@ class ReportingFlowTest extends TestCase
             ->withSession(['current_organization_id' => $this->organization->id])
             ->get('/dashboard');
 
+        // Revenue is the net booked on the revenue account (1000.00), not the
+        // gross invoice total (1081.00): VAT is collected on behalf of the tax
+        // authority and is a liability, never turnover. That makes the KPI
+        // cards agree with the profit & loss figures asserted below - reading
+        // invoice totals used to put the two reports 81.00 apart.
         $dashboard->assertStatus(200);
         $dashboard->assertInertia(fn ($page) => $page
             ->component('Dashboard')
-            ->where('revenue', '1081.00')
+            ->where('revenue', '1000.00')
             ->where('expenses', '200.00')
             ->where('cashBalance', '881.00')
-            ->where('balance', '881.00')
+            ->where('balance', '800.00')
             ->where('displayYear', 2026));
 
         $profitAndLoss = $this->actingAs($this->user)
@@ -150,6 +155,9 @@ class ReportingFlowTest extends TestCase
             ->where('report.total_revenue', 1000)
             ->where('report.total_expenses', 200)
             ->where('report.net_profit', '800.00'));
+
+        // Same period, same numbers, two reports.
+        $dashboard->assertInertia(fn ($page) => $page->where('balance', '800.00'));
     }
 
     private function seedFinancialActivity(): void

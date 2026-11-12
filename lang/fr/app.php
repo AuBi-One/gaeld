@@ -252,6 +252,7 @@ return [
     'dashboard_empty_state_desc' => 'Aucune activité pour l\'instant. Créez votre première facture ou saisissez une dépense pour démarrer.',
     'dashboard_create_first_invoice' => 'Créer ma première facture',
     'dashboard_export_for_accountant' => 'Exporter pour mon comptable',
+    'dashboard_other_accounts' => ':count autres comptes',
 
     // Invoices
     'create_invoice' => 'Créer une facture',

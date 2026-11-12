@@ -54,11 +54,11 @@ class DashboardServiceTest extends TestCase
         ]);
         $bankAccount->id = 10;
 
-        $invoiceService->shouldReceive('yearlyRevenue')->with($this->orgId, 2026)->andReturn('1500.00');
-        $expenseService->shouldReceive('yearlyTotal')->with($this->orgId, 2026)->andReturn('450.00');
+        $ledgerService->shouldReceive('periodTotals')->once()->with($this->orgId, '2026-01-01', '2026-12-31')
+            ->andReturn(['revenue' => '1500.00', 'expenses' => '450.00']);
         $invoiceService->shouldReceive('unpaidSummary')->once()->with($this->orgId)->andReturn(new SummaryResult(2, '700.00'));
         $expenseService->shouldReceive('pendingSummary')->once()->with($this->orgId)->andReturn(new SummaryResult(1, '120.00'));
-        $ledgerService->shouldReceive('latestPostedEntryDate')->once()->with($this->orgId)->andReturn('2026-03-04');
+        $ledgerService->shouldReceive('latestOperationalEntryDate')->once()->with($this->orgId)->andReturn('2026-03-04');
         $ledgerService->shouldReceive('resolveAccount')->once()->with($this->orgId, '1020')->andReturn($bankAccount);
         $ledgerService->shouldReceive('accountBalance')->once()->with(10)->andReturn('800.00');
         $ledgerService->shouldReceive('recentEntries')->once()->with($this->orgId)->andReturn(collect([
@@ -66,21 +66,22 @@ class DashboardServiceTest extends TestCase
             $this->makeEntry('je-2', '2026-03-04', 'Software expense', 'EXP-1', '6530', '120.00'),
         ]));
 
-        $invoiceService->shouldReceive('paidInYear')->once()->with($this->orgId, 2026)->andReturn(collect([
-            (object) ['number' => 'INV-1', 'total' => '100.00', 'issue_date' => '2026-01-10'],
-            (object) ['number' => 'INV-2', 'total' => '200.00', 'issue_date' => '2026-03-08'],
-        ]));
-        $expenseService->shouldReceive('inYear')->once()->with($this->orgId, 2026)->andReturn(collect([
-            (object) ['description' => 'Hosting', 'amount' => '50.00', 'date' => '2026-01-12'],
-            (object) ['description' => 'Tools', 'amount' => '70.00', 'date' => '2026-03-09'],
-        ]));
+        $ledgerService->shouldReceive('monthlyTotals')->once()->with($this->orgId, 2026)->andReturn([
+            'revenue' => $this->monthSeries([1 => '100.00', 3 => '200.00']),
+            'expenses' => $this->monthSeries([1 => '50.00', 3 => '70.00']),
+        ]);
+        $ledgerService->shouldReceive('monthlyTotalsByAccount')->once()->with($this->orgId, 2026)->andReturn([
+            'revenue' => $this->monthSeries([1 => [['label' => '3000 Sales', 'amount' => '100.00']]], []),
+            'expenses' => $this->monthSeries([1 => [['label' => '6500 Hosting', 'amount' => '50.00']]], []),
+        ]);
         $invoiceService->shouldReceive('sentOrOverdueDueInYear')->once()->with($this->orgId, 2026)->andReturn(collect([
             (object) ['number' => 'INV-3', 'total' => '300.00', 'due_date' => '2026-03-25'],
         ]));
 
         // Year-over-year comparison
-        $invoiceService->shouldReceive('yearlyRevenue')->with($this->orgId, 2025)->andReturn('1200.00');
-        $expenseService->shouldReceive('yearlyTotal')->with($this->orgId, 2025)->andReturn('400.00');
+        $ledgerService->shouldReceive('periodTotals')->once()->with($this->orgId, '2025-01-01', '2025-12-31')
+            ->andReturn(['revenue' => '1200.00', 'expenses' => '400.00']);
+        $ledgerService->shouldReceive('hasOperationalActivityInYear')->once()->with($this->orgId, 2025)->andReturn(true);
 
         $vatReportService = Mockery::mock(VatReportService::class);
         $vatReportService->shouldReceive('generate')->once()->andReturn([
@@ -112,9 +113,12 @@ class DashboardServiceTest extends TestCase
         $this->assertSame('income', $metrics['recentTransactions']->first()['type']);
         $this->assertSame('expense', $metrics['recentTransactions']->last()['type']);
         $this->assertCount(12, $metrics['monthlyBreakdown']['monthIndices']);
-        $this->assertSame('100', (string) $metrics['monthlyBreakdown']['revenue'][0]);
+        $this->assertSame('100.00', (string) $metrics['monthlyBreakdown']['revenue'][0]);
         $this->assertSame('300', (string) $metrics['monthlyBreakdown']['forecast'][2]);
+        $this->assertSame(['3000 Sales: 100.00'], $metrics['monthlyBreakdown']['revenueItems'][0]);
+        $this->assertSame(['6500 Hosting: 50.00'], $metrics['monthlyBreakdown']['expenseItems'][0]);
         $this->assertSame(2026, $metrics['displayYear']);
+        $this->assertTrue($metrics['hasActivity']);
     }
 
     public function test_metrics_returns_zero_cash_balance_when_bank_account_is_missing(): void
@@ -125,15 +129,21 @@ class DashboardServiceTest extends TestCase
         $invoiceService = Mockery::mock(InvoiceReportingQuery::class);
         $expenseService = Mockery::mock(ExpenseService::class);
 
-        $invoiceService->shouldReceive('yearlyRevenue')->andReturn('0.00');
-        $expenseService->shouldReceive('yearlyTotal')->andReturn('0.00');
+        $ledgerService->shouldReceive('periodTotals')->andReturn(['revenue' => '0.00', 'expenses' => '0.00']);
+        $ledgerService->shouldReceive('hasOperationalActivityInYear')->andReturn(false);
         $invoiceService->shouldReceive('unpaidSummary')->once()->andReturn(new SummaryResult(0, '0.00'));
         $expenseService->shouldReceive('pendingSummary')->once()->andReturn(new SummaryResult(0, '0.00'));
-        $ledgerService->shouldReceive('latestPostedEntryDate')->once()->with($this->orgId)->andReturn(null);
+        $ledgerService->shouldReceive('latestOperationalEntryDate')->once()->with($this->orgId)->andReturn(null);
         $ledgerService->shouldReceive('resolveAccount')->once()->andThrow(new ModelNotFoundException);
         $ledgerService->shouldReceive('recentEntries')->once()->andReturn(collect());
-        $invoiceService->shouldReceive('paidInYear')->once()->andReturn(collect());
-        $expenseService->shouldReceive('inYear')->once()->andReturn(collect());
+        $ledgerService->shouldReceive('monthlyTotals')->once()->andReturn([
+            'revenue' => $this->monthSeries([]),
+            'expenses' => $this->monthSeries([]),
+        ]);
+        $ledgerService->shouldReceive('monthlyTotalsByAccount')->once()->andReturn([
+            'revenue' => $this->monthSeries([], []),
+            'expenses' => $this->monthSeries([], []),
+        ]);
         $invoiceService->shouldReceive('sentOrOverdueDueInYear')->once()->andReturn(collect());
 
         $vatReportService = Mockery::mock(VatReportService::class);
@@ -159,6 +169,23 @@ class DashboardServiceTest extends TestCase
 
         $this->assertSame('0.00', $metrics['cashBalance']);
         $this->assertTrue($metrics['recentTransactions']->isEmpty());
+    }
+
+    /**
+     * Build a 1-12 keyed month series, filling unlisted months with $default.
+     *
+     * @param  array<int, mixed>  $values
+     * @return array<int, mixed>
+     */
+    private function monthSeries(array $values, mixed $default = '0.00'): array
+    {
+        $series = [];
+
+        foreach (range(1, 12) as $month) {
+            $series[$month] = $values[$month] ?? $default;
+        }
+
+        return $series;
     }
 
     private function makeEntry(string $id, string $date, string $description, string $reference, string $accountCode, string $amount): JournalEntry

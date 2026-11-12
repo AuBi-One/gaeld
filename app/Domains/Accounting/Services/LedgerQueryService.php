@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Read-only ledger queries: balances, trial balance, account lookups.
@@ -93,6 +94,161 @@ class LedgerQueryService
     }
 
     /**
+     * Journal entry types that record structural bookkeeping rather than
+     * business activity.
+     *
+     * Year-end closing entries transfer revenue and expense balances to
+     * equity, and historical summaries carry opening balances forward.
+     * Counting either as operational revenue or expense doubles the figures
+     * and - because a closing entry is dated in the following calendar year -
+     * can make the dashboard resolve to an otherwise empty year.
+     *
+     * @var list<string>
+     */
+    public const STRUCTURAL_ENTRY_TYPES = [JournalEntry::TYPE_YEAR_END_CLOSING, 'historical_summary'];
+
+    /** Accounts listed per month in a chart tooltip before folding into an overflow row. */
+    private const TOOLTIP_ITEM_LIMIT = 8;
+
+    /**
+     * Total posted revenue and expense for a date range.
+     *
+     * Both figures come back positive and natural-signed: revenue
+     * credit-normal, expenses debit-normal. Structural entries are excluded.
+     *
+     * Results are cached per organization + range (tag: org:{orgId}:ledger).
+     *
+     * @return array{revenue: string, expenses: string}
+     */
+    public function periodTotals(string $organizationId, string $fromDate, string $toDate): array
+    {
+        $cacheKey = "period_totals:{$organizationId}:{$fromDate}:{$toDate}";
+
+        return Cache::tags(["org:{$organizationId}:ledger"])->remember(
+            $cacheKey,
+            now()->addMinutes(30),
+            function () use ($organizationId, $fromDate, $toDate) {
+                $rows = $this->operationalLines($organizationId, $fromDate, $toDate)
+                    ->groupBy('accounts.type')
+                    ->selectRaw('accounts.type AS account_type, COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit')
+                    ->get();
+
+                return [
+                    'revenue' => $this->naturalBalance($rows, AccountType::Revenue),
+                    'expenses' => $this->naturalBalance($rows, AccountType::Expense),
+                ];
+            }
+        );
+    }
+
+    /**
+     * Posted revenue and expense totals per calendar month of a year.
+     *
+     * Both arrays are keyed 1-12 with every month present, so callers can
+     * plot them without filling the gaps themselves.
+     *
+     * @return array{revenue: array<int, string>, expenses: array<int, string>}
+     */
+    public function monthlyTotals(string $organizationId, int $year): array
+    {
+        $cacheKey = "monthly_totals:{$organizationId}:{$year}";
+
+        return Cache::tags(["org:{$organizationId}:ledger"])->remember(
+            $cacheKey,
+            now()->addMinutes(30),
+            function () use ($organizationId, $year) {
+                $rows = $this->operationalLines($organizationId, "{$year}-01-01", "{$year}-12-31")
+                    ->groupBy('accounts.type')
+                    ->groupByRaw('EXTRACT(MONTH FROM journal_entries.date)')
+                    ->selectRaw('accounts.type AS account_type, EXTRACT(MONTH FROM journal_entries.date) AS month, COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit')
+                    ->get()
+                    ->groupBy(fn ($row) => (int) $row->month);
+
+                $revenue = [];
+                $expenses = [];
+
+                foreach (range(1, 12) as $month) {
+                    $monthRows = $rows->get($month, collect());
+                    $revenue[$month] = $this->naturalBalance($monthRows, AccountType::Revenue);
+                    $expenses[$month] = $this->naturalBalance($monthRows, AccountType::Expense);
+                }
+
+                return ['revenue' => $revenue, 'expenses' => $expenses];
+            }
+        );
+    }
+
+    /**
+     * Per-month revenue and expense breakdown by account, for chart tooltips.
+     *
+     * Aggregating by account rather than by journal entry keeps a month with
+     * dozens of bookings readable ("Loehne: 18'790.97" instead of twelve
+     * separate wage lines). Each month lists at most
+     * {@see self::TOOLTIP_ITEM_LIMIT} accounts and folds the rest into a
+     * single overflow row.
+     *
+     * @return array{revenue: array<int, list<array{label: string, amount: string, overflow?: int}>>, expenses: array<int, list<array{label: string, amount: string, overflow?: int}>>}
+     */
+    public function monthlyTotalsByAccount(string $organizationId, int $year): array
+    {
+        $cacheKey = "monthly_totals_by_account:{$organizationId}:{$year}";
+
+        return Cache::tags(["org:{$organizationId}:ledger"])->remember(
+            $cacheKey,
+            now()->addMinutes(30),
+            function () use ($organizationId, $year) {
+                $rows = $this->operationalLines($organizationId, "{$year}-01-01", "{$year}-12-31")
+                    ->groupBy('accounts.type', 'accounts.code', 'accounts.name')
+                    ->groupByRaw('EXTRACT(MONTH FROM journal_entries.date)')
+                    ->selectRaw('accounts.type AS account_type, accounts.code, accounts.name, EXTRACT(MONTH FROM journal_entries.date) AS month, COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit')
+                    ->get()
+                    ->groupBy(fn ($row) => (int) $row->month);
+
+                $revenue = [];
+                $expenses = [];
+
+                foreach (range(1, 12) as $month) {
+                    $monthRows = $rows->get($month, collect());
+                    $revenue[$month] = $this->accountItems($monthRows, AccountType::Revenue);
+                    $expenses[$month] = $this->accountItems($monthRows, AccountType::Expense);
+                }
+
+                return ['revenue' => $revenue, 'expenses' => $expenses];
+            }
+        );
+    }
+
+    /**
+     * Date of the most recent posted entry that reflects business activity.
+     *
+     * Unlike {@see latestPostedEntryDate()} this skips structural entries, so
+     * a year-end closing booked into January does not make the dashboard jump
+     * to a year that holds no actual bookkeeping yet.
+     *
+     * @return string|null A Y-m-d date, or null when nothing is posted.
+     */
+    public function latestOperationalEntryDate(string $organizationId): ?string
+    {
+        $date = JournalEntry::where('organization_id', $organizationId)
+            ->where('is_posted', true)
+            ->where(fn ($query) => $query
+                ->whereNull('type')
+                ->orWhereNotIn('type', self::STRUCTURAL_ENTRY_TYPES))
+            ->orderByDesc('date')
+            ->value('date');
+
+        return $date?->toDateString();
+    }
+
+    /**
+     * Whether the organization posted any revenue or expense line in a year.
+     */
+    public function hasOperationalActivityInYear(string $organizationId, int $year): bool
+    {
+        return $this->operationalLines($organizationId, "{$year}-01-01", "{$year}-12-31")->exists();
+    }
+
+    /**
      * Get trial balance for an organization.
      *
      * Returns all accounts with non-zero posted balances, ordered by code.
@@ -145,6 +301,107 @@ class LedgerQueryService
         return Account::where('organization_id', $organizationId)
             ->where('code', $code)
             ->firstOrFail();
+    }
+
+    /**
+     * Base query over posted revenue/expense lines of an organization,
+     * excluding structural entries. Callers add their own grouping.
+     *
+     * @return \Illuminate\Database\Query\Builder
+     */
+    private function operationalLines(string $organizationId, string $fromDate, string $toDate)
+    {
+        return DB::table('transaction_lines')
+            ->join('accounts', 'accounts.id', '=', 'transaction_lines.account_id')
+            ->join('journal_entries', 'journal_entries.id', '=', 'transaction_lines.journal_entry_id')
+            ->where('journal_entries.organization_id', $organizationId)
+            ->where('journal_entries.is_posted', true)
+            ->whereBetween('journal_entries.date', [$fromDate, $toDate])
+            ->whereIn('accounts.type', [AccountType::Revenue->value, AccountType::Expense->value])
+            ->where(fn ($query) => $query
+                ->whereNull('journal_entries.type')
+                ->orWhereNotIn('journal_entries.type', self::STRUCTURAL_ENTRY_TYPES));
+    }
+
+    /**
+     * Reduce aggregate rows to one natural-signed balance for an account type.
+     *
+     * @param  Collection<int, \stdClass>  $rows
+     */
+    private function naturalBalance(Collection $rows, AccountType $type): string
+    {
+        /** @var numeric-string $debit */
+        $debit = '0.00';
+        /** @var numeric-string $credit */
+        $credit = '0.00';
+
+        foreach ($rows->where('account_type', $type->value) as $row) {
+            /** @var numeric-string $rowDebit */
+            $rowDebit = (string) $row->total_debit;
+            /** @var numeric-string $rowCredit */
+            $rowCredit = (string) $row->total_credit;
+            $debit = bcadd($debit, $rowDebit, 2);
+            $credit = bcadd($credit, $rowCredit, 2);
+        }
+
+        return $type->isDebitNormal()
+            ? bcsub($debit, $credit, 2)
+            : bcsub($credit, $debit, 2);
+    }
+
+    /**
+     * Turn aggregate rows into per-account tooltip items, largest first.
+     *
+     * Accounts whose net movement is zero are dropped: a booking and its
+     * reversal in the same month carry no information for the reader.
+     *
+     * @param  Collection<int, \stdClass>  $rows
+     * @return list<array{label: string, amount: string, overflow?: int}>
+     */
+    private function accountItems(Collection $rows, AccountType $type): array
+    {
+        $items = $rows->where('account_type', $type->value)
+            ->map(function ($row) use ($type) {
+                /** @var numeric-string $debit */
+                $debit = (string) $row->total_debit;
+                /** @var numeric-string $credit */
+                $credit = (string) $row->total_credit;
+
+                return [
+                    'label' => $row->code.' '.$row->name,
+                    'amount' => $type->isDebitNormal()
+                        ? bcsub($debit, $credit, 2)
+                        : bcsub($credit, $debit, 2),
+                ];
+            })
+            ->reject(function (array $item): bool {
+                /** @var numeric-string $amount */
+                $amount = $item['amount'];
+
+                return bccomp($amount, '0', 2) === 0;
+            })
+            ->sortByDesc(fn (array $item) => (float) $item['amount'])
+            ->values();
+
+        if ($items->count() <= self::TOOLTIP_ITEM_LIMIT) {
+            return array_values($items->all());
+        }
+
+        $shown = $items->take(self::TOOLTIP_ITEM_LIMIT);
+        $rest = $items->slice(self::TOOLTIP_ITEM_LIMIT);
+        $restTotal = $rest->reduce(function (string $carry, array $item): string {
+            /** @var numeric-string $carry */
+            /** @var numeric-string $amount */
+            $amount = $item['amount'];
+
+            return bcadd($carry, $amount, 2);
+        }, '0.00');
+
+        return array_values($shown->push([
+            'label' => __('app.dashboard_other_accounts', ['count' => $rest->count()]),
+            'amount' => $restTotal,
+            'overflow' => $rest->count(),
+        ])->all());
     }
 
     /**

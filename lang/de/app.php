@@ -254,6 +254,7 @@ return [
     'dashboard_empty_state_desc' => 'Noch keine Aktivität. Erstellen Sie Ihre erste Rechnung oder erfassen Sie eine Ausgabe.',
     'dashboard_create_first_invoice' => 'Erste Rechnung erstellen',
     'dashboard_export_for_accountant' => 'Export für meinen Buchhalter',
+    'dashboard_other_accounts' => ':count weitere Konten',
 
     // Invoices
     'create_invoice' => 'Rechnung erstellen',

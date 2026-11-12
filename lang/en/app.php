@@ -252,6 +252,7 @@ return [
     'dashboard_empty_state_desc' => 'No activity yet. Create your first invoice or record an expense to get started.',
     'dashboard_create_first_invoice' => 'Create my first invoice',
     'dashboard_export_for_accountant' => 'Export for my accountant',
+    'dashboard_other_accounts' => ':count other accounts',
 
     // Invoices
     'create_invoice' => 'Create Invoice',

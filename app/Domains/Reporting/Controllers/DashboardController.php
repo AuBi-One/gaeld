@@ -34,9 +34,9 @@ class DashboardController extends Controller
         $org = $currentOrg->get();
         $metrics = $dashboardService->metrics($orgId);
 
-        $isEmptyState = $metrics['revenue'] === '0.00'
-            && $metrics['expenses'] === '0.00'
-            && count($metrics['recentTransactions']) === 0;
+        // Captured documents count too: the welcome panel steps aside once work
+        // has started, while the ledger-based cards stay at zero until it is booked.
+        $isEmptyState = ! $metrics['hasActivity'];
 
         // The banner asks the user to close the year: only for users who may.
         $expiredFiscalYear = $request->user()->can('closeYear', Account::class)

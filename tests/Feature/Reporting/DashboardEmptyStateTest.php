@@ -60,6 +60,11 @@ class DashboardEmptyStateTest extends TestCase
         );
     }
 
+    /**
+     * A captured expense counts as activity even before it is posted: the
+     * onboarding panel should step aside once the user has started working,
+     * while the KPI cards honestly stay at zero until the expense is booked.
+     */
     public function test_org_with_expense_gets_empty_state_false(): void
     {
         Expense::create([
@@ -80,6 +85,7 @@ class DashboardEmptyStateTest extends TestCase
             fn ($page) => $page
                 ->component('Dashboard')
                 ->where('isEmptyState', false)
+                ->where('expenses', '0.00')
         );
     }
 }
