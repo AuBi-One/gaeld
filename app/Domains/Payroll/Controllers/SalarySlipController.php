@@ -21,6 +21,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -172,11 +173,15 @@ class SalarySlipController extends Controller
         $validated = $request->validate([
             'posting_date' => PayrollAdjustmentRules::postingDateForSlip($slip),
         ]);
-        if (array_key_exists('posting_date', $validated)) {
-            $slip->forceFill(['posting_date' => $validated['posting_date']])->save();
-        }
+        // The chosen date and the posting together: a refused posting (closed
+        // year, unmapped account, ...) leaves the draft's date as it was.
+        DB::transaction(function () use ($slip, $validated, $action): void {
+            if (array_key_exists('posting_date', $validated)) {
+                $slip->forceFill(['posting_date' => $validated['posting_date']])->save();
+            }
 
-        $action->execute($slip);
+            $action->execute($slip);
+        });
 
         if ($request->wantsJson()) {
             return new JsonResponse(['message' => __('app.salary_slip_posted'), 'id' => $slip->id]);

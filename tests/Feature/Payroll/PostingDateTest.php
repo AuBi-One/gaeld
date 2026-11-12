@@ -3,7 +3,9 @@
 namespace Tests\Feature\Payroll;
 
 use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Enums\FiscalYearStatus;
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Payroll\Actions\PostPayrollAction;
 use App\Domains\Payroll\Actions\UnpostPayrollAction;
 use App\Domains\Payroll\Exceptions\PostingDateOutsidePeriodException;
@@ -171,6 +173,25 @@ class PostingDateTest extends TestCase
 
         $this->assertNull($slip->fresh()->posted_at);
         $this->assertSame(1, SalarySlip::count());
+    }
+
+    public function test_a_refused_post_leaves_the_draft_date_unchanged(): void
+    {
+        FiscalYear::factory()->for($this->org)->create([
+            'name' => '2026',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+            'status' => FiscalYearStatus::Closed,
+        ]);
+        $slip = $this->draft(3, '2026-03-20');
+
+        $this->actAsOrg()->postJson("/payroll/salary-slips/{$slip->id}/post", ['posting_date' => '2026-03-27'])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'fiscal_year_closed');
+
+        $fresh = $slip->fresh();
+        $this->assertNull($fresh->posted_at);
+        $this->assertSame('2026-03-20', $fresh->posting_date->toDateString());
     }
 
     public function test_the_slip_page_shows_the_date_it_would_post_on(): void
