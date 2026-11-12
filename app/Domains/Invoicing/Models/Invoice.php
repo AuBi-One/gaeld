@@ -317,6 +317,21 @@ class Invoice extends Model
         return Money::subtract((string) $this->total, $this->amountPaid());
     }
 
+    /**
+     * The total of the posted, non-cancelled credit notes issued for this invoice: they reduced
+     * its receivable, not its open amount (amountDue()).
+     */
+    public function creditedByCreditNotes(): string
+    {
+        return Money::absoluteAmount((string) self::query()->withoutGlobalScopes()
+            ->where('organization_id', $this->organization_id)
+            ->where('related_invoice_id', $this->id)
+            ->where('type', InvoiceType::CreditNote)
+            ->whereNotNull('journal_entry_id')
+            ->whereNotIn('status', [InvoiceStatus::Draft, InvoiceStatus::Cancelled])
+            ->sum('total'));
+    }
+
     public function isFullyPaid(): bool
     {
         return Money::compare($this->amountDue(), '0') <= 0;

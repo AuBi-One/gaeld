@@ -425,14 +425,7 @@ class InvoiceAccountingService
             }
             // A credit note already reduced revenue, VAT and the receivable, but not the invoice's
             // open amount: only what it leaves is written off. Nothing left: the invoice is settled.
-            $credited = Money::absoluteAmount((string) Invoice::query()->withoutGlobalScopes()
-                ->where('organization_id', $orgId)
-                ->where('related_invoice_id', $invoice->id)
-                ->where('type', InvoiceType::CreditNote)
-                ->whereNotNull('journal_entry_id')
-                ->whereNotIn('status', [InvoiceStatus::Draft, InvoiceStatus::Cancelled])
-                ->sum('total'));
-            $rest = Money::subtract($rest, $credited);
+            $rest = Money::subtract($rest, $invoice->creditedByCreditNotes());
             if (! Money::isPositive($rest)) {
                 $invoice->update(['status' => InvoiceStatus::Paid]);
 
