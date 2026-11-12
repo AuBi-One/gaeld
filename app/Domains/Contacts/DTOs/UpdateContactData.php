@@ -30,7 +30,15 @@ readonly class UpdateContactData
         private bool $hasCountryName = false,
         // The form sends an empty account holder to fall back to the contact name: keep the null.
         public bool $accountHolderGiven = false,
+        /** @var list<string> the clearable fields the form sent: an emptied one is cleared */
+        private array $clearableGiven = [],
     ) {}
+
+    /** Optional columns an empty input clears; a field not sent keeps its value. */
+    private const CLEARABLE = [
+        'email', 'phone', 'vat_number', 'default_expense_category', 'iban', 'bic',
+        'payment_terms', 'internal_notes', 'notes', 'address', 'city', 'postal_code',
+    ];
 
     /** @param  array<string, mixed>  $data */
     public static function fromArray(array $data): self
@@ -55,6 +63,7 @@ readonly class UpdateContactData
             hasSalutation: array_key_exists('salutation', $data),
             hasCountryName: array_key_exists('country_name', $data),
             accountHolderGiven: array_key_exists('account_holder', $data),
+            clearableGiven: array_values(array_intersect(self::CLEARABLE, array_keys($data))),
         );
     }
 
@@ -76,7 +85,10 @@ readonly class UpdateContactData
             'payment_terms' => $this->paymentTerms,
             'internal_notes' => $this->internalNotes,
             'notes' => $this->notes ? ['default' => $this->notes] : null,
-        ] + ($this->addressData?->toArray() ?? AddressData::empty()->toArray()), fn ($value) => $value !== null);
+        ] + ($this->addressData?->toArray() ?? AddressData::empty()->toArray()),
+            fn ($value, $key) => $value !== null || in_array($key, $this->clearableGiven, true),
+            ARRAY_FILTER_USE_BOTH,
+        );
 
         if ($this->hasSalutation) {
             $data['salutation'] = $this->salutation;
