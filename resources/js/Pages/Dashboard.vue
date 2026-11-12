@@ -15,6 +15,7 @@ import { useTheme } from '@/lib/useTheme'
 import { TrendingUp, TrendingDown, ArrowRightLeft, Wallet, X, AlertTriangle, Receipt, Target, ScanLine, Rocket, Clock } from 'lucide-vue-next'
 import HelpText from '@/Components/HelpText.vue'
 import QuickReceiptButton from '@/Components/QuickReceiptButton.vue'
+import LiquidityRunwayCard from '@/Components/Dashboard/LiquidityRunwayCard.vue'
 import { normalizeDashboardContract } from '@/lib/inertiaContracts'
 import { Bar } from 'vue-chartjs'
 import {
@@ -22,13 +23,16 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  LineElement,
+  PointElement,
+  Filler,
   Title,
   Tooltip,
   Legend,
 } from 'chart.js'
 import { intlLocale } from '@/lib/utils'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler, Title, Tooltip, Legend)
 
 const { t } = useTranslations()
 const { formatCurrency, formatDate, intlMonthName, locale } = useFormatters()
@@ -50,6 +54,7 @@ const props = defineProps({
   receivablesAging: { type: Object, default: null },
   recentTransactions: { type: Array, default: () => [] },
   monthlyBreakdown: { type: Object, default: () => ({ monthIndices: [], revenue: [], expenses: [], forecast: [], revenueItems: [], expenseItems: [], forecastItems: [] }) },
+  liquidityForecast: { type: Object, default: null },
   pendingOcrScans: { type: Number, default: 0 },
   displayYear: { type: Number, default: () => new Date().getFullYear() },
   isEmptyState: { type: Boolean, default: false },
@@ -337,6 +342,11 @@ const transactionColumns = computed(() => [
         :icon-class="card.color"
         :trend="card.trend"
       />
+    </div>
+
+    <!-- Liquidity runway (hidden until there is something to project from) -->
+    <div v-if="contract.liquidityForecast" class="mt-6">
+      <LiquidityRunwayCard :forecast="contract.liquidityForecast" />
     </div>
 
     <!-- OCR Receipts — pending validation (shown only when there are pending scans) -->

@@ -9,6 +9,7 @@ use App\Domains\Organizations\Enums\OrganizationModule;
 use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Reporting\Services\DashboardService;
+use App\Domains\Reporting\Services\LiquidityForecastService;
 use App\Http\Controllers\Controller;
 use App\Support\FeatureFlag;
 use Illuminate\Http\RedirectResponse;
@@ -21,8 +22,12 @@ use Inertia\Response;
  */
 class DashboardController extends Controller
 {
-    public function index(Request $request, DashboardService $dashboardService, CurrentOrganization $currentOrg): Response|RedirectResponse
-    {
+    public function index(
+        Request $request,
+        DashboardService $dashboardService,
+        LiquidityForecastService $forecastService,
+        CurrentOrganization $currentOrg,
+    ): Response|RedirectResponse {
         if ($request->user()->hasPermissionTo(Permission::PayrollSalarySlipsViewOwn)
             && ! $request->user()->hasPermissionTo(Permission::AccountingView)) {
             return redirect()->route('payroll.salarySlips.index');
@@ -48,6 +53,7 @@ class DashboardController extends Controller
 
         return Inertia::render('Dashboard', array_merge($metrics, [
             'isEmptyState' => $isEmptyState,
+            'liquidityForecast' => $isEmptyState ? null : $forecastService->forecast($orgId),
             'hasExportModule' => FeatureFlag::enabledForOrg(OrganizationModule::FiduciaryExport->value, $org),
             'expiredFiscalYear' => $expiredFiscalYear ? [
                 'id' => $expiredFiscalYear->id,

@@ -8,6 +8,7 @@ use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -249,6 +250,107 @@ class LedgerQueryService
     }
 
     /**
+     * Natural-signed balance of an account group, selected by code prefix.
+     *
+     * Summing a whole group rather than named accounts keeps this working on
+     * customised charts of accounts: an organisation that books wages through
+     * a payroll clearing account in the 10xx group has that clearing balance
+     * netted off its liquid assets automatically, without the caller needing
+     * to know the account exists.
+     *
+     * @param  list<string>  $codePrefixes
+     */
+    public function groupBalance(string $organizationId, AccountType $type, array $codePrefixes, ?string $asOfDate = null): string
+    {
+        $cacheKey = "group_balance:{$organizationId}:{$type->value}:".implode(',', $codePrefixes).":{$asOfDate}";
+
+        return Cache::tags(["org:{$organizationId}:ledger"])->remember(
+            $cacheKey,
+            now()->addMinutes(30),
+            function () use ($organizationId, $type, $codePrefixes, $asOfDate) {
+                $row = DB::table('transaction_lines')
+                    ->join('accounts', 'accounts.id', '=', 'transaction_lines.account_id')
+                    ->join('journal_entries', 'journal_entries.id', '=', 'transaction_lines.journal_entry_id')
+                    ->where('journal_entries.organization_id', $organizationId)
+                    ->where('journal_entries.is_posted', true)
+                    ->when($asOfDate, fn ($query, $date) => $query->where('journal_entries.date', '<=', $date))
+                    ->where('accounts.type', $type->value)
+                    ->where(fn ($query) => $this->applyCodePrefixes($query, $codePrefixes))
+                    ->selectRaw('COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit')
+                    ->first();
+
+                /** @var numeric-string $debit */
+                $debit = (string) ($row->total_debit ?? '0');
+                /** @var numeric-string $credit */
+                $credit = (string) ($row->total_credit ?? '0');
+
+                return $type->isDebitNormal()
+                    ? bcsub($debit, $credit, 2)
+                    : bcsub($credit, $debit, 2);
+            }
+        );
+    }
+
+    /**
+     * Monthly natural-signed totals for one account type over an arbitrary
+     * window, keyed "Y-m" with every month in the window present.
+     *
+     * The exclusion lists let a caller drop accounts it already accounts for
+     * from another source, so a figure taken from master data is not counted a
+     * second time from its own bookings.
+     *
+     * @param  list<string>  $excludeCodePrefixes
+     * @param  list<string>  $excludeCodes
+     * @param  list<string>  $onlyCodePrefixes  when given, restrict to these groups
+     * @return array<string, string>
+     */
+    public function monthlyTotalsInWindow(
+        string $organizationId,
+        AccountType $type,
+        string $fromDate,
+        string $toDate,
+        array $excludeCodePrefixes = [],
+        array $excludeCodes = [],
+        array $onlyCodePrefixes = [],
+    ): array {
+        $rows = $this->operationalLines($organizationId, $fromDate, $toDate)
+            ->where('accounts.type', $type->value)
+            ->when($onlyCodePrefixes, fn ($query) => $query->where(
+                fn ($inner) => $this->applyCodePrefixes($inner, $onlyCodePrefixes)
+            ))
+            ->when($excludeCodePrefixes, fn ($query) => $query->where(
+                fn ($inner) => $this->applyCodePrefixes($inner, $excludeCodePrefixes, negate: true)
+            ))
+            ->when($excludeCodes, fn ($query) => $query->whereNotIn('accounts.code', $excludeCodes))
+            ->groupByRaw("TO_CHAR(journal_entries.date, 'YYYY-MM')")
+            ->selectRaw("TO_CHAR(journal_entries.date, 'YYYY-MM') AS period, COALESCE(SUM(transaction_lines.debit), 0) AS total_debit, COALESCE(SUM(transaction_lines.credit), 0) AS total_credit")
+            ->get()
+            ->keyBy('period');
+
+        $totals = [];
+        $cursor = Carbon::parse($fromDate)->startOfMonth();
+        $last = Carbon::parse($toDate)->startOfMonth();
+
+        while ($cursor->lessThanOrEqualTo($last)) {
+            $key = $cursor->format('Y-m');
+            $row = $rows->get($key);
+
+            /** @var numeric-string $debit */
+            $debit = (string) ($row->total_debit ?? '0');
+            /** @var numeric-string $credit */
+            $credit = (string) ($row->total_credit ?? '0');
+
+            $totals[$key] = $type->isDebitNormal()
+                ? bcsub($debit, $credit, 2)
+                : bcsub($credit, $debit, 2);
+
+            $cursor->addMonth();
+        }
+
+        return $totals;
+    }
+
+    /**
      * Get trial balance for an organization.
      *
      * Returns all accounts with non-zero posted balances, ordered by code.
@@ -301,6 +403,24 @@ class LedgerQueryService
         return Account::where('organization_id', $organizationId)
             ->where('code', $code)
             ->firstOrFail();
+    }
+
+    /**
+     * Constrain a query to accounts whose code starts with one of the given
+     * prefixes, or - with $negate - to those that start with none of them.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  list<string>  $codePrefixes
+     */
+    private function applyCodePrefixes($query, array $codePrefixes, bool $negate = false): void
+    {
+        foreach ($codePrefixes as $prefix) {
+            if ($negate) {
+                $query->where('accounts.code', 'not like', $prefix.'%');
+            } else {
+                $query->orWhere('accounts.code', 'like', $prefix.'%');
+            }
+        }
     }
 
     /**
