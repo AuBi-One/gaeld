@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Accounting;
 
+use App\Domains\Accounting\Actions\YearEndClosingAction;
+use App\Domains\Accounting\Constants\AccountCode;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Enums\JournalCorrectionStatus;
@@ -300,6 +302,69 @@ class JournalCorrectionTest extends TestCase
         $this->assertContains($status, [403, 404]);
 
         $this->assertSame(JournalCorrectionStatus::Draft, $correction->fresh()?->status);
+    }
+
+    public function test_an_entry_of_a_closed_year_is_corrected_in_the_open_year(): void
+    {
+        $this->account('2900', 'Annual result', AccountType::Equity);
+        $this->account(AccountCode::OPENING_BALANCE, 'Opening balance', AccountType::Equity);
+        $original = $this->postedEntry('JE-2025', '2025-04-01');
+        app(YearEndClosingAction::class)->execute($this->organization, [
+            'year' => 2025, 'fiscal_year_id' => null, 'closing_date' => '2025-12-31',
+            'reference' => 'BOUCL-2025', 'result_account_code' => '2900',
+        ], $this->user);
+        $this->assertNotNull($original->fresh()?->archived_at);
+
+        $this->prepare($original, '2026-01-15')->assertSessionHasNoErrors()->assertSessionMissing('error');
+        $correction = JournalCorrection::query()->sole();
+        $this->actAsOrg()->post(route('accounting.journal-corrections.post', $correction))->assertSessionHas('success');
+
+        $this->assertSame(JournalCorrectionStatus::Posted, $correction->fresh()?->status);
+        $this->assertSame('2026-01-15', $correction->reversal->date->toDateString());
+    }
+
+    public function test_a_correction_date_in_a_closed_year_or_a_settled_vat_period_is_refused_up_front(): void
+    {
+        $original = $this->postedEntry('JE-1', '2025-03-01');
+        $this->organization->closeFiscalYear(2025);
+        $this->prepare($original, '2025-12-31')->assertSessionHas('error', __('app.journal_correction_date_closed'));
+
+        $settlement = $this->postedEntry('VAT-SETTLEMENT-2026-01-01-2026-06-30', '2026-06-30');
+        $settlement->update(['type' => 'vat_settlement', 'vat_period_start' => '2026-01-01', 'vat_period_end' => '2026-06-30']);
+        $this->prepare($original, '2026-05-04')->assertSessionHas('error', __('app.journal_correction_date_vat_settled'));
+
+        $this->assertSame(0, JournalCorrection::query()->count());
+        $this->prepare($original, '2026-07-01')->assertSessionMissing('error');
+        $this->assertSame(1, JournalCorrection::query()->count());
+    }
+
+    public function test_a_posted_replacement_can_be_corrected_again(): void
+    {
+        $this->prepare($this->postedEntry('JE-1'));
+        $first = JournalCorrection::query()->sole();
+        $this->actAsOrg()->post(route('accounting.journal-corrections.post', $first))->assertSessionHas('success');
+
+        $this->actAsOrg()->get(route('accounting.journal-entries.show', $first->replacement_journal_entry_id))
+            ->assertInertia(fn ($page) => $page->where('canCorrect', true)->where('correction.role', 'replacement'));
+
+        $this->prepare($first->replacement()->firstOrFail())->assertSessionMissing('error');
+        $second = JournalCorrection::query()->where('original_journal_entry_id', $first->replacement_journal_entry_id)->sole();
+
+        $this->actAsOrg()->get(route('accounting.journal-entries.show', $first->replacement_journal_entry_id))
+            ->assertInertia(fn ($page) => $page->where('correction.id', $second->id)->where('correction.role', 'original')->where('canCorrect', false));
+        $this->actAsOrg()->get(route('accounting.journal-entries.show', $second->replacement_journal_entry_id))
+            ->assertInertia(fn ($page) => $page->where('correction.id', $second->id)->where('correction.editable', true));
+    }
+
+    public function test_posting_records_the_reversal_in_the_journal_events(): void
+    {
+        $this->prepare($this->postedEntry('JE-1'));
+        $correction = JournalCorrection::query()->sole();
+        $this->assertDatabaseMissing('journal_events', ['journal_entry_id' => $correction->reversal_journal_entry_id, 'event_type' => 'reversed']);
+
+        $this->actAsOrg()->post(route('accounting.journal-corrections.post', $correction))->assertSessionHas('success');
+
+        $this->assertDatabaseHas('journal_events', ['journal_entry_id' => $correction->reversal_journal_entry_id, 'event_type' => 'reversed']);
     }
 
     private function prepare(JournalEntry $entry, string $date = '2026-05-04'): TestResponse

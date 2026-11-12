@@ -20,8 +20,13 @@ class JournalCorrectionException extends DomainException
         return new self(__('app.journal_correction_not_draft'));
     }
 
-    public static function reversedMeanwhile(): self
+    public static function closedYear(): self
     {
-        return new self(__('app.journal_correction_reversed_meanwhile'));
+        return new self(__('app.journal_correction_date_closed'));
+    }
+
+    public static function settledVatPeriod(): self
+    {
+        return new self(__('app.journal_correction_date_vat_settled'));
     }
 }

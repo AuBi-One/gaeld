@@ -3,6 +3,7 @@
 namespace App\Domains\Accounting\Actions;
 
 use App\Domains\Accounting\Enums\JournalCorrectionStatus;
+use App\Domains\Accounting\Events\JournalEntryReversed;
 use App\Domains\Accounting\Exceptions\InvalidEntryDataException;
 use App\Domains\Accounting\Exceptions\JournalCorrectionException;
 use App\Domains\Accounting\Models\Account;
@@ -37,18 +38,6 @@ final class PostJournalCorrectionAction
             $reversal = $this->lockEntry($locked->reversal_journal_entry_id);
             $replacement = $this->lockEntry($locked->replacement_journal_entry_id);
 
-            // Reversed some other way in the meantime (e.g. through the API).
-            $reversedElsewhere = JournalEntry::withoutGlobalScopes()
-                ->where('organization_id', $original->organization_id)
-                ->whereKeyNot($reversal->id)
-                ->where(fn ($query) => $query
-                    ->where('reversal_of_entry_id', $original->id)
-                    ->when((string) $original->reference !== '', fn ($byReference) => $byReference->orWhere('reference', 'REV-'.$original->reference)))
-                ->exists();
-            if ($reversedElsewhere) {
-                throw JournalCorrectionException::reversedMeanwhile();
-            }
-
             // The reversal may use accounts made inactive since; the replacement books anew and may not.
             $this->assertActiveAccounts($replacement);
             foreach ([$reversal, $replacement] as $entry) {
@@ -60,6 +49,8 @@ final class PostJournalCorrectionAction
             $this->ledger->postDraft($replacement);
 
             $locked->update(['status' => JournalCorrectionStatus::Posted, 'posted_at' => now()]);
+            // As for a journal reversal: the journal event log records it.
+            JournalEntryReversed::dispatch($reversal, $original);
 
             return $locked;
         });

@@ -84,17 +84,6 @@ class JournalEntry extends Model
         return $this->belongsTo(Organization::class);
     }
 
-    /**
-     * The entry this one reverses (set by LedgerService::reverseEntry and the
-     * guided correction; older reversals carry only their `REV-` reference).
-     *
-     * @return BelongsTo<JournalEntry, $this>
-     */
-    public function reversalOf(): BelongsTo
-    {
-        return $this->belongsTo(self::class, 'reversal_of_entry_id');
-    }
-
     /** @return HasMany<TransactionLine, $this> */
     public function lines(): HasMany
     {

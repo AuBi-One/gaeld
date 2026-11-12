@@ -14,7 +14,8 @@ use App\Domains\Expenses\Models\Expense;
 /**
  * Whether a posted journal entry may be corrected with the guided correction.
  *
- * Only entries booked by hand (journal, API, migration) qualify. An entry
+ * Only entries booked by hand (journal, API, migration) qualify, also from a
+ * closed (archived) year: the correction is dated in an open period. An entry
  * owned by another record (invoice, payment, salary slip, expense-claims
  * records: {@see JournalEntryReferences}; also expenses, bank transactions,
  * depreciation) is corrected through its owner, and so are entries the
@@ -45,9 +46,6 @@ final class JournalCorrectionEligibility
     {
         if (! $entry->is_posted) {
             return __('app.journal_correction_reason_not_posted');
-        }
-        if ($entry->archived_at !== null) {
-            return __('app.journal_correction_reason_archived');
         }
 
         $owner = $this->owners->for($entry);

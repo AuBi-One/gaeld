@@ -3,8 +3,6 @@
 namespace App\Domains\Accounting\Models;
 
 use App\Domains\Accounting\Enums\JournalCorrectionStatus;
-use App\Domains\Organizations\Models\Organization;
-use App\Domains\Users\Models\User;
 use App\Support\Traits\Auditable;
 use App\Support\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -55,12 +53,6 @@ class JournalCorrection extends Model
         ];
     }
 
-    /** @return BelongsTo<Organization, $this> */
-    public function organization(): BelongsTo
-    {
-        return $this->belongsTo(Organization::class);
-    }
-
     /** @return BelongsTo<JournalEntry, $this> */
     public function original(): BelongsTo
     {
@@ -77,12 +69,6 @@ class JournalCorrection extends Model
     public function replacement(): BelongsTo
     {
         return $this->belongsTo(JournalEntry::class, 'replacement_journal_entry_id');
-    }
-
-    /** @return BelongsTo<User, $this> */
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
     }
 
     public function isDraft(): bool

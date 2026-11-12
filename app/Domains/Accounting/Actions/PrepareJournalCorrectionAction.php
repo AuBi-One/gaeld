@@ -5,12 +5,14 @@ namespace App\Domains\Accounting\Actions;
 use App\Domains\Accounting\DTOs\JournalEntryData;
 use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\JournalCorrectionStatus;
+use App\Domains\Accounting\Exceptions\FiscalYearClosedException;
 use App\Domains\Accounting\Exceptions\JournalCorrectionException;
 use App\Domains\Accounting\Models\JournalCorrection;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Services\JournalCorrectionEligibility;
 use App\Domains\Accounting\Services\LedgerService;
+use App\Domains\Accounting\Services\VatPeriodLockService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -25,6 +27,7 @@ final class PrepareJournalCorrectionAction
     public function __construct(
         private readonly LedgerService $ledger,
         private readonly JournalCorrectionEligibility $eligibility,
+        private readonly VatPeriodLockService $vatPeriodLocks,
     ) {}
 
     /** @throws JournalCorrectionException When the entry cannot be corrected here */
@@ -38,6 +41,7 @@ final class PrepareJournalCorrectionAction
             $locked->load('lines');
 
             $this->eligibility->assertCorrectable($locked);
+            $this->assertDateOpen($locked->organization_id, $correctionDate);
 
             $reversal = $this->ledger->createDraft($locked->organization_id, new JournalEntryData(
                 date: $correctionDate,
@@ -66,6 +70,20 @@ final class PrepareJournalCorrectionAction
                 'user_id' => $userId,
             ]);
         });
+    }
+
+    /** @throws JournalCorrectionException When the date is in a closed year or a settled VAT period */
+    private function assertDateOpen(string $organizationId, string $date): void
+    {
+        try {
+            $this->ledger->guardClosedFiscalYear($organizationId, $date);
+        } catch (FiscalYearClosedException) {
+            throw JournalCorrectionException::closedYear();
+        }
+
+        if ($this->vatPeriodLocks->isLocked($organizationId, $date)) {
+            throw JournalCorrectionException::settledVatPeriod();
+        }
     }
 
     /** @return list<JournalLineData> */

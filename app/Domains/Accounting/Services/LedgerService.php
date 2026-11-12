@@ -189,14 +189,19 @@ class LedgerService
                 throw new InvalidEntryDataException('Only posted journal entries can be reversed.');
             }
 
-            $reversalReference = self::REFERENCE_PREFIX_REVERSAL.$original->reference;
+            // An entry without a reference gets an unreferenced reversal (not a shared "REV-").
+            $reversalReference = (string) $original->reference !== '' ? self::REFERENCE_PREFIX_REVERSAL.$original->reference : null;
             $this->throwIfDuplicateReference($original->organization_id, $reversalReference);
+            // One reversal per entry, linked by reversal_of_entry_id (REV- stays the readable label).
+            if (JournalEntry::withoutGlobalScopes()->where('reversal_of_entry_id', $original->id)->exists()) {
+                throw new DuplicateReferenceException('This journal entry has already been reversed.');
+            }
 
             $lines = $original->lines->map(fn (TransactionLine $line) => new JournalLineData(
                 accountId: (string) $line->account_id,
                 debit: (string) $line->credit,
                 credit: (string) $line->debit,
-                description: 'Reversal: '.($line->description ?? ''),
+                description: mb_strimwidth('Reversal: '.($line->description ?? ''), 0, 255),
             ))->all();
 
             $reversalEntry = $this->createDraft($original->organization_id, new JournalEntryData(
@@ -207,10 +212,6 @@ class LedgerService
                 type: $type ?? 'reversal',
             ));
 
-            // The reversal names its original (REV- stays the readable label); one reversal per entry.
-            if (JournalEntry::withoutGlobalScopes()->where('reversal_of_entry_id', $original->id)->exists()) {
-                throw new DuplicateReferenceException('This journal entry has already been reversed.');
-            }
             $reversalEntry->forceFill(['reversal_of_entry_id' => $original->id])->save();
 
             JournalEntryReversed::dispatch($reversalEntry, $original);
@@ -403,7 +404,7 @@ class LedgerService
      *
      * @throws FiscalYearClosedException
      */
-    private function guardClosedFiscalYear(
+    public function guardClosedFiscalYear(
         string $organizationId,
         string $date,
         ?string $fiscalYearId = null,

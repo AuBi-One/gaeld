@@ -125,6 +125,11 @@ class JournalEntryPolicy extends BasePolicy
             && $user->hasPermissionTo(Permission::AccountingEdit)
             && $entry->is_posted;
 
+        // A closed year is changed by reopening and closing it again.
+        if ($allowed && $entry->type === JournalEntry::TYPE_YEAR_END_CLOSING) {
+            return Response::deny(__('app.journal_closing_not_reversible'));
+        }
+
         return $allowed ? $this->unlessOwned($entry) : false;
     }
 }

@@ -159,10 +159,19 @@ class AccountingController extends Controller
      */
     private function correctionProps(Request $request, JournalEntry $entry): array
     {
+        // An entry can be in two corrections: the replacement of one and the
+        // original of the next. Shown: the open one it is a draft of, else the
+        // one it is the original of, else the one it came from.
         $correction = JournalCorrection::query()
             ->where('original_journal_entry_id', $entry->id)
             ->orWhere('reversal_journal_entry_id', $entry->id)
             ->orWhere('replacement_journal_entry_id', $entry->id)
+            ->get()
+            ->sortBy(fn (JournalCorrection $c): int => match (true) {
+                $c->isDraft() && (string) $c->original_journal_entry_id !== (string) $entry->id => 0,
+                (string) $c->original_journal_entry_id === (string) $entry->id => 1,
+                default => 2,
+            })
             ->first();
         $role = match ((string) $entry->id) {
             (string) $correction?->original_journal_entry_id => 'original',
@@ -171,7 +180,7 @@ class AccountingController extends Controller
             default => null,
         };
         $editable = $role === 'replacement' && $correction?->isDraft() && ($request->user()?->can('update', $correction) ?? false);
-        $canCorrect = $entry->is_posted && $correction === null && ($request->user()?->can('correct', $entry) ?? false);
+        $canCorrect = $request->user()?->can('correct', $entry) ?? false;
 
         return [
             'correction' => $correction === null ? null : [
