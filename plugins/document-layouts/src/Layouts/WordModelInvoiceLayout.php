@@ -139,12 +139,6 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
     }
 
     /**
-     * The address window: salutation, name, the "Attention" person, street, town and the
-     * country (its free-text name when the contact has one, else the code outside Switzerland).
-     *
-     * @return list<string>
-     */
-    /**
      * Part of an open invoice is paid: the QR slip asks for the rest (core), these rows say why,
      * as in the core renderer. Label key and formatted amount.
      *
@@ -163,6 +157,12 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
         return [['already_paid', '-'.Format::money($paid)], ['amount_open', Format::money($invoice->amountDue())]];
     }
 
+    /**
+     * The address window: salutation, name, the "Attention" person, street, town and the
+     * country (its free-text name when the contact has one, else the code outside Switzerland).
+     *
+     * @return list<string>
+     */
     public static function recipientLines(Invoice $invoice): array
     {
         // Older or partial snapshots may lack keys.
