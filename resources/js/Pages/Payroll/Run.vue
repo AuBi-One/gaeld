@@ -20,6 +20,8 @@ const { intlMonthName, formatCurrency, formatDate } = useFormatters()
 const props = defineProps({
   employees: { type: Array, default: () => [] },
   fiscalYears: { type: Array, default: () => [] },
+  // Organization's usual payday (day of the month), or null for the month's last day.
+  defaultPayday: { type: [Number, String], default: null },
   withholdingTaxEnabled: { type: Boolean, default: false },
   // { [employeeId]: [{ id, date, label, amount }] } from the reimbursement source
   reimbursementItems: { type: Object, default: () => ({}) },
@@ -90,6 +92,20 @@ watch([month, year], () => {
     adjustment.reimbursement_item_ids = adjustment.reimbursement_item_ids.filter(id => offered.has(id))
   }
 })
+// The date the run's entries are posted on (the payday), within the payroll
+// month; prefilled with the organization's payday.
+const postingDate = ref('')
+const periodStart = computed(() => `${periodEnd.value.slice(0, 8)}01`)
+watch([month, year], () => {
+  const payday = Number.parseInt(props.defaultPayday, 10)
+  if (!Number.isFinite(payday)) {
+    postingDate.value = ''
+    return
+  }
+  const candidate = `${periodEnd.value.slice(0, 8)}${String(payday).padStart(2, '0')}`
+  postingDate.value = candidate > periodEnd.value ? periodEnd.value : candidate
+}, { immediate: true })
+
 const preview = ref([])
 const generatedSlipIds = ref([])
 const generating = ref(false)
@@ -241,6 +257,7 @@ async function generateSlips() {
         employee_ids: selectedEmployeeIds.value,
         month: month.value,
         year: year.value,
+        posting_date: postingDate.value || null,
         adjustments: adjustmentPayload(),
       }),
     })
@@ -335,7 +352,19 @@ async function postSlips() {
         <div class="flex flex-wrap gap-4">
           <FormSelect id="month" v-model="month" :label="t('month')" :options="monthOptions" required class="w-full sm:w-40" />
           <FormSelect id="year" v-model="year" :label="t('year')" :options="yearOptions" required class="w-full sm:w-28" />
+          <label class="w-full text-sm font-medium sm:w-48">
+            {{ t('payroll_posting_date') }}
+            <input
+              id="posting_date"
+              v-model="postingDate"
+              type="date"
+              :min="periodStart"
+              :max="periodEnd"
+              class="mt-1 flex h-10 w-full rounded-md border border-[hsl(var(--input))] bg-transparent px-3 text-sm font-normal sm:h-9"
+            />
+          </label>
         </div>
+        <p class="-mt-3 text-xs text-[hsl(var(--muted-foreground))]">{{ t('payroll_posting_date_hint') }}</p>
 
         <div>
           <div class="mb-3 flex items-center justify-between">

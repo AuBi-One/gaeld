@@ -9,9 +9,12 @@ use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
+use App\Domains\Organizations\Models\Organization;
 use App\Domains\Payroll\Contracts\ReimbursementSourceInterface;
 use App\Domains\Payroll\Contracts\SourceTaxServiceInterface;
+use App\Domains\Payroll\Exceptions\PostingDateOutsidePeriodException;
 use App\Domains\Payroll\Models\SalarySlip;
+use App\Domains\Payroll\Requests\PayrollAdjustmentRules;
 use App\Domains\Payroll\Services\NullReimbursementSource;
 use App\Support\Money;
 use Carbon\Carbon;
@@ -158,7 +161,8 @@ class PostPayrollAction
         $monthPad = str_pad((string) $slip->period_month, 2, '0', STR_PAD_LEFT);
 
         $entry = new JournalEntryData(
-            date: Carbon::create($slip->period_year, $slip->period_month)->endOfMonth()->toDateString(),
+            // Explicitly, not lazily: lazy loading is refused outside production.
+            date: self::postingDate($slip, $slip->relationLoaded('organization') ? $slip->organization : Organization::query()->find($orgId)),
             reference: "PAY-{$tag}-{$slip->period_year}-{$monthPad}",
             description: $description,
             lines: $lines,
@@ -181,6 +185,35 @@ class PostPayrollAction
         $this->sendEmail->execute($postedSlip);
 
         return $postedSlip;
+    }
+
+    /**
+     * The date the slip's entry is posted on: the slip's own posting date,
+     * else the organization's payday in the slip's month (a payday past the
+     * end of a short month is its last day), else the month's last day, as
+     * before posting dates existed.
+     *
+     * @throws PostingDateOutsidePeriodException when the slip's date is outside its month
+     */
+    public static function postingDate(SalarySlip $slip, ?Organization $organization): string
+    {
+        $monthStart = Carbon::create($slip->period_year, $slip->period_month, 1);
+
+        if ($slip->posting_date !== null) {
+            $date = $slip->posting_date->toDateString();
+            if (! PayrollAdjustmentRules::withinMonth($date, $slip->period_month, $slip->period_year)) {
+                throw new PostingDateOutsidePeriodException(__('app.payroll_posting_date_outside_period'));
+            }
+
+            return $date;
+        }
+
+        $payday = $organization?->payroll_payday;
+        if ($payday === null || $payday < 1) {
+            return $monthStart->copy()->endOfMonth()->toDateString();
+        }
+
+        return $monthStart->copy()->day(min($payday, $monthStart->daysInMonth))->toDateString();
     }
 
     /**

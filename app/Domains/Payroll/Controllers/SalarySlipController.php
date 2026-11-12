@@ -2,7 +2,9 @@
 
 namespace App\Domains\Payroll\Controllers;
 
+use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Organizations\Enums\Permission;
+use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Payroll\Actions\PostPayrollAction;
 use App\Domains\Payroll\Actions\UnpostPayrollAction;
@@ -18,6 +20,7 @@ use App\Support\PdfExportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -98,7 +101,28 @@ class SalarySlipController extends Controller
             // One row per charge, labelled from the lines the slip was
             // calculated with (works for deleted employees too).
             'deductionRows' => $slip->deductionRows(),
+            'postingDate' => $this->postingDate($slip),
         ]);
+    }
+
+    /**
+     * The date the slip's entry is posted on, or would be if posted now. Read
+     * with queries of its own so no relation ends up in the slip's props.
+     */
+    private function postingDate(SalarySlip $slip): ?string
+    {
+        if ($slip->journal_entry_id !== null) {
+            $date = JournalEntry::query()->whereKey($slip->journal_entry_id)->value('date');
+            if ($date !== null) {
+                return Carbon::parse($date)->toDateString();
+            }
+        }
+
+        return rescue(
+            fn (): string => PostPayrollAction::postingDate($slip, Organization::query()->find($slip->organization_id)),
+            null,
+            false,
+        );
     }
 
     public function generate(
@@ -114,6 +138,7 @@ class SalarySlipController extends Controller
             'year' => ['required', 'integer', 'min:2000'],
             'unpaid_leave_days' => PayrollAdjustmentRules::unpaidLeaveDays($request),
             'reimbursement_amount' => ['nullable', 'numeric', 'decimal:0,2', 'min:0'],
+            'posting_date' => PayrollAdjustmentRules::postingDate($request),
         ]);
 
         $employee = Employee::query()->whereKey($validated['employee_id'])->firstOrFail();
@@ -124,6 +149,7 @@ class SalarySlipController extends Controller
             (int) ($validated['unpaid_leave_days'] ?? 0),
             (string) ($validated['reimbursement_amount'] ?? '0.00'),
         );
+        $slip->posting_date = isset($validated['posting_date']) ? Carbon::parse((string) $validated['posting_date']) : null;
         $slip->save();
 
         return redirect()->route('payroll.salarySlips.show', $slip)
@@ -141,6 +167,13 @@ class SalarySlipController extends Controller
             }
 
             return redirect()->back()->with('error', __('app.salary_slip_already_posted'));
+        }
+
+        $validated = $request->validate([
+            'posting_date' => PayrollAdjustmentRules::postingDateForSlip($slip),
+        ]);
+        if (array_key_exists('posting_date', $validated)) {
+            $slip->forceFill(['posting_date' => $validated['posting_date']])->save();
         }
 
         $action->execute($slip);

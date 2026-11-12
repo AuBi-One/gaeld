@@ -14,7 +14,7 @@ import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 
 const { t } = useTranslations()
-const { formatCurrency } = useFormatters()
+const { formatCurrency, formatDate } = useFormatters()
 
 const props = defineProps({
   slip: Object,
@@ -22,9 +22,13 @@ const props = defineProps({
   // One row per charge ({ name, employee, employer }), built by the server
   // from the lines the slip was calculated with (SalarySlip::deductionRows).
   deductionRows: { type: Array, default: () => [] },
+  // Date the entry is (or, for a draft, would be) posted on.
+  postingDate: { type: String, default: null },
 })
 
-const postForm = useForm({})
+const postForm = useForm({ posting_date: props.postingDate ?? '' })
+const periodStart = computed(() => `${props.slip.period_year}-${String(props.slip.period_month).padStart(2, '0')}-01`)
+const periodEnd = computed(() => new Date(Date.UTC(props.slip.period_year, props.slip.period_month, 0)).toISOString().slice(0, 10))
 const showUnpostDialog = ref(false)
 const showDeleteDialog = ref(false)
 const unposting = ref(false)
@@ -87,9 +91,14 @@ const deductionRows = computed(() => props.deductionRows
                 <span v-else>{{ slip.employee_name }}</span>
               </p>
             </div>
-            <Badge :variant="slip.status === 'posted' ? 'default' : 'secondary'">
-              {{ t('slip_status_' + slip.status) }}
-            </Badge>
+            <div class="flex items-center gap-3">
+              <span v-if="slip.status === 'posted' && postingDate" class="text-sm text-[hsl(var(--muted-foreground))]">
+                {{ t('payroll_posting_date') }}: {{ formatDate(postingDate) }}
+              </span>
+              <Badge :variant="slip.status === 'posted' ? 'default' : 'secondary'">
+                {{ t('slip_status_' + slip.status) }}
+              </Badge>
+            </div>
           </div>
         </CardHeader>
       </Card>
@@ -172,7 +181,18 @@ const deductionRows = computed(() => props.deductionRows
       </Card>
 
       <!-- Actions -->
-      <div class="flex flex-wrap gap-3">
+      <div class="flex flex-wrap items-end gap-3">
+        <label v-if="canManage && slip.status !== 'posted'" class="text-xs text-[hsl(var(--muted-foreground))]">
+          {{ t('payroll_posting_date') }}
+          <input
+            id="posting_date"
+            v-model="postForm.posting_date"
+            type="date"
+            :min="periodStart"
+            :max="periodEnd"
+            class="mt-1 flex h-9 w-44 rounded-md border border-[hsl(var(--input))] bg-transparent px-2 text-sm text-[hsl(var(--foreground))]"
+          />
+        </label>
         <Button
           v-if="canManage && slip.status !== 'posted'"
           size="sm"

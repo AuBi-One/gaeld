@@ -54,6 +54,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $founded_at
  * @property bool $require_two_factor
  * @property int|null $default_payment_terms_days
+ * @property int|null $payroll_payday
  * @property int $invoice_number_step
  * @property Carbon|null $suspended_at
  * @property string|null $suspended_reason
@@ -85,6 +86,7 @@ class Organization extends Model
         'business_type',
         'require_two_factor',
         'default_payment_terms_days',
+        'payroll_payday',
         'default_invoice_notes',
         'invoice_number_step',
         'logo_path',
@@ -107,6 +109,7 @@ class Organization extends Model
         return [
             'require_two_factor' => 'boolean',
             'default_payment_terms_days' => 'integer',
+            'payroll_payday' => 'integer',
             'invoice_number_step' => 'integer',
             'closed_fiscal_years' => 'array',
             'enabled_modules' => 'array',

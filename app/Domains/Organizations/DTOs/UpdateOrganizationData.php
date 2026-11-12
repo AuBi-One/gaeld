@@ -28,6 +28,8 @@ readonly class UpdateOrganizationData
      * @param  string  $locale  BCP 47 locale tag for UI language and number formatting (e.g. 'en').
      * @param  int  $defaultPaymentTermsDays  Number of days after invoice date before payment is due.
      * @param  bool  $requireTwoFactor  Whether 2FA is mandatory for all organization users.
+     * @param  int|null  $payrollPayday  Day of the month salary slips are posted on (null: last day).
+     * @param  bool  $payrollPaydayGiven  Whether the payload carried payroll_payday (absent: left unchanged).
      */
     public function __construct(
         public string $name,
@@ -41,6 +43,8 @@ readonly class UpdateOrganizationData
         public int $defaultPaymentTermsDays = 30,
         public ?BusinessType $businessType = null,
         public bool $requireTwoFactor = false,
+        public ?int $payrollPayday = null,
+        public bool $payrollPaydayGiven = false,
     ) {}
 
     /**
@@ -70,6 +74,8 @@ readonly class UpdateOrganizationData
             defaultPaymentTermsDays: (int) ($data['default_payment_terms_days'] ?? 30),
             businessType: isset($data['business_type']) ? BusinessType::tryFrom($data['business_type']) : null,
             requireTwoFactor: (bool) ($data['require_two_factor'] ?? false),
+            payrollPayday: isset($data['payroll_payday']) ? (int) $data['payroll_payday'] : null,
+            payrollPaydayGiven: array_key_exists('payroll_payday', $data),
         );
     }
 
@@ -101,6 +107,6 @@ readonly class UpdateOrganizationData
             'default_payment_terms_days' => $this->defaultPaymentTermsDays,
             'business_type' => $this->businessType?->value,
             'require_two_factor' => $this->requireTwoFactor,
-        ] + $address;
+        ] + ($this->payrollPaydayGiven ? ['payroll_payday' => $this->payrollPayday] : []) + $address;
     }
 }

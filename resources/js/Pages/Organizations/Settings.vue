@@ -102,6 +102,7 @@ const generalForm = useForm({
   locale: props.organization.locale || 'en',
   require_two_factor: props.organization.require_two_factor || false,
   default_payment_terms_days: props.organization.default_payment_terms_days ?? 30,
+  payroll_payday: props.organization.payroll_payday ?? '',
 })
 
 const fiscalYearRequestForm = useForm({
@@ -596,6 +597,18 @@ const businessTypeOptions = [
                   type="number"
                   :error="generalForm.errors.default_payment_terms_days"
                 />
+                <div v-if="featureFlags.payroll">
+                  <FormInput
+                    id="payroll_payday"
+                    v-model="generalForm.payroll_payday"
+                    :label="t('payroll_default_payday')"
+                    type="number"
+                    min="1"
+                    max="31"
+                    :error="generalForm.errors.payroll_payday"
+                  />
+                  <p class="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{{ t('payroll_default_payday_hint') }}</p>
+                </div>
               </div>
 
               <div class="flex items-center gap-3">
