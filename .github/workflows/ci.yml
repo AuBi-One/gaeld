@@ -104,18 +104,28 @@ jobs:
     strategy:
       matrix:
         include:
-          # Feature tests split into 2 balanced groups to stay under 120s timeout
+          # AuBi-One fork: every test directory on disk runs in exactly one group;
+          # tests/Unit/CiWorkflowCoverageTest.php fails when a directory under tests/
+          # or plugins/*/tests is missing here (or a path here holds no tests).
+          # Feature in four groups of similar run time (gald-dev, 2026-11-12: 262 / 333 / 253 / 165 s
+          # on a shared 2-vCPU VM; one process no longer dies at 120 s since upstream v3.8.21).
+          # tests/Performance holds k6 scripts only (no PHPUnit tests): not listed.
           - name: 'Feature (Group 1)'
             test-paths: 'tests/Feature/Accounting tests/Feature/Migration tests/Feature/Console'
           - name: 'Feature (Group 2)'
-            test-paths: 'tests/Feature/Organizations tests/Feature/Invoicing tests/Feature/Api tests/Feature/Reporting tests/Feature/Expenses tests/Feature/Banking tests/Feature/Users tests/Feature/Payroll tests/Feature/Contacts tests/Feature/Auth tests/Feature/Assets tests/Feature/Seeders tests/Feature/Security tests/Feature/Dashboard tests/Feature/Billing tests/Feature/SaasAdmin'
+            test-paths: 'tests/Feature/Organizations tests/Feature/Invoicing tests/Feature/Expenses tests/Feature/Banking'
+          - name: 'Feature (Group 3)'
+            test-paths: 'tests/Feature/Users tests/Feature/Payroll tests/Feature/Contacts tests/Feature/Auth tests/Feature/Assets tests/Feature/Seeders tests/Feature/Security tests/Feature/Dashboard tests/Feature/Billing tests/Feature/SaasAdmin'
+          - name: 'Feature (Group 4)'
+            test-paths: 'tests/Feature/Api tests/Feature/Reporting tests/Feature/EditionBoundary tests/Feature/Http tests/Feature/Plugins tests/Feature/NotificationMailContentTest.php tests/Feature/OfferPlanDefinitionTest.php tests/Feature/OrganizationCommunicationsTest.php'
+          # Plugin tests in their own job: their test cases enable the plugins and migrate their tables.
+          - name: 'Plugins'
+            test-paths: 'plugins/document-layouts/tests plugins/expense-claims/tests plugins/offers/tests'
           # Non-Feature suites
           - name: 'Unit'
             test-paths: 'tests/Unit'
           - name: 'Security'
             test-paths: 'tests/Security'
-          - name: 'Performance'
-            test-paths: 'tests/Performance'
 
     services:
       postgres:
