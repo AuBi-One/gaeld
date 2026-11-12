@@ -1018,7 +1018,7 @@ return [
     'write_off_recorded' => 'Residuo stornato. La fattura è saldata.',
     'write_off_rest' => 'Stornare il residuo',
     'invoice_delete_closed_period' => 'Una registrazione di questa fattura (:date) si trova in un periodo IVA rendicontato o in un esercizio chiuso: non può essere eliminata.',
-    'write_off_has_credit_note' => 'Per questa fattura è stata emessa una nota di credito: il suo residuo non può essere anche stornato.',
+    'write_off_settled_by_credit_note' => 'Nulla da stornare: pagamenti e note di credito coprono la fattura. È segnata come pagata, senza registrazione.',
     'write_off_hint' => 'Per un residuo che non sarà pagato: sconto, arrotondamento o perdita. Gäld lo registra come riduzione del ricavo della fattura e toglie la sua quota d\'IVA dall\'imposta dovuta, nel periodo IVA della data.',
     'write_off_reason' => 'Motivo',
     'write_off_reason_placeholder' => 'p. es. sconto 2 %, arrotondamento, perdita su crediti',

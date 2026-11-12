@@ -150,7 +150,7 @@ class InvoiceLifecycleController extends Controller
         $validated = $request->validated();
 
         try {
-            $action->execute($invoice, $validated['date'], $validated['reason']);
+            $payment = $action->execute($invoice, $validated['date'], $validated['reason']);
         } catch (\DomainException $e) {
             return $this->backWithError($e);
         } catch (ModelNotFoundException) {
@@ -158,7 +158,7 @@ class InvoiceLifecycleController extends Controller
         }
 
         return redirect()->route('invoices.show', $invoice)
-            ->with('success', __('app.write_off_recorded'));
+            ->with('success', __($payment === null ? 'app.write_off_settled_by_credit_note' : 'app.write_off_recorded'));
     }
 
     public function removePayment(Invoice $invoice, InvoicePayment $payment, RemoveInvoicePaymentAction $action): RedirectResponse

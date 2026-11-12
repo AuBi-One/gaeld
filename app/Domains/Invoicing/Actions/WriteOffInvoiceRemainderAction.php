@@ -17,13 +17,14 @@ class WriteOffInvoiceRemainderAction
         private InvoiceAccountingService $accountingService,
     ) {}
 
-    public function execute(Invoice $invoice, string $date, string $reason): InvoicePayment
+    /** @return InvoicePayment|null null: credit notes covered the rest, the invoice is marked paid */
+    public function execute(Invoice $invoice, string $date, string $reason): ?InvoicePayment
     {
         $payment = $this->accountingService->writeOffRemainder($invoice, $date, $reason);
 
-        Log::info('Invoice rest written off', [
+        Log::info($payment === null ? 'Invoice settled by its credit notes' : 'Invoice rest written off', [
             'invoice_id' => $invoice->id,
-            'payment_id' => $payment->id,
+            'payment_id' => $payment?->id,
             'organization_id' => $invoice->organization_id,
         ]);
 
