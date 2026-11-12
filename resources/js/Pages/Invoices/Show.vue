@@ -399,7 +399,7 @@ const bankAccountOptions = computed(() =>
                 {{ t('duplicate') }}
               </button>
               <button
-                v-if="canRefreshCustomerSnapshot"
+                v-if="canRefreshCustomerSnapshot && invoice?.status !== 'draft'"
                 class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]"
                 :disabled="refreshCustomerSnapshotForm.processing"
                 @click="requestCustomerSnapshotRefresh(); close()"

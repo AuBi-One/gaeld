@@ -3,7 +3,10 @@
 namespace Tests\Feature\Expenses;
 
 use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Expenses\Actions\ApproveExpenseAction;
 use App\Domains\Expenses\Actions\CancelExpenseAction;
@@ -123,6 +126,21 @@ class ExpenseFlowTest extends TestCase
             'is_posted' => true,
             'type' => 'expense_cancellation',
         ]);
+    }
+
+    public function test_cancelling_an_expense_takes_its_input_vat_back(): void
+    {
+        $vatRate = VatRate::create(['organization_id' => $this->org->id, 'name' => 'Standard', 'rate' => 8.10, 'code' => 'NORMAL', 'is_default' => true]);
+        $expense = app(PostExpenseAction::class)->execute((new ApproveExpenseAction)->execute($this->createExpense(['vat_rate_id' => $vatRate->id])), '6530');
+        $this->assertSame('56.70', (string) VatEntry::where('journal_entry_id', $expense->journal_entry_id)->sum('vat_amount'));
+
+        $cancelled = app(CancelExpenseAction::class)->execute($expense);
+
+        $reversal = JournalEntry::where('reference', 'REV-EXP-'.$cancelled->id)->sole();
+        $vat = VatEntry::where('journal_entry_id', $reversal->id)->sole();
+        $this->assertSame(VatEntryType::Input, $vat->type);
+        $this->assertSame('-56.70', (string) $vat->vat_amount);
+        $this->assertEqualsWithDelta(0.0, (float) VatEntry::sum('vat_amount'), 0.001);
     }
 
     public function test_complete_expense_flow(): void

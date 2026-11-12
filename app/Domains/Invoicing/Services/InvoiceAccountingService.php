@@ -67,6 +67,12 @@ class InvoiceAccountingService
     {
         return DB::transaction(function () use ($invoice) {
             $orgId = $invoice->organization_id;
+            // A second (stale or concurrent) finalization must not book the invoice twice.
+            $stored = Invoice::query()->withoutGlobalScopes()->whereKey($invoice->id)->lockForUpdate()->first();
+            if ($stored === null || $stored->status !== InvoiceStatus::Draft) {
+                throw new InvalidInvoiceStateException('Only a draft invoice can be posted to the ledger.');
+            }
+            $invoice->setRawAttributes($stored->getAttributes(), true);
             $invoice->load('lines.vatRate', 'organization');
 
             $isCreditNote = $invoice->type === InvoiceType::CreditNote;
@@ -141,7 +147,7 @@ class InvoiceAccountingService
             $issueDate = $invoice->issue_date->toDateString();
             $journalEntry = $this->ledgerService->postEntry($orgId, new JournalEntryData(
                 date: $invoice->journal_entry_id === null ? $issueDate : $this->correctionDate($orgId, $issueDate),
-                reference: $this->ledgerQuery->nextFreeReference($orgId, (string) $invoice->number),
+                reference: $this->ledgerQuery->nextReferenceAfterReversals($orgId, (string) $invoice->number),
                 description: "{$docType} {$invoice->number} — ".($invoice->customer->name ?? 'N/A').$fxNote,
                 lines: $lines,
             ));

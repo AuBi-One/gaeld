@@ -58,14 +58,14 @@ class RevertInvoiceToDraftTest extends TestCase
         $this->customer = Contact::create(['organization_id' => $this->org->id, 'name' => 'Test Client AG']);
     }
 
-    private function createInvoice(): Invoice
+    private function createInvoice(string $number = 'INV-2026-001'): Invoice
     {
         $action = app(CreateInvoiceAction::class);
 
         return $action->execute(new CreateInvoiceData(
             organizationId: $this->org->id,
             customerId: $this->customer->id,
-            number: 'INV-2026-001',
+            number: $number,
             issueDate: '2026-03-16',
             dueDate: '2026-04-15',
             currency: 'CHF',
@@ -188,6 +188,40 @@ class RevertInvoiceToDraftTest extends TestCase
         app(RevertInvoiceToDraftAction::class)->execute($invoice);
 
         $this->assertSame('2027-02-10', JournalEntry::where('reference', 'REV-INV-2026-001')->firstOrFail()->date->toDateString());
+    }
+
+    public function test_a_stale_second_finalization_does_not_book_the_invoice_twice(): void
+    {
+        $draft = $this->createInvoice();
+        $stale = Invoice::findOrFail($draft->id);
+        app(FinalizeInvoiceAction::class)->execute($draft);
+
+        try {
+            app(InvoiceAccountingService::class)->postToLedger($stale);
+            $this->fail('The invoice was posted twice.');
+        } catch (InvalidInvoiceStateException) {
+        }
+
+        $this->assertSame(['INV-2026-001'], JournalEntry::where('organization_id', $this->org->id)->pluck('reference')->all());
+        $this->assertEqualsWithDelta(1621.50, $this->receivableBalance(), 0.001);
+    }
+
+    public function test_a_corrected_draft_with_entries_in_a_settled_vat_period_is_not_deleted(): void
+    {
+        Account::create(['organization_id' => $this->org->id, 'code' => '1170', 'name' => 'VAT Input', 'type' => AccountType::Asset->value]);
+        Account::create(['organization_id' => $this->org->id, 'code' => '2201', 'name' => 'VAT payable', 'type' => AccountType::Liability->value]);
+        $this->travelTo('2026-10-25');
+        $invoice = app(FinalizeInvoiceAction::class)->execute($this->createInvoice());
+        $draft = app(RevertInvoiceToDraftAction::class)->execute($invoice); // reversal in March: open then
+        app(FinalizeInvoiceAction::class)->execute($this->createInvoice('INV-2026-002')); // something to settle
+        app(PostVatSettlementAction::class)->execute($this->org->id, '2026-01-01', '2026-06-30');
+
+        $response = $this->actAsOrg()->delete("/invoices/{$draft->id}");
+
+        $response->assertSessionHas('error', __('app.invoice_delete_closed_period', ['date' => '16.03.2026']));
+        $this->assertNotNull($draft->fresh());
+        $this->assertTrue(JournalEntry::where('reference', 'INV-2026-001')->exists());
+        $this->assertTrue(JournalEntry::where('reference', 'REV-INV-2026-001')->exists());
     }
 
     private function receivableBalance(): float

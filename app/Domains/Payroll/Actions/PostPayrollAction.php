@@ -160,7 +160,7 @@ class PostPayrollAction
         $entry = new JournalEntryData(
             date: Carbon::create($slip->period_year, $slip->period_month)->endOfMonth()->toDateString(),
             // A slip unposted and posted again: the reversed entry keeps the first reference.
-            reference: $this->ledgerQuery->nextFreeReference($orgId, "PAY-{$tag}-{$slip->period_year}-{$monthPad}"),
+            reference: $this->ledgerQuery->nextReferenceAfterReversals($orgId, "PAY-{$tag}-{$slip->period_year}-{$monthPad}"),
             description: $description,
             lines: $lines,
         );

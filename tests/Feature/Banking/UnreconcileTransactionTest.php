@@ -5,6 +5,8 @@ namespace Tests\Feature\Banking;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Models\VatEntry;
+use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Banking\Actions\UnreconcileTransactionAction;
 use App\Domains\Banking\Enums\BankTransactionType;
 use App\Domains\Banking\Exceptions\NotReconciledException;
@@ -155,6 +157,41 @@ class UnreconcileTransactionTest extends TestCase
         $this->assertEquals('10000.00', $result->bankAccount->balance);
         $this->assertEquals(ExpenseStatus::Approved, $expense->fresh()->status);
         $this->assertNull($expense->fresh()->journal_entry_id);
+    }
+
+    public function test_it_unreconciles_an_expense_payment_with_input_vat(): void
+    {
+        Account::create(['organization_id' => $this->organization->id, 'code' => '1170', 'name' => 'Input VAT', 'type' => AccountType::Asset->value]);
+        $vatRate = VatRate::create(['organization_id' => $this->organization->id, 'name' => 'Standard', 'rate' => 8.10, 'code' => 'NORMAL', 'is_default' => true]);
+        $expense = Expense::create([
+            'organization_id' => $this->organization->id,
+            'category' => 'Software',
+            'description' => 'Licence',
+            'amount' => 200.00,
+            'vat_amount' => 16.20,
+            'vat_rate_id' => $vatRate->id,
+            'date' => '2026-03-12',
+            'vendor' => 'Vendor',
+            'status' => ExpenseStatus::Approved,
+            'currency' => 'CHF',
+        ]);
+        $transaction = BankTransaction::create([
+            'bank_account_id' => $this->bankAccount->id,
+            'date' => '2026-03-12',
+            'description' => 'Licence',
+            'amount' => 216.20,
+            'type' => BankTransactionType::Debit,
+            'reference' => 'EXP-LIC',
+        ]);
+        $reconciled = app(ReconciliationService::class)->reconcileWithExpense($transaction, $expense, '6530');
+        $this->assertSame(1, VatEntry::where('journal_entry_id', $reconciled->journal_entry_id)->count());
+
+        $result = app(UnreconcileTransactionAction::class)->execute($reconciled);
+
+        $this->assertFalse($result->is_reconciled);
+        $this->assertEquals(ExpenseStatus::Approved, $expense->fresh()->status);
+        $this->assertEqualsWithDelta(0.0, (float) VatEntry::sum('vat_amount'), 0.001);
+        $this->assertEqualsWithDelta(0.0, (float) VatEntry::sum('base_amount'), 0.001);
     }
 
     public function test_it_unreconciles_a_manual_contra_account_match(): void

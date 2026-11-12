@@ -2,6 +2,7 @@
 
 namespace App\Domains\Invoicing\Controllers;
 
+use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Invoicing\Actions\CancelInvoiceAction;
 use App\Domains\Invoicing\Actions\CreateCreditNoteAction;
 use App\Domains\Invoicing\Actions\DuplicateInvoiceAction;
@@ -21,12 +22,12 @@ use App\Domains\Invoicing\Notifications\InvoicePaymentRecordedNotification;
 use App\Domains\Invoicing\Requests\RecordPaymentRequest;
 use App\Domains\Invoicing\Requests\UpdatePaymentDateRequest;
 use App\Domains\Invoicing\Requests\WriteOffInvoiceRemainderRequest;
-use App\Domains\Invoicing\Services\InvoiceAccountingService;
 use App\Domains\Organizations\Enums\Permission;
 use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
 use App\Http\Controllers\Controller;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -65,16 +66,11 @@ class InvoiceLifecycleController extends Controller
             ->with('success', __('app.invoice_cancelled'));
     }
 
-    public function revertToDraft(
-        Invoice $invoice,
-        RevertInvoiceToDraftAction $action,
-        InvoiceAccountingService $accounting,
-    ): RedirectResponse {
+    public function revertToDraft(Invoice $invoice, RevertInvoiceToDraftAction $action): RedirectResponse
+    {
         $this->authorize('revertToDraft', $invoice);
 
-        // A settled VAT period or closed year keeps its entries: the reversal goes to today.
-        $postedOn = $invoice->journalEntry?->date->toDateString();
-        $settled = $postedOn !== null && $accounting->correctionDate($invoice->organization_id, $postedOn) !== $postedOn;
+        $posted = $invoice->journalEntry;
 
         try {
             $action->execute($invoice);
@@ -83,7 +79,21 @@ class InvoiceLifecycleController extends Controller
         }
 
         return redirect()->route('invoices.edit', $invoice)
-            ->with('success', __($settled ? 'app.invoice_reverted_to_draft_settled_period' : 'app.invoice_reverted_to_draft'));
+            ->with('success', __($this->reversedOnAnotherDate($posted) ? 'app.invoice_reverted_to_draft_settled_period' : 'app.invoice_reverted_to_draft'));
+    }
+
+    /**
+     * Whether the reversal went to another date than the entry it reverses: its VAT period was
+     * settled or its fiscal year closed (InvoiceAccountingService::correctionDate()).
+     */
+    private function reversedOnAnotherDate(?JournalEntry $posted): bool
+    {
+        $reversedOn = $posted === null ? null : JournalEntry::query()
+            ->where('organization_id', $posted->organization_id)
+            ->where('reference', 'REV-'.$posted->reference)
+            ->value('date');
+
+        return $reversedOn !== null && Carbon::parse($reversedOn)->toDateString() !== $posted?->date->toDateString();
     }
 
     public function recordPayment(RecordPaymentRequest $request, Invoice $invoice, RecordPaymentAction $action): RedirectResponse
