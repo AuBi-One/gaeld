@@ -14,8 +14,8 @@ use App\Domains\Payroll\Contracts\ReimbursementSourceInterface;
 use App\Domains\Payroll\Contracts\SourceTaxServiceInterface;
 use App\Domains\Payroll\Exceptions\PostingDateOutsidePeriodException;
 use App\Domains\Payroll\Models\SalarySlip;
-use App\Domains\Payroll\Requests\PayrollAdjustmentRules;
 use App\Domains\Payroll\Services\NullReimbursementSource;
+use App\Domains\Payroll\Services\PayrollPeriod;
 use App\Support\Money;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -209,7 +209,7 @@ class PostPayrollAction
 
         if ($slip->posting_date !== null) {
             $date = $slip->posting_date->toDateString();
-            if (! PayrollAdjustmentRules::withinMonth($date, $slip->period_month, $slip->period_year)) {
+            if (! PayrollPeriod::contains($date, $slip->period_month, $slip->period_year)) {
                 throw new PostingDateOutsidePeriodException(__('app.payroll_posting_date_outside_period'));
             }
 

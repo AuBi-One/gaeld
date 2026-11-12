@@ -3,6 +3,7 @@
 namespace App\Domains\Payroll\Requests;
 
 use App\Domains\Payroll\Models\SalarySlip;
+use App\Domains\Payroll\Services\PayrollPeriod;
 use Carbon\Carbon;
 use Closure;
 use Illuminate\Http\Request;
@@ -56,7 +57,7 @@ final class PayrollAdjustmentRules
                 $month = (int) $request->input('month');
                 $year = (int) $request->input('year');
 
-                if ($month >= 1 && $month <= 12 && $year >= 1 && ! self::withinMonth((string) $value, $month, $year)) {
+                if ($month >= 1 && $month <= 12 && $year >= 1 && ! PayrollPeriod::contains((string) $value, $month, $year)) {
                     $fail(__('app.payroll_posting_date_outside_period'));
                 }
             },
@@ -76,20 +77,11 @@ final class PayrollAdjustmentRules
             'nullable',
             'date_format:Y-m-d',
             function (string $attribute, mixed $value, Closure $fail) use ($slip): void {
-                if (! self::withinMonth((string) $value, $slip->period_month, $slip->period_year)) {
+                if (! PayrollPeriod::contains((string) $value, $slip->period_month, $slip->period_year)) {
                     $fail(__('app.payroll_posting_date_outside_period'));
                 }
             },
         ];
-    }
-
-    public static function withinMonth(string $date, int $month, int $year): bool
-    {
-        $start = Carbon::create($year, $month, 1)->toDateString();
-        $end = Carbon::create($year, $month, 1)->endOfMonth()->toDateString();
-        $day = Carbon::parse($date)->toDateString();
-
-        return $day >= $start && $day <= $end;
     }
 
     /**
