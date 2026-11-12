@@ -101,10 +101,14 @@ class PostingDateTest extends TestCase
         $slip = app(PostPayrollAction::class)->execute($this->draft(3, '2026-03-20'));
         $this->assertSame('2026-03-20', $this->entryDate($slip));
 
-        // Re-posting then uses the same date (re-posting itself is covered elsewhere).
+        $firstReference = $slip->fresh()->journalEntry->reference;
         $slip = app(UnpostPayrollAction::class)->execute($slip);
         $this->assertSame('2026-03-20', $slip->posting_date->toDateString());
-        $this->assertSame('2026-03-20', PostPayrollAction::postingDate($slip, $this->org->fresh()));
+
+        // Posted again: same date, versioned reference next to the reversed first entry.
+        $slip = app(PostPayrollAction::class)->execute($slip->fresh());
+        $this->assertSame('2026-03-20', $this->entryDate($slip));
+        $this->assertSame($firstReference.'-v2', $slip->fresh()->journalEntry->reference);
     }
 
     public function test_posting_refuses_a_slip_dated_outside_its_month(): void
