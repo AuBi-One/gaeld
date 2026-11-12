@@ -262,6 +262,21 @@ class Invoice extends Model
     }
 
     /**
+     * Invoices whose open amount (total less what is paid or written off) lies within $tolerance
+     * of $amount, so a second instalment finds its invoice too.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeByOpenAmountRange(Builder $query, string $amount, string $tolerance): Builder
+    {
+        return $query->whereRaw(
+            '(invoices.total - (SELECT COALESCE(SUM(invoice_payments.amount), 0) FROM invoice_payments WHERE invoice_payments.invoice_id = invoices.id)) BETWEEN ? AND ?',
+            [Money::subtract($amount, $tolerance), Money::add($amount, $tolerance)],
+        );
+    }
+
+    /**
      * @param  Builder<static>  $query
      * @return Builder<static>
      */

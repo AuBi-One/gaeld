@@ -25,6 +25,8 @@ Route::post('/invoices/{invoice}/cancel', [InvoiceLifecycleController::class, 'c
 Route::post('/invoices/{invoice}/revert-to-draft', [InvoiceLifecycleController::class, 'revertToDraft'])->name('invoices.revertToDraft');
 Route::post('/invoices/{invoice}/payment', [InvoiceLifecycleController::class, 'recordPayment'])->name('invoices.payment');
 Route::patch('/invoices/{invoice}/payments/{payment}/date', [InvoiceLifecycleController::class, 'updatePaymentDate'])->name('invoices.payments.date');
+Route::delete('/invoices/{invoice}/payments/{payment}', [InvoiceLifecycleController::class, 'removePayment'])->name('invoices.payments.destroy');
+Route::post('/invoices/{invoice}/write-off', [InvoiceLifecycleController::class, 'writeOff'])->name('invoices.writeOff');
 Route::post('/invoices/{invoice}/duplicate', [InvoiceLifecycleController::class, 'duplicate'])->name('invoices.duplicate');
 Route::post('/invoices/{invoice}/credit-note', [InvoiceLifecycleController::class, 'creditNote'])->name('invoices.creditNote');
 Route::post('/invoices/{invoice}/send', [InvoiceCommunicationController::class, 'sendInvoice'])->name('invoices.send');

@@ -4,6 +4,7 @@ namespace App\Domains\Invoicing\Controllers;
 
 use App\Domains\Accounting\Queries\VatRateQuery;
 use App\Domains\Banking\Models\BankAccount;
+use App\Domains\Banking\Models\BankTransaction;
 use App\Domains\Contacts\Queries\ContactQuery;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
 use App\Domains\Invoicing\Actions\DeleteInvoiceAction;
@@ -191,6 +192,14 @@ class InvoiceController extends Controller
             'canForceDelete' => $request->user()->can('forceDelete', $invoice),
             'canRecordPayment' => $request->user()->can('recordPayment', $invoice),
             'canUpdatePayment' => $request->user()->can('updatePayment', $invoice),
+            'canCancel' => $request->user()->can('cancel', $invoice),
+            // Payments from the bank reconciliation are taken back there, not removed here.
+            'bankLinkedPaymentIds' => BankTransaction::query()
+                ->whereIn('journal_entry_id', $invoice->payments->pluck('journal_entry_id')->filter()->all())
+                ->pluck('journal_entry_id')
+                ->map(fn ($entryId) => $invoice->payments->firstWhere('journal_entry_id', $entryId)?->id)
+                ->filter()
+                ->values(),
             'canSend' => $request->user()->can('send', $invoice),
             'canSendReminder' => $request->user()->can('sendReminder', $invoice),
             'canRefreshCustomerSnapshot' => $request->user()->can('refreshCustomerSnapshot', $invoice),

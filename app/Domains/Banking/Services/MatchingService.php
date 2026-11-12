@@ -115,7 +115,7 @@ class MatchingService
 
         $invoices = Invoice::where('organization_id', $orgId)
             ->open()
-            ->byAmountRange($amount, MatchConfidence::AMOUNT_TOLERANCE)
+            ->byOpenAmountRange($amount, MatchConfidence::AMOUNT_TOLERANCE)
             ->with(['customer'])
             ->get();
 
@@ -146,10 +146,8 @@ class MatchingService
         $query = Invoice::where('organization_id', $orgId)
             ->open()
             ->where(function ($q) use ($amount, $transaction) {
-                $q->whereBetween('total', [
-                    Money::subtract($amount, MatchConfidence::AMOUNT_TOLERANCE),
-                    Money::add($amount, MatchConfidence::AMOUNT_TOLERANCE),
-                ]);
+                // What is still open, so the second instalment finds it too.
+                $q->byOpenAmountRange($amount, MatchConfidence::AMOUNT_TOLERANCE);
 
                 if ($transaction->reference) {
                     $q->orWhere('number', 'like', '%'.$transaction->reference.'%');
