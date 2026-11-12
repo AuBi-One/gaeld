@@ -3,6 +3,7 @@
 namespace App\Domains\Accounting\Controllers;
 
 use App\Domains\Accounting\Enums\TaxDeclarationStatus;
+use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TaxDeclaration;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Requests\StoreTaxDeclarationRequest;
@@ -103,6 +104,9 @@ class TaxDeclarationController extends Controller
                 'accounts.type as account_type',
                 DB::raw('SUM(transaction_lines.debit) as total_debit'),
                 DB::raw('SUM(transaction_lines.credit) as total_credit'),
+                // Revenue and expenses without the year-end closing, which empties them.
+                DB::raw("SUM(CASE WHEN journal_entries.type IS DISTINCT FROM '".JournalEntry::TYPE_YEAR_END_CLOSING."' THEN transaction_lines.debit ELSE 0 END) as trading_debit"),
+                DB::raw("SUM(CASE WHEN journal_entries.type IS DISTINCT FROM '".JournalEntry::TYPE_YEAR_END_CLOSING."' THEN transaction_lines.credit ELSE 0 END) as trading_credit"),
             ])
             ->join('accounts', 'accounts.id', '=', 'transaction_lines.account_id')
             ->join('journal_entries', 'journal_entries.id', '=', 'transaction_lines.journal_entry_id')
@@ -125,13 +129,15 @@ class TaxDeclarationController extends Controller
         ];
 
         foreach ($lines as $line) {
-            /** @var object{account_type:string,total_credit:float|int|string,total_debit:float|int|string} $line */
+            /** @var object{account_type:string,total_credit:float|int|string,total_debit:float|int|string,trading_credit:float|int|string,trading_debit:float|int|string} $line */
+            // What the year traded: a closed year would otherwise read zero. The
+            // balance-sheet totals below keep the closing (it carries the result into equity).
             if ((string) $line->account_type === 'revenue') {
-                $totals['revenue'] += (float) $line->total_credit - (float) $line->total_debit;
+                $totals['revenue'] += (float) $line->trading_credit - (float) $line->trading_debit;
             }
 
             if ((string) $line->account_type === 'expense') {
-                $totals['expenses'] += (float) $line->total_debit - (float) $line->total_credit;
+                $totals['expenses'] += (float) $line->trading_debit - (float) $line->trading_credit;
             }
 
             if ((string) $line->account_type === 'asset') {

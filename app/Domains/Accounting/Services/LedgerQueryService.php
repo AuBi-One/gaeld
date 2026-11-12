@@ -27,25 +27,34 @@ class LedgerQueryService
      * Liability, equity, and revenue accounts return credit-normal (credits − debits).
      * Only posted entries are included.
      *
-     * Results are cached per account + date range (tag: org:{orgId}:ledger).
+     * Statements of trading (profit and loss) pass $withYearEndClosing = false:
+     * the closing empties every revenue and expense account, so counting it
+     * reads a closed year as zero. Balances of position (balance sheet, cash)
+     * keep it, since it is what carries the result into equity.
+     *
+     * Results are cached per account + date range + closing flag (tag: org:{orgId}:ledger).
      *
      * @param  int  $accountId  The account's primary key
      * @param  string|null  $fromDate  Start date (inclusive, Y-m-d)
      * @param  string|null  $toDate  End date (inclusive, Y-m-d)
+     * @param  bool  $withYearEndClosing  Count the year-end closing entry
      * @return string The calculated balance (bcmath-compatible string, 2 decimal places)
      */
-    public function accountBalance(int $accountId, ?string $fromDate = null, ?string $toDate = null): string
+    public function accountBalance(int $accountId, ?string $fromDate = null, ?string $toDate = null, bool $withYearEndClosing = true): string
     {
         $account = Account::findOrFail($accountId);
-        $cacheKey = "account_balance:{$accountId}:{$fromDate}:{$toDate}";
+        $cacheKey = "account_balance:{$accountId}:{$fromDate}:{$toDate}".($withYearEndClosing ? '' : ':trading');
         $orgTag = "org:{$account->organization_id}:ledger";
 
-        return Cache::tags([$orgTag])->remember($cacheKey, now()->addHour(), function () use ($accountId, $account, $fromDate, $toDate) {
+        return Cache::tags([$orgTag])->remember($cacheKey, now()->addHour(), function () use ($accountId, $account, $fromDate, $toDate, $withYearEndClosing) {
             $query = TransactionLine::where('account_id', $accountId)
-                ->whereHas('journalEntry', function ($q) use ($fromDate, $toDate) {
+                ->whereHas('journalEntry', function ($q) use ($fromDate, $toDate, $withYearEndClosing) {
                     $q->where('is_posted', true)
                         ->when($fromDate, fn ($q, $date) => $q->where('date', '>=', $date))
-                        ->when($toDate, fn ($q, $date) => $q->where('date', '<=', $date));
+                        ->when($toDate, fn ($q, $date) => $q->where('date', '<=', $date))
+                        ->when(! $withYearEndClosing, fn ($q) => $q->where(fn ($type) => $type
+                            ->whereNull('type')
+                            ->orWhere('type', '!=', JournalEntry::TYPE_YEAR_END_CLOSING)));
                 });
 
             $debits = (string) (clone $query)->sum('debit');

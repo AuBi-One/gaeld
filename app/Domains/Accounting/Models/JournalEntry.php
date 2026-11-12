@@ -42,6 +42,13 @@ class JournalEntry extends Model
     /** @use HasFactory<Factory<static>> */
     use Auditable, BelongsToOrganization, HasFactory, HasUuids;
 
+    /**
+     * The year-end closing entry: empties every revenue and expense account
+     * into the result account. Statements of trading (profit and loss, tax
+     * return figures, dashboard) leave it out; the balance sheet keeps it.
+     */
+    public const TYPE_YEAR_END_CLOSING = 'year_end_closing';
+
     protected $fillable = [
         'organization_id',
         'date',
