@@ -46,8 +46,8 @@ class GaeldInstallCommand extends Command
             $this->callSilently('migrate', ['--force' => true]);
         });
 
-        // Step 2: Check if already installed
-        if (Organization::exists()) {
+        // Step 2: Check if already installed (a deleted organization counts, as for /setup)
+        if (Organization::withTrashed()->exists()) {
             $this->components->warn('Gäld is already installed. Use gaeld:update to apply updates.');
 
             return self::SUCCESS;
