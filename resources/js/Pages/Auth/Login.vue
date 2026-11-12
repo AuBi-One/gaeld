@@ -12,6 +12,8 @@ import GuestBar from '@/Components/GuestBar.vue'
 const { t } = useTranslations()
 const page = usePage()
 const isSaas = computed(() => page.props.features?.saas ?? false)
+// SaaS signs up through /signup; otherwise the link follows FEATURE_SELF_REGISTRATION.
+const canRegister = computed(() => isSaas.value || (page.props.features?.self_registration ?? true))
 
 const form = useForm({
   email: '',
@@ -82,7 +84,7 @@ function submit() {
         </CardContent>
       </Card>
 
-      <p class="mt-4 text-center text-sm text-[hsl(var(--muted-foreground))]">
+      <p v-if="canRegister" class="mt-4 text-center text-sm text-[hsl(var(--muted-foreground))]">
         {{ t('no_account') }}
         <Link :href="isSaas ? '/signup' : '/register'" class="font-medium text-[hsl(var(--primary))] hover:underline">
           {{ t('create_one') }}

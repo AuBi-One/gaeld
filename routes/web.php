@@ -29,8 +29,13 @@ Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->middleware('throttle:5,1')->name('login.store');
 
-    Route::get('/register', [RegisteredUserController::class, 'create'])->name('register');
-    Route::post('/register', [RegisteredUserController::class, 'store'])->middleware('throttle:5,1')->name('register.store');
+    // Closed server-side (403) when FEATURE_SELF_REGISTRATION=false.
+    Route::get('/register', [RegisteredUserController::class, 'create'])
+        ->middleware('feature:self_registration')
+        ->name('register');
+    Route::post('/register', [RegisteredUserController::class, 'store'])
+        ->middleware(['feature:self_registration', 'throttle:5,1'])
+        ->name('register.store');
 
     // Two-factor challenge
     Route::get('/two-factor-challenge', [TwoFactorChallengeController::class, 'create'])->name('two-factor.create');
