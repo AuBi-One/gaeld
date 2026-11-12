@@ -28,6 +28,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $description
  * @property string|null $justificatif_path
  * @property bool $is_posted
+ * @property string|null $reversal_of_entry_id
  * @property string|null $type
  * @property Carbon|null $vat_period_start
  * @property Carbon|null $vat_period_end
@@ -56,6 +57,7 @@ class JournalEntry extends Model
         'description',
         'justificatif_path',
         'is_posted',
+        'reversal_of_entry_id',
         'type',
         'vat_period_start',
         'vat_period_end',
@@ -80,6 +82,17 @@ class JournalEntry extends Model
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    /**
+     * The entry this one reverses (set by LedgerService::reverseEntry and the
+     * guided correction; older reversals carry only their `REV-` reference).
+     *
+     * @return BelongsTo<JournalEntry, $this>
+     */
+    public function reversalOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reversal_of_entry_id');
     }
 
     /** @return HasMany<TransactionLine, $this> */

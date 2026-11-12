@@ -2,7 +2,9 @@
 
 namespace App\Domains\Accounting\Policies;
 
+use App\Domains\Accounting\Models\JournalCorrection;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Services\JournalCorrectionEligibility;
 use App\Domains\Accounting\Services\JournalEntryReferences;
 use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Users\Models\User;
@@ -74,11 +76,34 @@ class JournalEntryPolicy extends BasePolicy
         return $allowed ? $this->unlessOwned($entry) : false;
     }
 
-    public function post(User $user, JournalEntry $entry): bool
+    public function post(User $user, JournalEntry $entry): Response|bool
     {
-        return $this->belongsToOrganization($user, $entry)
+        $allowed = $this->belongsToOrganization($user, $entry)
             && $user->hasPermissionTo(Permission::AccountingEdit)
             && ! $entry->is_posted;
+
+        // A correction's drafts are posted together, by the correction.
+        if ($allowed && JournalCorrection::openFor((string) $entry->id) !== null) {
+            return Response::deny(__('app.journal_correction_drafts_locked'));
+        }
+
+        return $allowed;
+    }
+
+    /**
+     * Start a guided correction (D70: the posted entry itself never changes).
+     * Denied with the reason when the entry is corrected elsewhere (its owner,
+     * a system workflow) or already reversed or corrected.
+     */
+    public function correct(User $user, JournalEntry $entry): Response|bool
+    {
+        if (! $this->belongsToOrganization($user, $entry) || ! $user->hasPermissionTo(Permission::AccountingEdit)) {
+            return false;
+        }
+
+        $refusal = app(JournalCorrectionEligibility::class)->refusal($entry);
+
+        return $refusal === null ? true : Response::deny($refusal);
     }
 
     /**

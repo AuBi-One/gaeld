@@ -15,7 +15,8 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
  * settlements themselves: a date with VAT activity is settled while a posted
  * `vat_settlement` entry whose period (vat_period_start/end, else the
  * `VAT-SETTLEMENT-<from>-<to>[-vN]` reference) contains it has no posted
- * reversal. A reversed settlement reopens its period for corrections, so it
+ * reversal (linked by reversal_of_entry_id, or REV- + its reference). A
+ * reversed settlement reopens its period for corrections, so it
  * counts only once settled again (`-vN`).
  */
 final class VatSettlementCoverage
@@ -79,16 +80,22 @@ final class VatSettlementCoverage
             return [];
         }
 
-        $reversed = JournalEntry::withoutGlobalScopes()
+        // A posted reversal names its settlement (reversal_of_entry_id) or, for
+        // older ones, carries REV- + the settlement's reference.
+        $reversals = JournalEntry::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
             ->where('is_posted', true)
-            ->whereIn('reference', $settlements->pluck('reference')->filter()->map(fn (string $reference): string => 'REV-'.$reference)->values()->all())
-            ->pluck('reference')
-            ->flip();
+            ->where(fn ($query) => $query
+                ->whereIn('reversal_of_entry_id', $settlements->pluck('id')->all())
+                ->orWhereIn('reference', $settlements->pluck('reference')->filter()->map(fn (string $reference): string => 'REV-'.$reference)->values()->all()))
+            ->get(['reference', 'reversal_of_entry_id']);
+        $reversedIds = $reversals->pluck('reversal_of_entry_id')->filter()->map(fn ($id): string => (string) $id)->flip();
+        $reversedReferences = $reversals->pluck('reference')->filter()->flip();
 
         $periods = [];
         foreach ($settlements as $settlement) {
-            if ($settlement->reference !== null && $reversed->has('REV-'.$settlement->reference)) {
+            if ($reversedIds->has((string) $settlement->id)
+                || ((string) $settlement->reference !== '' && $reversedReferences->has('REV-'.$settlement->reference))) {
                 continue;
             }
 

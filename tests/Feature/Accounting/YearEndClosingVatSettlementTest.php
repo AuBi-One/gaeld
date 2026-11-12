@@ -89,6 +89,22 @@ class YearEndClosingVatSettlementTest extends TestCase
         $this->assertClosingRefused(['Q3 2025', 'Q4 2025'], ['Q1 2025']);
     }
 
+    public function test_a_reversal_linked_to_the_settlement_counts_whatever_its_reference(): void
+    {
+        $this->settlement('2025-01-01', '2025-06-30');
+        $settlement = $this->settlement('2025-07-01', '2025-12-31');
+        JournalEntry::create([
+            'organization_id' => $this->organization->id,
+            'date' => '2025-12-31',
+            'reference' => 'STORNO-S2',
+            'description' => 'reversal',
+            'is_posted' => true,
+            'reversal_of_entry_id' => $settlement->id,
+        ]);
+
+        $this->assertWizardShowsUnsettled(['Q3 2025', 'Q4 2025']);
+    }
+
     public function test_a_draft_reversal_leaves_the_settlement_in_force(): void
     {
         $this->settlement('2025-01-01', '2025-06-30');

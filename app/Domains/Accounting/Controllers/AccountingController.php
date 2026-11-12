@@ -7,6 +7,7 @@ use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Exceptions\AlreadyPostedException;
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\JournalCorrection;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Queries\AccountQuery;
@@ -146,7 +147,49 @@ class AccountingController extends Controller
                 : null,
             'canEditJustificatif' => $request->user()?->can('update', $journalEntry) ?? false,
             'canAttachJustificatif' => $request->user()?->can('attachJustificatif', $journalEntry) ?? false,
+            ...$this->correctionProps($request, $journalEntry),
         ]);
+    }
+
+    /**
+     * The guided correction on the entry's page: whether one can be started
+     * (or why not), and the correction this entry belongs to, if any.
+     *
+     * @return array<string, mixed>
+     */
+    private function correctionProps(Request $request, JournalEntry $entry): array
+    {
+        $correction = JournalCorrection::query()
+            ->where('original_journal_entry_id', $entry->id)
+            ->orWhere('reversal_journal_entry_id', $entry->id)
+            ->orWhere('replacement_journal_entry_id', $entry->id)
+            ->first();
+        $role = match ((string) $entry->id) {
+            (string) $correction?->original_journal_entry_id => 'original',
+            (string) $correction?->reversal_journal_entry_id => 'reversal',
+            (string) $correction?->replacement_journal_entry_id => 'replacement',
+            default => null,
+        };
+        $editable = $role === 'replacement' && $correction?->isDraft() && ($request->user()?->can('update', $correction) ?? false);
+        $canCorrect = $entry->is_posted && $correction === null && ($request->user()?->can('correct', $entry) ?? false);
+
+        return [
+            'correction' => $correction === null ? null : [
+                'id' => $correction->id,
+                'status' => $correction->status->value,
+                'reason' => $correction->reason,
+                'role' => $role,
+                'original_id' => $correction->original_journal_entry_id,
+                'reversal_id' => $correction->reversal_journal_entry_id,
+                'replacement_id' => $correction->replacement_journal_entry_id,
+                'editable' => $editable,
+            ],
+            'canCorrect' => $canCorrect,
+            'correctionAccounts' => $editable
+                ? Account::query()->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name', 'type'])
+                    ->map(fn (Account $a): array => ['id' => $a->id, 'code' => $a->code, 'name' => $a->display_name])->values()
+                : [],
+        ];
     }
 
     public function createJournalEntry(CurrentOrganization $currentOrg): Response
@@ -306,6 +349,9 @@ class AccountingController extends Controller
 
     public function postJournalEntry(JournalEntry $journalEntry, LedgerService $ledger): RedirectResponse
     {
+        if ($refused = $this->refuseOwned('post', $journalEntry)) {
+            return $refused;
+        }
         $this->authorize('post', $journalEntry);
 
         try {

@@ -11,6 +11,7 @@ use App\Domains\Accounting\Models\ConsolidationGroup;
 use App\Domains\Accounting\Models\CostCenter;
 use App\Domains\Accounting\Models\ExchangeRate;
 use App\Domains\Accounting\Models\FiscalYear;
+use App\Domains\Accounting\Models\JournalCorrection;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TaxDeclaration;
 use App\Domains\Accounting\Models\TransactionLine;
@@ -19,8 +20,10 @@ use App\Domains\Accounting\Policies\ConsolidationGroupPolicy;
 use App\Domains\Accounting\Policies\CostCenterPolicy;
 use App\Domains\Accounting\Policies\ExchangeRatePolicy;
 use App\Domains\Accounting\Policies\FiscalYearPolicy;
+use App\Domains\Accounting\Policies\JournalCorrectionPolicy;
 use App\Domains\Accounting\Policies\TaxDeclarationPolicy;
 use App\Domains\Accounting\Services\JournalEntryReferences;
+use App\Domains\Accounting\Support\JournalCorrectionDrafts;
 use App\Domains\Accounting\Support\SystemReferencePrefixes;
 use App\Domains\Api\Jobs\DispatchWebhookJob;
 use App\Domains\Api\Models\PersonalAccessToken;
@@ -210,6 +213,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(ExchangeRate::class, ExchangeRatePolicy::class);
         Gate::policy(ConsolidationGroup::class, ConsolidationGroupPolicy::class);
         Gate::policy(RecurringExpense::class, RecurringExpensePolicy::class);
+        Gate::policy(JournalCorrection::class, JournalCorrectionPolicy::class);
+        // A guided correction's drafts are owned by it until it is posted.
+        $this->callAfterResolving(JournalEntryReferences::class, fn (JournalEntryReferences $references) => JournalCorrectionDrafts::register($references));
 
         // Lock legally archived records (Swiss CO 10-year immutability).
         $registerLock = function (string $modelClass, string $documentType): void {

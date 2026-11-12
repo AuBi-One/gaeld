@@ -207,6 +207,12 @@ class LedgerService
                 type: $type ?? 'reversal',
             ));
 
+            // The reversal names its original (REV- stays the readable label); one reversal per entry.
+            if (JournalEntry::withoutGlobalScopes()->where('reversal_of_entry_id', $original->id)->exists()) {
+                throw new DuplicateReferenceException('This journal entry has already been reversed.');
+            }
+            $reversalEntry->forceFill(['reversal_of_entry_id' => $original->id])->save();
+
             JournalEntryReversed::dispatch($reversalEntry, $original);
 
             return $reversalEntry;
@@ -239,6 +245,20 @@ class LedgerService
     private function flushCacheAfterCommit(string $organizationId): void
     {
         DB::afterCommit(fn () => $this->flushCache($organizationId));
+    }
+
+    /**
+     * The balance and account checks of {@see createDraft()}, without writing:
+     * for draft edits made outside this service (a correction's replacement).
+     *
+     * @param  JournalLineData[]  $lines
+     *
+     * @throws UnbalancedEntryException|InvalidEntryDataException
+     */
+    public function validateDraftLines(string $organizationId, array $lines): void
+    {
+        $this->validateBalance($lines);
+        $this->validateAccounts($organizationId, $lines);
     }
 
     // ──────────────────────────────────────────────────────────────
