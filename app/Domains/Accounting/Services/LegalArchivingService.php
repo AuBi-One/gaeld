@@ -182,7 +182,12 @@ class LegalArchivingService
                     $doc->update(['archived_at' => now()]);
                 });
 
-            $journalEntries = JournalEntry::where('organization_id', $orgId)
+            // The lines carry the amounts, so they are part of the archived
+            // payload and its checksum, not only the entry header. Archives
+            // written before (header only) keep verifying: the check hashes
+            // the stored file, it never re-serialises the live record.
+            $journalEntries = JournalEntry::with('lines')
+                ->where('organization_id', $orgId)
                 ->whereBetween('date', [$period->fromDate, $period->toDate]);
             if (! $preservePreviousVersion) {
                 $journalEntries->whereNull('archived_at');

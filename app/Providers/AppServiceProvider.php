@@ -13,6 +13,7 @@ use App\Domains\Accounting\Models\ExchangeRate;
 use App\Domains\Accounting\Models\FiscalYear;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TaxDeclaration;
+use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Accounting\Policies\ConsolidationGroupPolicy;
 use App\Domains\Accounting\Policies\CostCenterPolicy;
@@ -64,6 +65,7 @@ use App\Support\EditionCompatibility as EditionCompatibilityService;
 use App\Support\EditionReleasePair;
 use App\Support\Listeners\AuthAuditSubscriber;
 use App\Support\Observers\LocksArchivedRecord;
+use App\Support\Observers\LocksArchivedTransactionLine;
 use App\Support\Plugins\PluginNavigation;
 use App\Support\Services\DefaultOrganizationQuotaResolver;
 use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
@@ -216,6 +218,12 @@ class AppServiceProvider extends ServiceProvider
         $registerLock(Invoice::class, 'invoice');
         $registerLock(Expense::class, 'expense');
         $registerLock(SalarySlip::class, 'salary_slip');
+
+        // The lines carry the amounts: an archived entry's lines are locked too.
+        $lineLock = new LocksArchivedTransactionLine;
+        Event::listen('eloquent.creating: '.TransactionLine::class, fn ($line) => $lineLock->creating($line));
+        Event::listen('eloquent.updating: '.TransactionLine::class, fn ($line) => $lineLock->updating($line));
+        Event::listen('eloquent.deleting: '.TransactionLine::class, fn ($line) => $lineLock->deleting($line));
 
         // Cache invalidation: flush tagged caches when models change
         $flushTags = function (string ...$tags) {
