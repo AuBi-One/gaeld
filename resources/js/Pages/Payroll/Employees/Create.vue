@@ -42,7 +42,7 @@ const form = useForm({
   last_name: '',
   ahv_number: '',
   email: '',
-  start_date: new Date().toISOString().slice(0, 10),
+  entry_date: new Date().toISOString().slice(0, 10),
   gross_salary: '',
   status: 'active',
   iban: '',
@@ -69,7 +69,7 @@ function submit() {
     city: data.city || null,
     country: data.country || null,
     ahv_number: data.ahv_number || null,
-    entry_date: data.start_date,
+    entry_date: data.entry_date,
     gross_salary: data.gross_salary,
     is_active: data.status === 'active',
     is_source_tax_subject: data.is_source_tax_subject,
@@ -147,11 +147,11 @@ function submit() {
           <h3 class="text-sm font-medium text-[hsl(var(--foreground))]">{{ t('employment') }}</h3>
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormInput
-              id="start_date"
-              v-model="form.start_date"
+              id="entry_date"
+              v-model="form.entry_date"
               type="date"
               :label="t('start_date')"
-              :error="form.errors.start_date"
+              :error="form.errors.entry_date"
               required
             />
             <FormInput

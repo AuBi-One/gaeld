@@ -37,9 +37,9 @@ use Laravel\Scout\Searchable;
  * @property InvoiceTaxTreatment $tax_treatment
  * @property InvoiceType $type
  * @property string|null $contact_person_id
- * @property array{name: string, attention: string|null, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, vat_number: string|null}|null $customer_snapshot
+ * @property array{name: string, attention?: string|null, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null}|null $customer_snapshot
  * @property Carbon $issue_date
- * @property Carbon $due_date
+ * @property Carbon|null $due_date
  * @property string $subtotal
  * @property string $vat_amount
  * @property string $total
@@ -53,7 +53,6 @@ use Laravel\Scout\Searchable;
  * @property string|null $justificatif_path
  * @property int $reminder_count
  * @property Carbon|null $last_reminded_at
- * @property bool $auto_reminders
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -78,7 +77,6 @@ class Invoice extends Model
 
     protected $attributes = [
         'tax_treatment' => InvoiceTaxTreatment::Standard->value,
-        'auto_reminders' => true,
     ];
 
     protected $fillable = [
@@ -107,7 +105,6 @@ class Invoice extends Model
         'justificatif_path',
         'reminder_count',
         'last_reminded_at',
-        'auto_reminders',
         'archived_at',
     ];
 
@@ -125,7 +122,6 @@ class Invoice extends Model
             'customer_snapshot' => 'array',
             'reminder_count' => 'integer',
             'last_reminded_at' => 'datetime',
-            'auto_reminders' => 'boolean',
             'archived_at' => 'datetime',
         ];
     }
@@ -148,6 +144,17 @@ class Invoice extends Model
     public function contactPerson(): BelongsTo
     {
         return $this->belongsTo(ContactPerson::class);
+    }
+
+    /**
+     * The customer block of the invoice documents: the snapshot taken when the invoice was
+     * saved, or the live contact (with the invoice's contact person) for an old invoice without one.
+     *
+     * @return array{name: string, attention?: string|null, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name?: string|null, salutation?: string|null, vat_number: string|null}|null
+     */
+    public function customerDetailsForDocument(): ?array
+    {
+        return $this->customer_snapshot ?? $this->customer?->toInvoiceSnapshot($this->contactPerson);
     }
 
     /** @return BelongsTo<JournalEntry, $this> */
@@ -223,6 +230,7 @@ class Invoice extends Model
     public function isOverdue(): bool
     {
         return in_array($this->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue], true)
+            && $this->due_date !== null
             && $this->due_date->isBefore(now()->startOfDay());
     }
 

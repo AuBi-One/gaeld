@@ -7,6 +7,7 @@ use App\Domains\Organizations\Models\Organization;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Attachment;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -28,7 +29,11 @@ class InvoiceMail extends Mailable
             ? $this->replacePlaceholders($this->organization->invoice_email_subject)
             : __('mail.invoice_subject', ['number' => $this->invoice->number]);
 
-        return new Envelope(subject: $subject);
+        return new Envelope(
+            from: $this->fromAddress(),
+            replyTo: $this->replyToAddresses(),
+            subject: $subject,
+        );
     }
 
     public function content(): Content
@@ -39,6 +44,7 @@ class InvoiceMail extends Mailable
                 'body' => $this->organization->invoice_email_body
                     ? $this->replacePlaceholders($this->organization->invoice_email_body)
                     : null,
+                'organization' => $this->organization,
             ],
         );
     }
@@ -66,10 +72,27 @@ class InvoiceMail extends Mailable
                 $this->invoice->customer->name ?? '',
                 $this->invoice->number ?? '',
                 number_format($this->invoice->total ?? 0, 2).' '.($this->invoice->currency ?? 'CHF'),
-                $this->invoice->due_date->format('d.m.Y'),
+                $this->invoice->due_date?->format('d.m.Y') ?? '',
                 $this->organization->name ?? '',
             ],
             $text,
         );
+    }
+
+    private function fromAddress(): ?Address
+    {
+        $address = config('mail.from.address');
+
+        return $address ? new Address($address, $this->organization->name) : null;
+    }
+
+    /**
+     * @return array<int, Address>
+     */
+    private function replyToAddresses(): array
+    {
+        return $this->organization->contact_email
+            ? [new Address($this->organization->contact_email, $this->organization->name)]
+            : [];
     }
 }

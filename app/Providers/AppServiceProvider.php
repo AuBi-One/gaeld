@@ -32,11 +32,12 @@ use App\Domains\Expenses\Contracts\ReceiptOcrInterface;
 use App\Domains\Expenses\Jobs\ProcessReceiptOcrJob;
 use App\Domains\Expenses\Models\Expense;
 use App\Domains\Expenses\Models\ExpenseCategory;
+use App\Domains\Expenses\Models\RecurringExpense;
+use App\Domains\Expenses\Policies\RecurringExpensePolicy;
 use App\Domains\Expenses\Search\ExpenseSearchProvider;
 use App\Domains\Expenses\Services\NullOcrService;
 use App\Domains\Expenses\Services\TesseractOcrService;
 use App\Domains\Invoicing\Jobs\GenerateRecurringInvoicesJob;
-use App\Domains\Invoicing\Jobs\SendPaymentRemindersJob;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Models\InvoicePayment;
 use App\Domains\Invoicing\Search\InvoiceSearchProvider;
@@ -54,6 +55,7 @@ use App\Domains\Payroll\Services\NullReimbursementSource;
 use App\Domains\Payroll\Services\NullSourceTaxService;
 use App\Domains\Reporting\Jobs\GenerateReportsJob;
 use App\Domains\Users\Jobs\ExportUserDataJob;
+use App\Domains\Users\Models\User;
 use App\Http\Services\GlobalSearchService;
 use App\Listeners\SendHorizonTelegramAlert;
 use App\Support\Contracts\EditionCompatibility;
@@ -78,6 +80,7 @@ use Illuminate\Validation\Rules\Password;
 use Knuckles\Camel\Extraction\ExtractedEndpointData;
 use Knuckles\Scribe\Scribe;
 use Laravel\Horizon\Events\LongWaitDetected;
+use Laravel\Passkeys\Passkeys;
 use Laravel\Sanctum\Sanctum;
 
 /**
@@ -161,6 +164,7 @@ class AppServiceProvider extends ServiceProvider
         RedirectIfAuthenticated::redirectUsing(fn () => route('home'));
 
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
+        Passkeys::useUserModel(User::class);
 
         // ── Queue Routing (Laravel 13) ──────────────────────────
         // Centralizes job→queue mapping so individual jobs don't
@@ -174,7 +178,6 @@ class AppServiceProvider extends ServiceProvider
             ExportUserDataJob::class => [null, 'exports'],
             ExportOrganizationDataJob::class => [null, 'exports'],
             GenerateRecurringInvoicesJob::class => [null, 'scheduled'],
-            SendPaymentRemindersJob::class => [null, 'scheduled'],
             GenerateReportsJob::class => [null, 'scheduled'],
             MonthlyDepreciationJob::class => [null, 'scheduled'],
         ]);
@@ -201,6 +204,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(CostCenter::class, CostCenterPolicy::class);
         Gate::policy(ExchangeRate::class, ExchangeRatePolicy::class);
         Gate::policy(ConsolidationGroup::class, ConsolidationGroupPolicy::class);
+        Gate::policy(RecurringExpense::class, RecurringExpensePolicy::class);
 
         // Lock legally archived records (Swiss CO 10-year immutability).
         $registerLock = function (string $modelClass, string $documentType): void {
@@ -231,12 +235,13 @@ class AppServiceProvider extends ServiceProvider
         };
 
         $referenceFlush = $flushTags('reference');
+        $accountFlush = $flushTags('reference', 'ledger');
         $contactsFlush = $flushTags('contacts');
         $dashboardFlush = $flushTags('dashboard');
 
         foreach (['created', 'updated', 'deleted'] as $event) {
             VatRate::$event($referenceFlush);
-            Account::$event($referenceFlush);
+            Account::$event($accountFlush);
             ExpenseCategory::$event($referenceFlush);
             Contact::$event($contactsFlush);
             Invoice::$event($dashboardFlush);

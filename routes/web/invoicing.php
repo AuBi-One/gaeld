@@ -24,12 +24,13 @@ Route::post('/invoices/{invoice}/finalize', [InvoiceLifecycleController::class, 
 Route::post('/invoices/{invoice}/cancel', [InvoiceLifecycleController::class, 'cancel'])->name('invoices.cancel');
 Route::post('/invoices/{invoice}/revert-to-draft', [InvoiceLifecycleController::class, 'revertToDraft'])->name('invoices.revertToDraft');
 Route::post('/invoices/{invoice}/payment', [InvoiceLifecycleController::class, 'recordPayment'])->name('invoices.payment');
+Route::patch('/invoices/{invoice}/payments/{payment}/date', [InvoiceLifecycleController::class, 'updatePaymentDate'])->name('invoices.payments.date');
 Route::post('/invoices/{invoice}/duplicate', [InvoiceLifecycleController::class, 'duplicate'])->name('invoices.duplicate');
 Route::post('/invoices/{invoice}/credit-note', [InvoiceLifecycleController::class, 'creditNote'])->name('invoices.creditNote');
 Route::post('/invoices/{invoice}/send', [InvoiceCommunicationController::class, 'sendInvoice'])->name('invoices.send');
 Route::get('/invoices/{invoice}/qr-pdf', [InvoiceDocumentController::class, 'downloadQrPdf'])->middleware('throttle:30,1')->name('invoices.qr-pdf');
+Route::post('/invoices/{invoice}/refresh-customer-snapshot', [InvoiceDocumentController::class, 'refreshCustomerSnapshot'])->name('invoices.refreshCustomerSnapshot');
 Route::delete('/invoices/{invoice}/justificatif', [InvoiceDocumentController::class, 'removeJustificatif'])->name('invoices.justificatif.remove');
 Route::get('/invoices/{invoice}/justificatif', [InvoiceDocumentController::class, 'downloadJustificatif'])->middleware('throttle:30,1')->name('invoices.justificatif.download');
 Route::post('/invoices/{invoice}/reminder', [InvoiceCommunicationController::class, 'sendReminder'])->name('invoices.reminder');
-Route::patch('/invoices/{invoice}/auto-reminders', [InvoiceCommunicationController::class, 'updateAutoReminders'])->name('invoices.autoReminders');
 Route::delete('/invoices/{invoice}/purge', [InvoiceLifecycleController::class, 'purge'])->withTrashed()->name('invoices.purge');

@@ -3,6 +3,7 @@
 namespace App\Domains\Invoicing\Requests;
 
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Invoicing\Models\RecurringInvoice;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
@@ -10,6 +11,18 @@ use Illuminate\Validation\Rule;
 
 class RecurringInvoiceRequest extends FormRequest
 {
+    public function authorize(): bool
+    {
+        $recurring = $this->route('recurring');
+
+        if ($this->isMethod('POST')) {
+            return $this->user()?->can('create', RecurringInvoice::class) ?? false;
+        }
+
+        return $recurring instanceof RecurringInvoice
+            && ($this->user()?->can('update', $recurring) ?? false);
+    }
+
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {

@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Domains\Accounting\Models\FiscalYear;
+use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Models\OrganizationDocumentStorageUsage;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Users\Models\User;
@@ -149,7 +150,7 @@ class HandleInertiaRequests extends Middleware
                 'locale' => $user->locale,
                 'show_help' => $user->show_help,
                 'two_factor_enabled' => $user->hasTwoFactorEnabled(),
-                'has_passkeys' => $user->webAuthnCredentials()->exists(),
+                'has_passkeys' => $user->hasPasskeysEnabled(),
                 'notification_preferences' => $user->notification_preferences ?? [],
                 'onboarding_completed_at' => $user->onboarding_completed_at?->toIso8601String(),
             ],
@@ -157,6 +158,7 @@ class HandleInertiaRequests extends Middleware
             'subscription' => $this->resolveSubscription($user),
             'role' => fn () => $this->resolveCurrentRole($user),
             'permissions' => fn () => $this->resolvePermissions($user),
+            'canCreateOrganization' => $user->can('create', Organization::class),
             'organizations' => $user->organizations()
                 ->select('organizations.id', 'organizations.name')
                 ->get()

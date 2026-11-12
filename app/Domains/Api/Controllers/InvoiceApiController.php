@@ -34,7 +34,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 
 /**
  * @group Invoices
@@ -181,8 +180,7 @@ class InvoiceApiController extends Controller
     /**
      * Update invoice
      *
-     * Updates an existing invoice. Only draft invoices can be modified, except
-     * `auto_reminders` sent alone, which any non-archived invoice accepts.
+     * Updates an existing invoice. Only draft invoices can be modified.
      *
      * @urlParam invoice string required The UUID of the invoice. Example: 9c8f1a2b-3c4d-5e6f-7a8b-9c0d1e2f3a4b
      *
@@ -193,7 +191,6 @@ class InvoiceApiController extends Controller
      * @bodyParam notes string Notes displayed on the invoice.
      * @bodyParam introduction string Text printed before the line items.
      * @bodyParam payment_terms string Payment terms text.
-     * @bodyParam auto_reminders boolean Whether the scheduled payment reminders are sent for this invoice.
      * @bodyParam lines object[] Line items (replaces all existing lines).
      * @bodyParam lines[].description string required Line description.
      * @bodyParam lines[].quantity number required Quantity (min 0.01).
@@ -208,19 +205,9 @@ class InvoiceApiController extends Controller
         UpdateInvoiceAction $action,
         CurrentOrganization $currentOrg,
     ): InvoiceResource {
-        $validated = $request->validated();
-
-        // Only the reminder switch: allowed on sent invoices too, without touching the rest.
-        if (array_keys($validated) === ['auto_reminders']) {
-            $this->authorize('manageReminders', $invoice);
-            $invoice->update(['auto_reminders' => (bool) $validated['auto_reminders']]);
-
-            return new InvoiceResource($invoice->fresh(['customer', 'lines.vatRate']));
-        }
-
         $this->authorize('update', $invoice);
-        $autoReminders = $validated['auto_reminders'] ?? null;
-        unset($validated['auto_reminders']);
+
+        $validated = $request->validated();
         $validated['organization_id'] = $currentOrg->id();
 
         // Resolve customer UUID to internal integer FK
@@ -238,12 +225,7 @@ class InvoiceApiController extends Controller
         $validated = $this->completeUpdatePayload($invoice, $validated);
 
         $dto = UpdateInvoiceData::fromArray($validated);
-        DB::transaction(function () use ($action, $invoice, $dto, $autoReminders): void {
-            $action->execute($invoice, $dto);
-            if ($autoReminders !== null) {
-                $invoice->update(['auto_reminders' => (bool) $autoReminders]);
-            }
-        });
+        $action->execute($invoice, $dto);
 
         return new InvoiceResource($invoice->fresh(['customer', 'lines.vatRate']));
     }
@@ -384,7 +366,7 @@ class InvoiceApiController extends Controller
      */
     public function reminder(Invoice $invoice, InvoiceMailerService $mailerService): InvoiceResource|JsonResponse
     {
-        $this->authorize('send', $invoice);
+        $this->authorize('sendReminder', $invoice);
 
         try {
             $mailerService->sendReminder($invoice);
@@ -455,7 +437,7 @@ class InvoiceApiController extends Controller
             'issue_date' => $validated['issue_date'] ?? $invoice->issue_date->toDateString(),
             'due_date' => array_key_exists('due_date', $validated)
                 ? $validated['due_date']
-                : $invoice->due_date->toDateString(),
+                : $invoice->due_date?->toDateString(),
             'currency' => $validated['currency'] ?? $invoice->currency,
             'notes' => array_key_exists('notes', $validated)
                 ? $validated['notes']

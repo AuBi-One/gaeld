@@ -5,11 +5,10 @@ import FormInput from '@/Components/UI/FormInput.vue'
 import FormTextarea from '@/Components/UI/FormTextarea.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
 import SearchableSelect from '@/Components/UI/SearchableSelect.vue'
-import Tooltip from '@/Components/UI/Tooltip.vue'
 import InvoiceLineSourcePicker from '@/Components/Invoices/InvoiceLineSourcePicker.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
-import { Plus, Trash2, HelpCircle, ArrowUp, ArrowDown, Copy, Link2, X } from 'lucide-vue-next'
+import { Plus, Trash2, ArrowUp, ArrowDown, Copy, Link2, X } from 'lucide-vue-next'
 
 const props = defineProps({
   modelValue: { type: Array, required: true },
@@ -115,6 +114,10 @@ const lineTypeOptions = computed(() => [
   { value: 'text', label: t('line_type_text') },
 ])
 
+function lineTypeLabel(type) {
+  return lineTypeOptions.value.find(option => option.value === type)?.label ?? type
+}
+
 const discountTypeOptions = computed(() => [
   { value: 'flat', label: t('discount_flat') },
   { value: 'percentage', label: t('discount_percentage') },
@@ -218,50 +221,60 @@ defineExpose({ subtotal, vatTotal, total })
       </div>
       <span class="shrink-0 text-xs tabular-nums text-[hsl(var(--muted-foreground))]">{{ lines.length }} {{ t('line_items') }}</span>
     </div>
-    <div class="mb-2 hidden grid-cols-[minmax(8rem,1.15fr)_minmax(0,2.4fr)_minmax(5rem,.8fr)_minmax(8rem,1.1fr)_minmax(8rem,1.25fr)_minmax(7rem,1fr)_auto] gap-3 px-4 text-xs font-medium text-[hsl(var(--muted-foreground))] xl:grid">
-      <span>{{ t('type') }}</span>
-      <span>{{ t('description') }}</span>
-      <span>{{ t('qty') }}</span>
-      <span>{{ t('unit_price') }}</span>
-      <span>{{ t('vat') }}</span>
-      <span class="text-right">{{ t('amount') }}</span>
-      <span class="text-right">{{ t('actions') }}</span>
-    </div>
-    <div class="divide-y overflow-hidden rounded-lg border border-[hsl(var(--border))]">
+    <div class="space-y-3">
       <div
         v-for="(line, i) in lines"
         :key="i"
         :class="[
-          'grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(8rem,1.15fr)_minmax(0,2.4fr)_minmax(5rem,.8fr)_minmax(8rem,1.1fr)_minmax(8rem,1.25fr)_minmax(7rem,1fr)_auto] sm:items-end sm:gap-3',
-          line.type === 'discount' ? 'bg-[hsl(var(--destructive)/0.04)]' : line.type === 'text' ? 'bg-[hsl(var(--muted)/0.35)]' : 'bg-[hsl(var(--card))]',
+          'rounded-lg border p-4 shadow-sm xl:p-5',
+          line.type === 'discount' ? 'border-[hsl(var(--destructive)/0.35)] bg-[hsl(var(--destructive)/0.045)]' : line.type === 'text' ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]',
         ]"
       >
-        <div class="min-w-0 sm:col-span-1 xl:col-span-1">
-          <FormSelect
-            :id="`line-type-${i}`"
-            v-model="line.type"
-            :label="t('type')"
-            label-class="xl:sr-only"
-            :options="lineTypeOptions"
-          />
-          <FormSelect
-            v-if="line.type === 'discount'"
-            :id="`line-discount-type-${i}`"
-            v-model="line.discount_type"
-            :label="t('discount_mode')"
-            label-class="xl:sr-only"
-            :options="discountTypeOptions"
-            class="mt-3"
-          />
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[hsl(var(--border))] pb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">{{ t('line_items') }} {{ i + 1 }}</span>
+            <span class="rounded-full bg-[hsl(var(--muted))] px-2 py-1 text-xs font-medium text-[hsl(var(--foreground))]">{{ lineTypeLabel(line.type) }}</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <Button type="button" variant="ghost" size="icon" :disabled="i === 0" :title="t('move_line_up')" @click="moveLine(i, -1)">
+              <ArrowUp class="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" :disabled="i === lines.length - 1" :title="t('move_line_down')" @click="moveLine(i, 1)">
+              <ArrowDown class="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" :title="t('duplicate_line')" @click="duplicateLine(i)">
+              <Copy class="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" :disabled="lines.length <= 1" :title="t('delete')" @click="removeLine(i)">
+              <Trash2 class="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-        <div class="min-w-0 sm:col-span-2" :class="line.type === 'text' ? 'xl:col-span-4' : 'xl:col-span-1'">
+
+        <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(10rem,0.8fr)_minmax(0,2fr)]">
+          <div>
+            <FormSelect
+              :id="`line-type-${i}`"
+              v-model="line.type"
+              :label="t('type')"
+              :options="lineTypeOptions"
+            />
+            <FormSelect
+              v-if="line.type === 'discount'"
+              :id="`line-discount-type-${i}`"
+              v-model="line.discount_type"
+              :label="t('discount_mode')"
+              :options="discountTypeOptions"
+              class="mt-4"
+            />
+          </div>
+          <div>
           <FormTextarea
             :id="`line-desc-${i}`"
             v-model="line.description"
             :label="t('description')"
-            label-class="xl:sr-only"
             :error="errors[`lines.${i}.description`]"
-            :rows="2"
+            :rows="3"
             required
           />
           <p v-if="errors[`lines.${i}.source_id`] || errors[`lines.${i}.source_type`]" class="mt-1 text-xs text-[hsl(var(--destructive))]">
@@ -274,102 +287,52 @@ defineExpose({ subtotal, vatTotal, total })
               <X class="h-3 w-3" />
             </button>
           </p>
+          </div>
         </div>
+
         <template v-if="line.type !== 'text'">
-          <div class="min-w-0 sm:col-span-1 xl:col-span-1">
+          <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(7rem,.65fr)_minmax(11rem,1fr)_minmax(13rem,1.25fr)_minmax(10rem,.9fr)]">
             <FormInput
               :id="`line-qty-${i}`"
               v-model="line.quantity"
               type="number"
               :label="t('qty')"
-              label-class="xl:sr-only"
               :error="errors[`lines.${i}.quantity`]"
               :readonly="line.type === 'discount' && line.discount_type === 'percentage'"
               required
             />
-          </div>
-          <div class="relative min-w-0 sm:col-span-1 xl:col-span-1">
             <FormInput
               :id="`line-price-${i}`"
               v-model="line.unit_price"
               type="number"
               :label="line.type === 'discount' ? (line.discount_type === 'percentage' ? t('discount_percentage') : t('line_type_discount')) : t('unit_price')"
-              label-class="xl:sr-only"
               :error="errors[`lines.${i}.unit_price`]"
+              :hint="line.type === 'item' ? t('negative_price_hint') : undefined"
               required
             />
-            <div v-if="line.type === 'item'" class="absolute right-0 top-0">
-              <Tooltip :content="t('negative_price_hint')" side="top">
-                <HelpCircle class="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-              </Tooltip>
+            <div>
+              <FormSelect
+                :id="`line-vat-${i}`"
+                v-model="line.vat_rate_id"
+                :label="t('vat')"
+                :options="vatOptions"
+              />
+              <p class="mt-2 text-xs leading-4 text-[hsl(var(--muted-foreground))]">{{ t('tooltip_vat_rate') }}</p>
             </div>
-          </div>
-          <div class="relative min-w-0 sm:col-span-1 xl:col-span-1">
-            <FormSelect
-              :id="`line-vat-${i}`"
-              v-model="line.vat_rate_id"
-              :label="t('vat')"
-              label-class="xl:sr-only"
-              :options="vatOptions"
-            />
-            <div class="absolute right-0 top-0">
-              <Tooltip :content="t('tooltip_vat_rate')" side="top">
-                <HelpCircle class="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-              </Tooltip>
+            <div class="flex min-h-11 items-center justify-between rounded-md bg-[hsl(var(--muted)/0.45)] px-3 py-2 text-sm font-semibold tabular-nums sm:col-span-2 xl:col-span-1 xl:justify-end">
+              <span class="text-xs font-medium text-[hsl(var(--muted-foreground))]">{{ t('amount') }}</span>
+              <span :class="line.type === 'discount' ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--foreground))]'">{{ formattedLineAmount(line) }}</span>
             </div>
-          </div>
-          <div class="text-right text-sm font-medium tabular-nums sm:col-span-1 sm:pb-2 xl:col-span-1">
-            {{ formattedLineAmount(line) }}
           </div>
         </template>
-        <div v-else class="hidden text-right text-sm text-[hsl(var(--muted-foreground))] sm:col-span-2 sm:block sm:pb-2 xl:col-span-1">
-          {{ formattedLineAmount(line) }}
-        </div>
-        <div class="flex items-end justify-end gap-1 sm:col-span-2 sm:pb-2 xl:col-span-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            :disabled="i === 0"
-            :title="t('move_line_up')"
-            @click="moveLine(i, -1)"
-          >
-            <ArrowUp class="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            :disabled="i === lines.length - 1"
-            :title="t('move_line_down')"
-            @click="moveLine(i, 1)"
-          >
-            <ArrowDown class="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            :title="t('duplicate_line')"
-            @click="duplicateLine(i)"
-          >
-            <Copy class="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            :disabled="lines.length <= 1"
-            :title="t('delete')"
-            @click="removeLine(i)"
-          >
-            <Trash2 class="h-4 w-4" />
-          </Button>
+        <div v-else class="mt-4 flex items-center justify-between rounded-md bg-[hsl(var(--muted)/0.45)] px-3 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+          <span class="text-xs font-medium">{{ t('amount') }}</span>
+          <span>{{ formattedLineAmount(line) }}</span>
         </div>
       </div>
     </div>
 
-    <div class="mt-4 flex flex-wrap gap-2">
+    <div class="mt-4 flex flex-wrap items-center gap-2">
       <Button type="button" variant="outline" size="sm" @click="addLine('item')">
         <Plus class="mr-1 h-4 w-4" />
         {{ t('add_line') }}
@@ -402,7 +365,7 @@ defineExpose({ subtotal, vatTotal, total })
         :options="catalogOptions"
         :placeholder="t('add_from_catalog')"
         force-searchable
-        class="min-w-64 flex-1 sm:w-64 sm:flex-none"
+        class="min-w-64 flex-1 sm:w-72 sm:flex-none"
       />
     </div>
 

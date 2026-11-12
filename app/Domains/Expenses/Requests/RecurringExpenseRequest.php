@@ -3,7 +3,8 @@
 namespace App\Domains\Expenses\Requests;
 
 use App\Domains\Accounting\Enums\AccountType;
-use App\Domains\Expenses\Models\Expense;
+use App\Domains\Expenses\Enums\ExpenseAmountBasis;
+use App\Domains\Expenses\Models\RecurringExpense;
 use App\Domains\Invoicing\Enums\RecurrenceFrequency;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Illuminate\Foundation\Http\FormRequest;
@@ -13,7 +14,14 @@ class RecurringExpenseRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->can('create', Expense::class);
+        $recurring = $this->route('recurring');
+
+        if ($this->isMethod('POST')) {
+            return $this->user()?->can('create', RecurringExpense::class) ?? false;
+        }
+
+        return $recurring instanceof RecurringExpense
+            && ($this->user()?->can('update', $recurring) ?? false);
     }
 
     /**
@@ -27,6 +35,22 @@ class RecurringExpenseRequest extends FormRequest
             'category' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string'],
             'amount' => ['required', 'numeric', 'min:0.01'],
+            'amount_basis' => ['sometimes', Rule::enum(ExpenseAmountBasis::class)],
+            'expense_category_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('expense_categories', 'id')
+                    ->where('organization_id', $orgId)
+                    ->where('is_active', true),
+            ],
+            'expense_account_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('accounts', 'id')
+                    ->where('organization_id', $orgId)
+                    ->where('type', AccountType::Expense->value)
+                    ->where('is_active', true),
+            ],
             'vat_amount' => ['nullable', 'numeric', 'min:0'],
             'vendor' => ['nullable', 'string', 'max:255'],
             'currency' => ['nullable', 'string', 'size:3'],
@@ -48,7 +72,8 @@ class RecurringExpenseRequest extends FormRequest
                 'string',
                 Rule::exists('accounts', 'code')
                     ->where('organization_id', $orgId)
-                    ->where('type', AccountType::Expense->value),
+                    ->where('type', AccountType::Expense->value)
+                    ->where('is_active', true),
             ],
             'bank_account_code' => [
                 'nullable',

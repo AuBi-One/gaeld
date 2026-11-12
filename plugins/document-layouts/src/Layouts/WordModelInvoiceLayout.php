@@ -103,21 +103,11 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
 
     private function addresses(Letterhead $letterhead, Invoice $invoice): void
     {
-        $customer = $invoice->customer_snapshot ?? $invoice->customer?->toInvoiceSnapshot($invoice->contactPerson) ?? [];
+        $recipient = self::recipientLines($invoice);
         $sender = [$letterhead->name, ...$letterhead->addressLines];
         if ($letterhead->phone !== null) {
             $sender[] = $letterhead->phone;
         }
-        // Older or partial snapshots may lack keys.
-        $country = (string) data_get($customer, 'country', 'CH');
-        $recipient = array_values(array_filter([
-            data_get($customer, 'name'),
-            data_get($customer, 'attention'),
-            data_get($customer, 'address'),
-            trim(data_get($customer, 'postal_code', '').' '.data_get($customer, 'city', '')),
-            $country !== 'CH' ? $country : null,
-        ], fn ($line): bool => is_string($line) && trim($line) !== ''));
-
         $this->font('', 11);
         $y = $this->y;
         foreach ($sender as $line) {
@@ -145,6 +135,29 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
             $recipientY += self::LINE;
         }
         $this->y = max($y, $recipientY) + self::LINE;
+    }
+
+    /**
+     * The address window: salutation, name, the "Attention" person, street, town and the
+     * country (its free-text name when the contact has one, else the code outside Switzerland).
+     *
+     * @return list<string>
+     */
+    public static function recipientLines(Invoice $invoice): array
+    {
+        // Older or partial snapshots may lack keys.
+        $customer = $invoice->customerDetailsForDocument() ?? [];
+        $country = (string) data_get($customer, 'country', 'CH');
+        $countryName = trim((string) data_get($customer, 'country_name', ''));
+
+        return array_values(array_filter([
+            data_get($customer, 'salutation'),
+            data_get($customer, 'name'),
+            data_get($customer, 'attention'),
+            data_get($customer, 'address'),
+            trim(data_get($customer, 'postal_code', '').' '.data_get($customer, 'city', '')),
+            $countryName !== '' ? $countryName : ($country !== 'CH' ? $country : null),
+        ], fn ($line): bool => is_string($line) && trim($line) !== ''));
     }
 
     private function title(Invoice $invoice): void
@@ -297,13 +310,15 @@ final class WordModelInvoiceLayout implements InvoicePdfLayoutInterface
             $left[] = ['IBAN '.Format::iban($invoice->qr_iban), '', 12];
             $left[] = ['', '', 11];
         }
-        $terms = Format::paymentTerms($invoice->payment_terms, (int) $invoice->issue_date->diffInDays($invoice->due_date, false));
+        $terms = Format::paymentTerms($invoice->payment_terms, $invoice->due_date === null ? 0 : (int) $invoice->issue_date->diffInDays($invoice->due_date, false));
         if ($terms['text'] !== null) {
             $left[] = [$terms['text'], '', 11];
         } elseif ($terms['days'] > 0) {
             $left[] = [$this->t('payment_days', ['days' => $terms['days']]), '', 11];
         }
-        $left[] = [$this->t('due_date').' '.$invoice->due_date->format('d.m.Y'), '', 11];
+        if ($invoice->due_date !== null) {
+            $left[] = [$this->t('due_date').' '.$invoice->due_date->format('d.m.Y'), '', 11];
+        }
         if ($invoice->qr_reference) {
             $left[] = [$this->t('reference').' '.Format::reference((string) $invoice->qr_reference), '', 10];
         }

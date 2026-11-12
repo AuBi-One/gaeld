@@ -40,9 +40,12 @@ Route::delete('/profile/passkeys/{credential}', [PasskeyController::class, 'dest
 Route::put('/profile/notification-preferences', [UserController::class, 'updateNotificationPreferences'])->name('profile.notification-preferences');
 
 // Active sessions / devices
-Route::get('/profile/sessions', [DeviceSessionController::class, 'index'])->name('profile.sessions');
+Route::get('/profile/device-sessions', [DeviceSessionController::class, 'index'])->name('profile.device-sessions');
 Route::delete('/profile/sessions/{id}', [DeviceSessionController::class, 'destroy'])->name('profile.sessions.destroy');
 Route::delete('/profile/sessions', [DeviceSessionController::class, 'destroyOthers'])->name('profile.sessions.destroy-others');
+Route::get('/profile/{section}', [UserController::class, 'profile'])
+    ->whereIn('section', ['preferences', 'security', 'sessions'])
+    ->name('profile.section');
 
 // Notifications
 Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');

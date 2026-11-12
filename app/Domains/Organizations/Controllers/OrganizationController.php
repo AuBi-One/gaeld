@@ -5,14 +5,16 @@ namespace App\Domains\Organizations\Controllers;
 use App\Domains\Organizations\DTOs\CreateOrganizationData;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Requests\StoreOrganizationRequest;
-use App\Domains\Organizations\Services\InvitationService;
 use App\Domains\Organizations\Services\OrganizationService;
 use App\Domains\Organizations\Services\OrganizationSetupService;
 use App\Domains\Payroll\Models\Employee;
 use App\Http\Controllers\Controller;
+use App\Support\Contracts\OrganizationQuotaResolver;
+use App\Support\FeatureFlag;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -26,11 +28,36 @@ class OrganizationController extends Controller
     {
         $this->authorize('viewAny', Organization::class);
 
-        $organizations = $request->user()->organizations()->get();
+        $user = $request->user();
+        $organizations = $user->organizations()->get();
+        $organizationLimit = app(OrganizationQuotaResolver::class)->maxOrganizations($user);
+        $organizationCount = $organizations->count();
+        $currentOrganization = $user->resolveCurrentOrganization();
+        $plan = $this->activePlan($currentOrganization);
+        $ownedOrganizations = $user->organizations()
+            ->wherePivot('role', 'owner')
+            ->get();
+        $hasFreeOrganization = $ownedOrganizations->contains(
+            function (Organization $organization): bool {
+                $plan = $this->activePlan($organization);
+
+                return (float) data_get($plan, 'price_chf', 0) === 0.0;
+            },
+        );
+        $paidOrganizationCreationAvailable = Route::has('billing.index') && $ownedOrganizations->isNotEmpty();
 
         return Inertia::render('Organizations/Index', [
             'organizations' => $organizations,
-            'canCreateOrganization' => $request->user()->can('create', Organization::class),
+            'canCreateOrganization' => $user->can('create', Organization::class),
+            'organizationQuota' => [
+                'count' => $organizationCount,
+                'limit' => $organizationLimit,
+                'plan_name' => is_object($plan) ? ($plan->name ?? null) : null,
+                'billing_available' => Route::has('billing.index'),
+                'has_free_organization' => $hasFreeOrganization,
+                'paid_creation_available' => $paidOrganizationCreationAvailable,
+                'requires_paid_plan_for_next' => $hasFreeOrganization && $paidOrganizationCreationAvailable,
+            ],
         ]);
     }
 
@@ -41,11 +68,15 @@ class OrganizationController extends Controller
         return Inertia::render('Organizations/Create');
     }
 
-    public function show(Organization $organization, InvitationService $invitationService): Response
+    public function show(Organization $organization): Response
     {
         $this->authorize('view', $organization);
 
         $canManageUsers = request()->user()->can('manageUsers', $organization);
+        $members = $organization->users()->count();
+        $pendingInvitations = $organization->invitations()->pending()->count();
+        $memberLimit = app(OrganizationQuotaResolver::class)->maxUsers($organization);
+        $plan = $this->activePlan($organization);
 
         return Inertia::render('Organizations/Show', [
             'organization' => $organization->load('users'),
@@ -53,7 +84,16 @@ class OrganizationController extends Controller
                 ? $organization->invitations()->pending()->with('inviter:id,name')->get()
                 : [],
             'canManageUsers' => $canManageUsers,
-            'canAddMember' => $canManageUsers && $invitationService->canAddMember($organization),
+            'canAddMember' => $canManageUsers
+                && ($memberLimit === -1 || ($members + $pendingInvitations) < $memberLimit),
+            'memberQuota' => [
+                'members' => $members,
+                'pending_invitations' => $pendingInvitations,
+                'total' => $members + $pendingInvitations,
+                'limit' => $memberLimit,
+                'plan_name' => is_object($plan) ? ($plan->name ?? null) : null,
+                'billing_available' => Route::has('billing.index'),
+            ],
             'availableEmployees' => $canManageUsers
                 ? Employee::query()->whereNull('user_id')->orderBy('last_name')->orderBy('first_name')
                     ->get(['id', 'first_name', 'last_name', 'email'])
@@ -82,11 +122,19 @@ class OrganizationController extends Controller
 
             return $org;
         });
-
         $request->user()->switchOrganization($org);
 
         return redirect()->route('organizations.show', $org)
             ->with('success', __('app.organization_created'));
+    }
+
+    private function activePlan(?Organization $organization): mixed
+    {
+        if (! FeatureFlag::isSaas() || $organization === null) {
+            return null;
+        }
+
+        return $organization->activeSubscription?->getPlan();
     }
 
     public function destroy(
@@ -118,7 +166,6 @@ class OrganizationController extends Controller
     public function switchOrganization(Request $request, string $organization): RedirectResponse
     {
         $model = Str::isUuid($organization) ? Organization::find($organization) : null;
-
         abort_unless($model && $request->user()->can('view', $model), 404);
 
         $request->user()->switchOrganization($model);

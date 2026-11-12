@@ -230,4 +230,24 @@ class PaymentInitiationTest extends TestCase
         $this->assertSame($expense->supplier_id, ContactQuery::findByCreditorName($orgId, 'Trading Name')?->id);
         $this->assertFalse(ContactQuery::hasMatchingSupplier($orgId, 'Someone Else'));
     }
+
+    public function test_download_rejects_an_expense_from_another_organization(): void
+    {
+        $otherOrganization = Organization::factory()->create();
+        $foreignExpense = Expense::create([
+            'organization_id' => $otherOrganization->id,
+            'category' => 'consulting',
+            'description' => 'Foreign expense',
+            'amount' => '99.00',
+            'vat_amount' => '0.00',
+            'date' => now()->toDateString(),
+            'status' => ExpenseStatus::Approved->value,
+            'currency' => 'CHF',
+        ]);
+
+        $this->actAsOrg()->post('/payments/outgoing/download', [
+            'bank_account_id' => $this->bankAccount->id,
+            'expense_ids' => [$foreignExpense->id],
+        ])->assertSessionHasErrors('expense_ids.0');
+    }
 }

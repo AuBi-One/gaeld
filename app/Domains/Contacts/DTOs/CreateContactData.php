@@ -28,6 +28,8 @@ readonly class CreateContactData
         public ?string $paymentTerms = null,
         public ?string $internalNotes = null,
         public ?string $notes = null,
+        public ?string $salutation = null,
+        public ?string $countryName = null,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -51,6 +53,8 @@ readonly class CreateContactData
             paymentTerms: $data['payment_terms'] ?? null,
             internalNotes: $data['internal_notes'] ?? null,
             notes: $data['notes'] ?? null,
+            salutation: $data['salutation'] ?? null,
+            countryName: $data['country_name'] ?? null,
         );
     }
 
@@ -60,6 +64,8 @@ readonly class CreateContactData
         return [
             'organization_id' => $this->organizationId,
             'name' => $this->name,
+            'salutation' => $this->salutation,
+            'country_name' => $this->countryName,
             'type' => $this->type,
             'email' => $this->email,
             'phone' => $this->phone,

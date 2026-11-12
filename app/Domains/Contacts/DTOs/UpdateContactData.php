@@ -24,6 +24,10 @@ readonly class UpdateContactData
         public ?string $paymentTerms = null,
         public ?string $internalNotes = null,
         public ?string $notes = null,
+        public ?string $salutation = null,
+        public ?string $countryName = null,
+        private bool $hasSalutation = false,
+        private bool $hasCountryName = false,
         // The form sends an empty account holder to fall back to the contact name: keep the null.
         public bool $accountHolderGiven = false,
     ) {}
@@ -46,6 +50,10 @@ readonly class UpdateContactData
             paymentTerms: $data['payment_terms'] ?? null,
             internalNotes: $data['internal_notes'] ?? null,
             notes: $data['notes'] ?? null,
+            salutation: $data['salutation'] ?? null,
+            countryName: $data['country_name'] ?? null,
+            hasSalutation: array_key_exists('salutation', $data),
+            hasCountryName: array_key_exists('country_name', $data),
             accountHolderGiven: array_key_exists('account_holder', $data),
         );
     }
@@ -53,8 +61,10 @@ readonly class UpdateContactData
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return array_filter([
+        $data = array_filter([
             'name' => $this->name,
+            'salutation' => $this->salutation,
+            'country_name' => $this->countryName,
             'type' => $this->type,
             'email' => $this->email,
             'phone' => $this->phone,
@@ -66,7 +76,20 @@ readonly class UpdateContactData
             'payment_terms' => $this->paymentTerms,
             'internal_notes' => $this->internalNotes,
             'notes' => $this->notes ? ['default' => $this->notes] : null,
-        ] + ($this->addressData?->toArray() ?? AddressData::empty()->toArray()), fn ($value) => $value !== null)
-            + ($this->accountHolderGiven ? ['account_holder' => $this->accountHolder] : []);
+        ] + ($this->addressData?->toArray() ?? AddressData::empty()->toArray()), fn ($value) => $value !== null);
+
+        if ($this->hasSalutation) {
+            $data['salutation'] = $this->salutation;
+        }
+
+        if ($this->hasCountryName) {
+            $data['country_name'] = $this->countryName;
+        }
+
+        if ($this->accountHolderGiven) {
+            $data['account_holder'] = $this->accountHolder;
+        }
+
+        return $data;
     }
 }

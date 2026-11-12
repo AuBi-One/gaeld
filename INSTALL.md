@@ -1,8 +1,29 @@
 # Installation Guide
 
-The latest public Community Edition release is `v3.8.1`. The coordinated SaaS
+The latest public Community Edition release is `v3.8.28`. The coordinated SaaS
 CE/EE production pair and its deployment procedure are documented in
 [RELEASE.md](RELEASE.md).
+
+Release `v3.8.27` adds nullable `salutation` and `country_name` contact fields.
+Run the normal migrations after updating. Existing invoice customer snapshots
+remain unchanged: enter the full country name on the contact and use the
+invoice's customer-details refresh action when that specific invoice should
+use the updated address. Invoice PDFs print the country name as entered;
+Swiss QR payment data continues to use the ISO country code.
+
+Release `v3.8.28` fixes expense reconciliation with missing bank descriptions and
+converts foreign-currency invoices and expenses into the organization's ledger
+currency. Add an exchange rate dated on or before the posting/payment date.
+Invoice settlement uses the original receivable and records exchange differences
+in financial expenses account `6900`; create that account if your chart lacks it.
+Existing ledger entries are not rewritten. Automatic bank reconciliation requires
+the bank account, document, and organization to use the same currency; record
+foreign settlements separately using their payment-date rate.
+
+Release archives exclude development tests and intentional hostile-upload
+fixtures. Contributors should use a Git checkout to obtain the test suite.
+No new database migration is introduced by this patch; normal upgrade migrations
+still apply when upgrading from an older release.
 
 ## Docker Installation (Recommended)
 
@@ -150,6 +171,23 @@ required by this guide. A self-hosted CE installation does not require a SaaS
 subscription or private registry credentials.
 The Community Edition REST API is enabled by default and can be disabled with
 `FEATURE_API_ACCESS=false` when an installation does not need external access.
+
+### Create an integration token
+
+After installation, create an organization-scoped token from the server. The
+organization UUID is available in the organization settings or database:
+
+```bash
+./vendor/bin/sail artisan gaeld:token <organization-uuid> \
+	--name="Bookkeeping integration" \
+	--abilities=banking.view \
+	--abilities=banking.create \
+	--abilities=banking.import \
+	--expires-in-days=365
+```
+
+The token is printed once and must be stored securely by the integrating
+application. Do not put it in shell history, source control, or logs.
 
 ---
 

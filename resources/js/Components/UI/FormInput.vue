@@ -18,6 +18,7 @@ const props = defineProps({
   readonly: Boolean,
   placeholder: String,
   autocomplete: String,
+  maxlength: [String, Number],
   class: String,
   labelClass: String,
 })
@@ -58,9 +59,11 @@ function togglePasswordVisibility() {
         :type="effectiveType"
         :value="modelValue"
         :required="required"
+        :aria-required="required ? 'true' : undefined"
         :readonly="readonly"
         :placeholder="placeholder"
         :autocomplete="autocomplete"
+        :maxlength="maxlength"
         :aria-describedby="error ? id + '-error' : undefined"
         :aria-invalid="error ? true : undefined"
         :class="cn(

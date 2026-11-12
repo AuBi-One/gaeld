@@ -5,6 +5,217 @@ GitLab CE mirror, and the private Enterprise Edition (EE) plugin. It prepares
 release commits and commands locally; it does not push or create tags by
 itself.
 
+## v3.8.28 Coordinated Candidate
+
+This candidate integrates open CE PRs #63–68, #71, and #72, the missing bank
+description reconciliation fix, and staging QA corrections. Impact Accounting
+remains excluded. The immutable hosted pair is CE `v3.8.28` with the unchanged
+private EE `v2.9.31`.
+
+Foreign invoice settlement preserves the original posted receivable, allocates
+partial payments proportionally, clears the final rounding remainder, and
+records payment-date exchange differences against account `6900`. Missing
+rates or required accounts fail explicitly. Existing historical postings are
+not rewritten. Automatic bank matching requires document, bank, and ledger
+currencies to agree; foreign settlements must be recorded separately.
+
+The release archive excludes development tests and hostile-upload fixtures;
+Git checkouts retain them. Targeted Symfony HTTP Foundation and YAML security
+updates accompany the dependency PRs. No new schema migration is introduced.
+
+Local CE validation passed 1,599 tests with 6,078 assertions and 13 conditional
+skips. The clean CE build and 30 standalone/boundary/API acceptance tests passed,
+as did Pint, PHPStan, dependency audits, the API contract parse, and source and
+compiled-asset boundary audits.
+
+The initial staging connectivity outage was resolved. Record staging acceptance,
+EE compatibility, exact immutable commits, backups, and production activation in
+the published release record before declaring the coordinated rollout complete.
+
+## v3.8.27 Coordinated Candidate
+
+This patch preserves each invoice's stored customer details and adds an
+authorized, audited action to refresh that snapshot from its current contact.
+The action updates only the selected invoice, rejects archived invoices, and
+preserves accounting entries and amounts. Contacts gain nullable `salutation`
+and `country_name` fields. PDFs print the full country name entered by the user
+and retain the ISO country code for Swiss QR payment data. Older snapshots
+without a country name need an explicit refresh to display that new field.
+
+The release includes the compatible security updates to Laravel `13.30.0`,
+Commonmark `2.10.2`, Flysystem `3.35.3`, brace-expansion `5.0.12`, and
+source-map-js `1.2.2`. Public CI enforces the complete Composer and pnpm audits
+and installs the frozen JavaScript lockfile.
+
+The exact intended pair is CE `v3.8.27` with private EE `v2.9.31`. Validate that
+pair on staging before production promotion. The private deployment must
+select the EE tag and expected commit explicitly, verify edition compatibility
+before activation, and retain build assets within each release. Roll back by
+selecting the previous complete CE/EE release; do not roll back additive
+database migrations.
+
+Local validation: full CE suites passed (1,566 passed, 26 conditional skips),
+EE `v2.9.31` passed (123 passed, one private registry-consumer skip), and the
+clean CE installation passed 25 acceptance tests. Composer and pnpm audits,
+PHPStan, Pint, frontend builds with and without EE, source and built-artifact
+boundary audits, API contract parsing, and edition compatibility checks passed.
+
+## v3.8.25 Staging Candidate
+
+This candidate introduces the first structured category/account foundation for
+expenses. Categories receive stable system codes and localized labels, while
+expenses and recurring expenses gain organization-scoped references to their
+category and active expense account. Existing category names and account codes
+remain available as compatibility fallbacks, and the migration only backfills
+safe matches without rewriting historical ledger data.
+
+The expense form now shows the account suggested by the selected category. The
+exact staging pair is CE `v3.8.25` with EE `v2.9.31`.
+
+Validation for this candidate: 52 focused Expenses/API tests passed with 211
+assertions; PHPStan, Pint, and the frontend production build passed.
+
+## v3.8.24 Staging Candidate
+
+This patch fixes the visibility of the standard resale expense category. The
+category remains stored under its canonical internal value, but users now see
+the correct localized label, including French « Achats de marchandises
+destinées à la revente », in all expense entry, recurring, Quick Receipt, list,
+and detail views.
+
+The exact staging pair is CE `v3.8.24` with EE `v2.9.31`.
+
+## v3.8.23 Staging Candidate
+
+This patch lets authorized users correct an incorrectly entered invoice payment
+date directly from the invoice payment history. Gäld preserves the original
+accounting trail by posting a reversal for the original payment entry and a new
+payment entry on the corrected date. The amount and payment method remain
+unchanged. Corrections are rejected when the affected VAT period or fiscal year
+is closed or archived.
+
+The exact staging pair is CE `v3.8.23` with EE `v2.9.31`. This is a staging
+release only until the invoice payment correction workflow is accepted.
+
+Validation for this candidate: 71 Invoicing tests passed with 217 assertions;
+Pint, PHPStan, and the frontend production build passed.
+
+## v3.8.22 Staging Candidate
+
+This candidate makes TTC the default entry basis for ordinary and recurring
+expenses while keeping the normalized ledger representation as net amount plus
+input VAT. It adds explicit net/gross API fields, direct expense posting for
+authorized users, and traceable cancellation through a posted reversal entry.
+Unposted expenses remain deletable within the existing organization and
+self-service permission boundaries.
+
+The exact staging pair is CE `v3.8.22` with EE `v2.9.31`. The CE commit and
+tag must be pushed to both GitHub and the internal GitLab CE mirror before
+deployment. This is a staging release only; production promotion requires
+staging acceptance of the TTC calculation, direct posting, cancellation,
+recurring expenses, Quick Receipt, and employee permissions.
+
+Validation for this candidate: 1,540 API tests passed, 13 skipped, 5,768
+assertions; Pint and PHPStan passed; the frontend production build passed.
+
+## v3.8.21 Staging Candidate
+
+This candidate removes the global 120-second timeout from PDF exports and keeps
+CE organization pages independent from EE subscription tables when SaaS mode is
+disabled. It is paired with private EE `v2.9.31`, which fixes mixed-installation
+migrations after the CE `customers` to `contacts` merge and preserves
+`contacts.peppol_id`.
+
+The full API suite passed 1,531 tests with 13 skipped tests and 5,738
+assertions. Deploy this exact CE/EE pair to staging, then run the disposable
+account QA runner before any production promotion.
+
+## v3.8.20 Staging Candidate
+
+This candidate includes PR #62 for analytics-aware cookie consent and removes
+the duplicate user navigation from the sidebar. Impact Accounting remains on
+its separate `feature/impact-accounting` branch and is intentionally excluded
+from this release.
+
+## v3.8.19 Staging Candidate
+
+This candidate integrates [PR #60](https://github.com/Scanix/Gaeld/pull/60),
+which fixes `GET /api/v1/invoices` for organizations with multiple invoices
+containing VAT-rated lines. The matching EE artifact remains `v2.9.30`.
+
+## v3.8.18 Staging Patch
+
+This patch resolves the `/profile/sessions` route collision found during the
+`v3.8.17` staging acceptance pass. The page route now renders the profile
+Sessions section while device data loads from a dedicated JSON endpoint. EE
+remains pinned to `v2.9.29`.
+
+## v3.8.17 Staging Candidate
+
+This candidate combines the validation-exception hotfix with streamlined
+organization and user-account navigation. Customer-facing SaaS plan management
+is labeled “Subscription”; EE `v2.9.29` adds a local, non-sensitive payment
+method snapshot and keeps Stripe identifiers out of Inertia props.
+
+The candidate must be deployed to staging with exact CE `v3.8.17` and EE
+`v2.9.29` tags. Production promotion remains blocked until the focused billing,
+profile, static-analysis, build, migration, and browser checks pass on staging.
+
+## v3.8.15 Staging Patch
+
+This patch simplifies the 500 error page actions and keeps retry/sign-out
+actions readable on narrow screens.
+
+## v3.8.14 Staging Navigation Release
+
+This staging release introduces the organization context switcher, the
+organization settings navigation, explicit team and access entry points, and
+canonical personal profile destinations. It contains no EE source and keeps
+the private deployment recipe only on `gitlab/production`.
+
+## v3.8.13 Passkeys Migration Patch
+
+This patch corrects the CBOR encoder namespace used by the legacy credential
+conversion. It must be promoted before production so the existing active
+credential can be converted safely.
+
+## v3.8.12 Passkeys Release
+
+This release replaces the abandoned Laragear WebAuthn package with the
+official Laravel Passkeys package. Production currently contains one active
+legacy passkey; the migration converts its encrypted P-256 public key into a
+COSE CredentialRecord and aborts explicitly on incompatible data.
+
+## v3.8.11 CI Patch
+
+This patch makes the GitHub Actions PHPUnit environment explicit: debug mode
+and the array session backend are set in the test job. It does not change the
+runtime production session backend or the CE/EE boundary.
+
+## v3.8.10 CI Patch
+
+This patch forces the isolated PHPUnit array session backend and changes the
+Composer audit command to report abandoned packages without treating them as
+security advisories. It also realigns the public GitHub `develop` branch with
+the release currently on `main`.
+
+## v3.8.9 Staging Patch
+
+This patch corrects the GitHub Actions test service configuration so the
+PostgreSQL database migrated by CI is the same `testing` database used by
+PHPUnit. The application and CE/EE boundaries are unchanged from v3.8.8.
+
+## v3.8.8 Staging Release
+
+This release updates the authenticated application navigation and clarifies
+the separation between organization context, user profile, and SaaS billing.
+It also distinguishes the single free organization from additional paid
+organizations for SaaS owners.
+
+The release candidate is CE `v3.8.8`, built from the validated navigation and
+organization-limit changes on `develop`. The staging promotion must preserve
+the private GitLab deployment recipe and use the matching immutable CE tag.
+
 ## Release Matrix
 
 Every production release records both immutable refs before deployment:
@@ -21,14 +232,168 @@ EE_SHA=8d91d37
 must not be inferred from the CE version or copied into the public repository.
 The deployment pair and the tested commit SHAs belong in the release record.
 
-The current coordinated production release (2026-09-03) is CE `v3.7.5` at
-`51aa424` with EE `v2.9.18` at `8d91d37`. It is deployed as release `255`.
+The historical coordinated production release (2026-09-03) was CE `v3.8.2` at
+`29e657e` with deployment commit `8efc7313`, using EE `v2.9.20` at `3cdfd8d`.
+It is deployed as API release `257`, with web `v2.14.3` at `1e47ae3` and the
+documentation site at `v2.12.3` at `fd97bee`.
+
+## v3.8.5 Staging Release
+
+This release contains the organization and billing-limit UX, balanced invoice
+accounting for text and discount lines, matching annual-procedure coverage,
+and the five Dependabot frontend updates:
+
+- Autoprefixer `10.5.5`
+- Maska `3.2.1`
+- PostCSS `8.5.28`
+- Zod `4.5.4`
+- `@simplewebauthn/browser` `14.0.0`
+
+The final aligned API release commit is `c2078156`. The matching web test commit
+is `7b0ade6`. Dependabot PRs #55, #56, and #58 were merged after their shared
+Security-job failure was reproduced as a CI-only issue; PRs #57 and #59 were
+integrated with regenerated lockfile commits `8fd9c3bd` and `660ff4d3`.
+The candidate passed focused invoice tests, the Security suite, PHP formatting,
+web TypeScript and ESLint checks, the web production build, and the all-locale
+documentation build. It was deployed to staging as releases `153` and `154`
+while the dependency candidate was split into patch and WebAuthn-major stages.
+
+The final aligned candidate was deployed to staging as release `155` with
+private promotion merge `ddac5e25`. Its health endpoint returned HTTP 200 with
+database and cache healthy. Authenticated staging QA remains pending because
+the configured QA account is rejected by the staging login endpoint and no
+Mailpit configuration is available for creating a disposable replacement.
+
+## v3.8.6 Staging Patch
+
+This patch hardens CAMT upload validation responses and makes the PHPUnit CI
+session backend deterministic. The focused CAMT security tests pass `8/8`,
+the full Security suite passes `138 tests / 194 assertions` locally, and the
+the patch was deployed to staging as release `156`. The disposable Team-plan
+staging workflow passed **41/41** checks with zero console errors, zero request
+failures, and cleanup of all generated accounts and organizations. GitHub's
+replacement CI runner stalled during dependency installation, while the same
+release passed the local exact suites, lint, PHPStan, and staging validation.
+
+The release was promoted to production as release `281` with private
+promotion merge `fc75d7ab` after fresh PostgreSQL and file backups completed.
+The deployed pair is CE `v3.8.6` and EE `v2.9.27`, with web `v2.14.5` and
+docs `v2.12.3`. Production `/up`, `/login`, and `/signup` returned HTTP 200;
+Horizon was active after deployment.
+
+## v3.8.3 Staging Candidate
+
+This candidate contains the convergence fixes validated on the `develop`
+branch: organization-scoped recurring policies, retry-safe recurring and
+asynchronous jobs, signed export isolation, OCR retry preservation, and custom
+logo layout protection in invoice PDFs.
+
+The selected staging pair is CE `v3.8.3` at `1a10b685` with EE `v2.9.27` at
+`a25b632`. The private GitLab staging promotion is merge commit `192b7e94`.
+The candidate is for staging only; no production deployment is part of this
+release step.
+
+## v3.8.4 Staging Candidate
+
+This candidate improves the invoice line-item form at wide desktop widths. The
+dense seven-column layout now activates at `2xl` instead of `xl`, keeping field
+labels and readable spacing visible on medium and standard desktop screens.
+The frontend production build passed before preparing this candidate.
+
+The candidate was deployed to staging as release `149`. The health endpoint
+returned HTTP 200 with database and cache checks healthy. After aligning the
+runner with the employee form's `#entry_date` field, the post-deploy safe
+smoke `release-v383-fix-20260906-144147` passed **41/41 checks** with zero
+failures, skips, console errors, or request failures. Evidence is in
+`storage/app/qa/staging-qa-release-v383-fix-20260906-144147.md`. The same
+workflows also passed in the exhaustive EE campaign
+`storage/app/qa/staging-qa-convergence-20260906-082834.md` (44/44).
+
+## EE v2.9.28 Hotfix Candidate
+
+This candidate fixes a customer-reported crash on the billing plans page:
+the mobile card layout in `Plans.vue` called an admin-only `updatePlan()`/
+`message` binding left over from a copy-paste of `SaasAdmin/Billing.vue`,
+raising `updatePlan is not a function` for customers on `/billing`. The
+mobile action button now mirrors the working desktop table logic
+(`selectPlan`).
+
+The fix is EE `v2.9.28` at `8978207`, tagged and pushed on top of the already
+staged `v2.9.27` (`a25b632`). No CE change is required for this candidate.
+Deployment (staging validation, then `dep deploy` to production) is pending
+and must be run from a host with production credentials.
 
 ## Release Candidate
 
-The next coordinated candidate removes the customer-facing Early Beta
-messaging from the hosted application and public website while preserving
-operational subscription, payment, support, and system banners:
+The v3.8.2 release contains the minimal self-hosted integration scope:
+first-token bootstrapping, bank-account creation through `/api/v1`, and
+token-authenticated invoice PDF downloads. The wider headless-accounting API
+remains out of scope.
+
+The release uses the already validated EE `v2.9.20` pair. The public API,
+documentation, and web contract tags are `v3.8.2`, `v2.12.3`, and `v2.14.3`.
+
+## v3.8.2 Staging Validation
+
+The candidate was deployed to staging as release `148` with CE deployment
+commit `8efc7313` and EE `v2.9.20`. The direct API smoke test passed for token
+bootstrap, bank-account creation, idempotent replay, and invoice PDF delivery;
+all temporary records were removed afterward.
+
+The general safe UI runner also completed signup, email verification,
+onboarding, accounting, invoicing, expenses, VAT, fiscal-year, archives,
+billing, and responsive checks. Its three failures were limited to existing
+payroll/persona selectors and two expected-by-environment 403 diagnostics; it
+was not used as the acceptance signal for this API-only release.
+
+## v3.8.2 Production Rollout
+
+The release was deployed to production on 2026-09-03:
+
+```text
+PRODUCTION_RELEASE=257
+API_REF=v3.8.2
+API_TAG_SHA=29e657e
+API_DEPLOY_COMMIT=8efc7313
+EE_REF=v2.9.20
+EE_SHA=3cdfd8d
+WEB_REF=v2.14.3
+WEB_SHA=1e47ae3
+DOCS_VERSION=v2.12.3
+DOCS_SHA=fd97bee
+DOCS_STATIC_RELEASE=5
+```
+
+The production `/up`, `/api/v1/`, and new API route checks returned healthy
+responses. The production API smoke test passed bank-account creation and
+idempotent replay on a SaaS tenant whose plan includes `api_access`; temporary
+token and bank-account records were removed. Invoice PDF behavior was also
+validated on staging with the same CE tag.
+
+The docs site was published as static release `5`, and the marketing site was
+updated to web commit `1e47ae3`; both public URLs returned HTTP 200. The docs
+search index was refreshed to `12,232` documents and returns the new bank-account
+and invoice-PDF pages. The fresh
+backups below passed gzip and tar integrity checks before deployment:
+
+```text
+/data/backups/postgresql/daily/gaeld_20260903_170329.sql.gz
+/data/backups/postgresql/daily/roles_20260903_170329.sql.gz
+/data/backups/files/daily/files_20260903_170332.tar.gz
+```
+
+Sentry release notification was skipped because the deployment credentials are
+not configured. Deployer also reported a sudo failure while disabling the
+legacy worker; post-deployment checks confirmed `gaeld-worker` was already
+inactive. Because Deployer stopped before its Horizon step, the deploy user
+issued `horizon:terminate`; systemd restarted `gaeld-horizon` from release
+`257` at 19:25:25 UTC, and the final service check was `active`.
+
+## Released Pair
+
+The released pair removes the customer-facing Early Beta messaging from the
+hosted application and public website while preserving operational
+subscription, payment, support, and system banners:
 
 ```text
 CE_VERSION=v3.8.1
@@ -38,14 +403,13 @@ EE_SHA=3cdfd8d
 EE_CONTENT_DIGEST=e49cfb95ca8bbd9c6e60f5e5c5b7459897b60fecdfd5ec3f30ee1fca1d9fd478
 WEB_VERSION=v2.14.2
 WEB_SHA=bf63fbf
-DOCS_VERSION=v2.12.0
+DOCS_VERSION=v2.12.1
 ```
 
-The candidate must be tested from a clean CE archive and a tagged private EE
-artifact before staging deployment. `CE_SHA` and `WEB_SHA` identify the
-implementation commits; the final release tags are created only after the
-staging acceptance below passes. The EE ref and digest are the immutable
-artifact that staging and production must consume.
+The release was tested from a clean CE archive and a tagged private EE
+artifact before deployment. `CE_SHA` and `WEB_SHA` identify the implementation
+commits. The EE ref and digest are the immutable artifacts consumed by staging
+and production.
 
 ## Validated Staging Candidate
 
@@ -64,6 +428,67 @@ wizard, organization and fiscal-year provisioning, and authenticated dashboard
 access. The authenticated safe smoke runner passed 29 checks with zero
 failures, zero skipped checks, console errors, or request failures. Evidence is
 in `storage/app/qa/staging-qa-1788440287426-r147.md`.
+
+## Production Rollout
+
+The coordinated release was deployed to production on 2026-09-03:
+
+```text
+PRODUCTION_RELEASE=256
+API_REF=v3.8.1
+API_TAG_SHA=f0609be7
+API_DEPLOY_COMMIT=5b2fa691
+EE_REF=v2.9.20
+EE_SHA=3cdfd8d
+WEB_REF=v2.14.2
+WEB_SHA=bf63fbf
+DOCS_REF=v2.12.1
+```
+
+The API deployment consumed the pinned EE artifact and completed migrations,
+cache rebuilds, permission synchronization, and service reloads successfully.
+The production `/up`, `/login`, `/api/v1/`, website, and documentation URLs
+returned HTTP 200. Database and cache health are healthy, Horizon, PHP-FPM,
+and nginx are active, no failed queue jobs were present, and no customer-facing
+beta wording remains in the compiled application or public responses.
+The legacy `gaeld-worker` systemd unit is intentionally disabled; Horizon is
+the sole queue executor and its production supervisors cover the default,
+exports, webhooks, processing, scheduled, and OCR queues.
+
+Fresh production backups were created before activation: PostgreSQL
+`/data/backups/postgresql/daily/gaeld_20260903_133719.sql.gz` and files
+`/data/backups/files/daily/files_20260903_133719.tar.gz`. Both passed gzip
+integrity checks. The Sentry release notification was skipped because the
+deployment token is not configured; application availability and queue health
+were verified independently.
+
+## Commercial Acceptance
+
+The complete hosted-offer acceptance was completed on staging on 2026-09-03.
+The exhaustive Team campaign in
+`storage/app/qa/staging-qa-commercial-20260903-151020.md` passed 44 checks with
+zero failures, zero skips, console errors, or request failures. It covered
+email verification, onboarding, opening balances, 24 months of invoices,
+expenses, payroll, CAMT.053/CAMT.054 imports, reconciliation, reports, salary
+certificates, VAT settlements, year-end closing, reopen/reclose, exports,
+permissions, responsive/accessibility checks, explicit Team conversion through
+Stripe Checkout, Stripe webhook lifecycle, idempotency, and ephemeral-tenant
+cleanup.
+
+The separate Cloud Free/Solo matrix in
+`storage/app/qa/staging-qa-offer-matrix-20260903-152927.md` passed 42 checks
+with zero failures or skips. It verified Cloud Free and Solo signup and
+cardless trials, no Stripe customer before explicit conversion, five allowed
+Cloud Free invoices followed by rejection of the sixth, Cloud Free payroll
+denial, and the resulting user-facing billing states. The focused EE commercial
+tests passed 55/55 with 188 assertions, the CE invoice flow passed 12/12 with
+46 assertions, and the public pricing/localization Playwright checks passed
+11/11.
+
+This closes the offer-alignment staging acceptance gate (T046). Economic
+observation metrics (T047), formal product-owner approval, and the separate
+CE/EE boundary acceptance with EE absent remain operational or governance
+gates; they are not represented as complete by these workflow results.
 
 ## Previous Validated Staging Candidate
 
@@ -101,9 +526,10 @@ tables, 34 users, 37 organizations, and 52 invoices; the temporary database
 was removed and its absence verified afterward. The latest production file
 archive also passed gzip integrity checking without extraction.
 
-The CE release was promoted to the public CE `main` branch and the private
-`production` branch. Production release `255` was deployed on 2026-09-03 with
-the immutable pair above. The offer-alignment and document-storage migrations
+The previous CE release was promoted to the public CE `main` branch and the
+private `production` branch. Production release `255` was deployed on
+2026-09-03 with the preceding immutable pair. The offer-alignment and
+document-storage migrations
 are applied, the health endpoint reports healthy database and cache checks,
 the failed-job queue is empty, and the offer-plan migration and Stripe price
 synchronization dry runs made no changes. The plan-change proration preview was
@@ -179,6 +605,29 @@ history. Roll back by selecting the last compatible immutable CE/EE pair; do
 not use `migrate:rollback` as an operational edition rollback.
 
 ## Boundary Feature Validation (2026-09-03)
+
+### Convergence validation (2026-09-06)
+
+The CE standalone smoke was rerun after correcting the edition-flag handoff
+inside the Sail container. With `PLUGINS_ENABLED=false` and
+`FEATURE_SAAS=false` applied to the container process, the clean CE boundary
+tests passed **4/4 tests and 35 assertions**. The smoke also completed a fresh
+CE migration and frontend build without loading the EE provider or commercial
+routes.
+
+The EE-enabled staging convergence campaign
+`convergence-20260906-082834` passed **44/44 checks**, with zero failures,
+skips, console errors, or request failures. It covered ephemeral signup and
+verification, onboarding, accounting operations, payroll, VAT, fiscal-year
+close/reopen, multi-persona authorization, billing, Stripe Test Clock
+lifecycle, exports, and the exhaustive 24-month replay. Raw evidence is in
+`storage/app/qa/staging-qa-convergence-20260906-082834.json` with the compact
+report at `storage/app/qa/staging-qa-convergence-20260906-082834.md`.
+
+This evidence closes the latest EE-enabled staging run. It does not close the
+separate CE/EE boundary task T045: staging acceptance with EE absent, plus the
+explicit migration and rollback rehearsal, still require a staging environment
+configured without the EE plugin and a recorded rollback pair.
 
 The CE boundary slice passed with 21 tests and 168 assertions. The EE boundary
 slice passed with 7 tests and 37 assertions (one registry-consumer test is

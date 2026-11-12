@@ -176,8 +176,9 @@ class LedgerService
         JournalEntry $journalEntry,
         ?string $description = null,
         ?string $type = null,
+        ?string $date = null,
     ): JournalEntry {
-        return DB::transaction(function () use ($journalEntry, $description, $type): JournalEntry {
+        return DB::transaction(function () use ($journalEntry, $description, $type, $date): JournalEntry {
             $original = JournalEntry::query()
                 ->whereKey($journalEntry->getKey())
                 ->lockForUpdate()
@@ -199,7 +200,7 @@ class LedgerService
             ))->all();
 
             $reversalEntry = $this->createDraft($original->organization_id, new JournalEntryData(
-                date: now()->toDateString(),
+                date: $date ?? now()->toDateString(),
                 reference: $reversalReference,
                 description: $description ?? 'Reversal of '.$original->reference,
                 lines: $lines,

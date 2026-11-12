@@ -29,6 +29,17 @@ class ContactValidationRulesTest extends TestCase
         $this->assertFalse($validator->fails());
     }
 
+    public function test_store_accepts_a_french_five_digit_postal_code(): void
+    {
+        $validator = Validator::make([
+            'name' => 'Client France',
+            'country' => 'FR',
+            'postal_code' => '75001',
+        ], ContactValidationRules::store());
+
+        $this->assertFalse($validator->fails());
+    }
+
     public function test_store_rejects_an_invalid_type(): void
     {
         $validator = Validator::make(
@@ -72,6 +83,44 @@ class ContactValidationRulesTest extends TestCase
         $errors = $validator->errors()->toArray();
         $this->assertArrayHasKey('country', $errors);
         $this->assertArrayHasKey('currency', $errors);
+    }
+
+    public function test_store_accepts_a_country_name_and_salutation_as_free_text(): void
+    {
+        $validator = Validator::make([
+            'name' => 'Maël Exemple',
+            'type' => 'individual',
+            'salutation' => 'Monsieur',
+            'country' => 'CH',
+            'country_name' => 'Suisse',
+        ], ContactValidationRules::store());
+
+        $this->assertFalse($validator->fails());
+    }
+
+    public function test_country_name_and_salutation_have_bounded_lengths(): void
+    {
+        foreach ([ContactValidationRules::store(), ContactValidationRules::update()] as $rules) {
+            $validator = Validator::make([
+                'name' => 'Client AG',
+                'salutation' => str_repeat('x', 51),
+                'country_name' => str_repeat('x', 101),
+            ], $rules);
+
+            $this->assertTrue($validator->fails());
+            $this->assertArrayHasKey('salutation', $validator->errors()->toArray());
+            $this->assertArrayHasKey('country_name', $validator->errors()->toArray());
+        }
+    }
+
+    public function test_update_accepts_clearing_the_country_name_and_salutation(): void
+    {
+        $validator = Validator::make([
+            'country_name' => null,
+            'salutation' => null,
+        ], ContactValidationRules::update());
+
+        $this->assertFalse($validator->fails());
     }
 
     public function test_update_allows_omitting_the_name(): void

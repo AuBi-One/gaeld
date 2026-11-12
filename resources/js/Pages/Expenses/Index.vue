@@ -46,7 +46,7 @@ function executePost() {
   })
 }
 
-const { t } = useTranslations()
+const { t, expenseCategoryLabel } = useTranslations()
 const { formatCurrency, formatDate } = useFormatters()
 
 function confirmDelete(expense) {
@@ -86,10 +86,11 @@ function handleFilter({ key, value }) {
 
 const columns = computed(() => [
   { key: 'date', label: t('date'), format: (v) => formatDate(v), sortable: true },
-  { key: 'category', label: t('category'), sortable: true },
+  { key: 'category', label: t('category'), format: (v) => expenseCategoryLabel(v), sortable: true },
   { key: 'description', label: t('description') },
   { key: 'vendor', label: t('vendor'), sortable: true },
-  { key: 'amount', label: t('amount'), class: 'text-right', format: (v) => formatCurrency(v), sortable: true },
+  { key: 'amount', label: t('net_amount_excl_vat'), class: 'text-right', format: (v, row) => formatCurrency(v, row.currency), sortable: true },
+  { key: 'gross_amount', label: t('gross_amount_incl_vat'), class: 'text-right', format: (v, row) => formatCurrency(v, row.currency), sortable: false },
   { key: 'status', label: t('status'), sortable: true },
   { key: 'actions', label: '', class: 'text-right w-auto' },
 ])
@@ -98,6 +99,7 @@ const statusVariant = {
   pending: 'warning',
   approved: 'info',
   posted: 'success',
+  cancelled: 'secondary',
 }
 
 const statusFilters = computed(() => [
@@ -109,6 +111,7 @@ const statusFilters = computed(() => [
       { value: 'pending', label: t('expense_status_pending') },
       { value: 'approved', label: t('expense_status_approved') },
       { value: 'posted', label: t('expense_status_posted') },
+      { value: 'cancelled', label: t('expense_status_cancelled') },
     ],
   },
 ])

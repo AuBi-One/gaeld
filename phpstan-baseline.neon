@@ -19,24 +19,6 @@ parameters:
 			path: app/Domains/Accounting/Controllers/LettrageController.php
 
 		-
-			message: '#^Access to an undefined property \(object\|string\)\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Domains/Accounting/Requests/UpdateAccountRequest.php
-
-		-
-			message: '#^Access to an undefined property \(object\|string\)\:\:\$organization_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Domains/Accounting/Requests/UpdateAccountRequest.php
-
-		-
-			message: '#^Call to an undefined method \(object\|string\)\:\:transactionLines\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Domains/Accounting/Requests/UpdateAccountRequest.php
-
-		-
 			message: '#^Parameter \#1 \$rows of method App\\Domains\\Accounting\\Services\\LedgerQueryService\:\:computeTrialBalances\(\) expects Illuminate\\Support\\Collection\<int, stdClass\>, Illuminate\\Database\\Eloquent\\Collection\<int, App\\Domains\\Accounting\\Models\\Account\> given\.$#'
 			identifier: argument.type
 			count: 1
@@ -350,12 +332,6 @@ parameters:
 			path: app/Domains/Invoicing/Search/InvoiceSearchProvider.php
 
 		-
-			message: '#^Expression on left side of \?\? is not nullable\.$#'
-			identifier: nullCoalesce.expr
-			count: 2
-			path: app/Domains/Invoicing/Services/InvoicePdfRenderer.php
-
-		-
 			message: '#^Parameter \#1 \$callback of function array_map expects \(callable\(string\|null\)\: mixed\)\|null, ''trim'' given\.$#'
 			identifier: argument.type
 			count: 1
@@ -480,18 +456,6 @@ parameters:
 			identifier: argument.type
 			count: 2
 			path: app/Domains/Reporting/Services/ReportingService.php
-
-		-
-			message: '#^Method App\\Domains\\Users\\Controllers\\PasskeyController\:\:registerOptions\(\) has no return type specified\.$#'
-			identifier: missingType.return
-			count: 1
-			path: app/Domains/Users/Controllers/PasskeyController.php
-
-		-
-			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Support\\Carbon\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Domains/Users/Controllers/PasskeyController.php
 
 		-
 			message: '#^Argument of an invalid type array\|string supplied for foreach, only iterables are supported\.$#'

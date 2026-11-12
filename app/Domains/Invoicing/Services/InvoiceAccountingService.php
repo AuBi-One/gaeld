@@ -11,16 +11,22 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Services\ChartTemplateService;
+use App\Domains\Accounting\Services\CurrencyConversionService;
 use App\Domains\Accounting\Services\LedgerQueryService;
 use App\Domains\Accounting\Services\LedgerService;
+use App\Domains\Accounting\Services\VatPeriodLockService;
 use App\Domains\Invoicing\DTOs\RecordPaymentData;
+use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceType;
+use App\Domains\Invoicing\Exceptions\InvalidPaymentException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Models\InvoiceLine;
 use App\Domains\Invoicing\Models\InvoicePayment;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Handles write operations for invoice accounting: posting ledger entries
@@ -33,6 +39,8 @@ class InvoiceAccountingService
         private LedgerService $ledgerService,
         private LedgerQueryService $ledgerQuery,
         private ChartTemplateService $chartTemplates,
+        private VatPeriodLockService $vatPeriodLocks,
+        private CurrencyConversionService $currencies,
     ) {}
 
     /**
@@ -56,71 +64,79 @@ class InvoiceAccountingService
     {
         return DB::transaction(function () use ($invoice) {
             $orgId = $invoice->organization_id;
-            $invoice->load('lines.vatRate');
+            $invoice->load('lines.vatRate', 'organization');
 
             $isCreditNote = $invoice->type === InvoiceType::CreditNote;
+            $ledgerCurrency = strtoupper((string) ($invoice->organization->currency ?: 'CHF'));
+            $documentCurrency = strtoupper((string) ($invoice->currency ?: $ledgerCurrency));
+            $rate = $this->currencies->rate(
+                $orgId,
+                $documentCurrency,
+                $ledgerCurrency,
+                $invoice->issue_date->toDateString(),
+            );
+            $toLedger = fn (string $amount): string => Money::round(Money::multiply($amount, $rate));
 
             $ar = $this->ledgerQuery->resolveAccount($orgId, AccountCode::ACCOUNTS_RECEIVABLE);
             $revenue = $this->revenueAccount($invoice, $isCreditNote);
 
             $lines = [];
 
-            // For credit notes, amounts are negative — use absolute values and swap debit/credit
-            $invoiceTotal = $isCreditNote
-                ? Money::absoluteAmount((string) $invoice->total)
-                : (string) $invoice->total;
-
-            // AR line: Debit for invoice, Credit for credit note
-            $lines[] = new JournalLineData(
-                accountId: (string) $ar->id,
-                debit: $isCreditNote ? '0' : $invoiceTotal,
-                credit: $isCreditNote ? $invoiceTotal : '0',
-                description: 'Accounts Receivable',
-            );
-
-            // Group invoice lines by VAT rate to create separate revenue + VAT entries
+            // Group invoice lines by VAT rate to create separate revenue + VAT entries.
+            // The receivable is the sum of those converted lines so rounding cannot
+            // leave the entry unbalanced.
             $groupedByVat = $invoice->lines->groupBy(fn ($line) => $line->vat_rate_id ?? 'none');
 
             foreach ($groupedByVat as $vatRateId => $invoiceLines) {
-                $netAmount = '0';
-                $vatAmount = '0';
-
-                foreach ($invoiceLines as $line) {
-                    $netAmount = Money::add($netAmount, Money::absoluteAmount((string) $line->amount));
-                    $vatAmount = Money::add($vatAmount, Money::absoluteAmount((string) ($line->vat_amount ?? '0')));
-                }
+                ['netAmount' => $netAmount, 'vatAmount' => $vatAmount] = $this->calculateGroupTotals($invoiceLines);
+                $netAmount = $toLedger($netAmount);
+                $vatAmount = $toLedger($vatAmount);
 
                 // Revenue line: Credit for invoice, Debit for credit note
-                if (Money::isPositive($netAmount)) {
+                if (! Money::isZero($netAmount)) {
                     $vatLabel = $vatRateId !== 'none' && $invoiceLines->first()->vatRate
                         ? " ({$invoiceLines->first()->vatRate->name})"
                         : '';
                     $lines[] = new JournalLineData(
                         accountId: (string) $revenue->id,
-                        debit: $isCreditNote ? $netAmount : '0',
-                        credit: $isCreditNote ? '0' : $netAmount,
+                        debit: $isCreditNote !== Money::isNegative($netAmount) ? Money::absoluteAmount($netAmount) : '0',
+                        credit: $isCreditNote !== Money::isNegative($netAmount) ? '0' : Money::absoluteAmount($netAmount),
                         description: "Revenue{$vatLabel}",
                     );
                 }
 
                 // VAT line: Credit for invoice, Debit for credit note
-                if (Money::isPositive($vatAmount)) {
+                if (! Money::isZero($vatAmount)) {
                     $vatOutputAccount = $this->ledgerQuery->resolveAccount($orgId, AccountCode::VAT_OUTPUT);
                     $rateName = $invoiceLines->first()->vatRate->name ?? 'VAT';
                     $lines[] = new JournalLineData(
                         accountId: (string) $vatOutputAccount->id,
-                        debit: $isCreditNote ? $vatAmount : '0',
-                        credit: $isCreditNote ? '0' : $vatAmount,
+                        debit: $isCreditNote !== Money::isNegative($vatAmount) ? Money::absoluteAmount($vatAmount) : '0',
+                        credit: $isCreditNote !== Money::isNegative($vatAmount) ? '0' : Money::absoluteAmount($vatAmount),
                         description: "VAT Output — {$rateName}",
                     );
                 }
             }
 
+            $invoiceTotal = '0';
+            foreach ($lines as $line) {
+                $invoiceTotal = Money::add($invoiceTotal, Money::subtract($line->credit, $line->debit));
+            }
+            array_unshift($lines, new JournalLineData(
+                accountId: (string) $ar->id,
+                debit: Money::isPositive($invoiceTotal) ? $invoiceTotal : '0',
+                credit: Money::isNegative($invoiceTotal) ? Money::absoluteAmount($invoiceTotal) : '0',
+                description: 'Accounts Receivable',
+            ));
+
             $docType = $isCreditNote ? 'Credit Note' : 'Invoice';
+            $fxNote = $documentCurrency === $ledgerCurrency
+                ? ''
+                : sprintf(' [%s %s @ %s %s]', $invoice->total, $documentCurrency, $rate, $ledgerCurrency);
             $journalEntry = $this->ledgerService->postEntry($orgId, new JournalEntryData(
                 date: $invoice->issue_date->toDateString(),
                 reference: $invoice->number,
-                description: "{$docType} {$invoice->number} — ".($invoice->customer->name ?? 'N/A'),
+                description: "{$docType} {$invoice->number} — ".($invoice->customer->name ?? 'N/A').$fxNote,
                 lines: $lines,
             ));
 
@@ -130,19 +146,16 @@ class InvoiceAccountingService
                     continue;
                 }
 
-                $netAmount = '0';
-                $vatAmount = '0';
-                foreach ($invoiceLines as $line) {
-                    $netAmount = Money::add($netAmount, Money::absoluteAmount((string) $line->amount));
-                    $vatAmount = Money::add($vatAmount, Money::absoluteAmount((string) ($line->vat_amount ?? '0')));
-                }
+                ['netAmount' => $netAmount, 'vatAmount' => $vatAmount] = $this->calculateGroupTotals($invoiceLines);
+                $netAmount = $toLedger($netAmount);
+                $vatAmount = $toLedger($vatAmount);
 
-                if (Money::isPositive($vatAmount)) {
+                if (! Money::isZero($vatAmount)) {
                     VatEntry::create([
                         'journal_entry_id' => $journalEntry->id,
                         'vat_rate_id' => $vatRateId,
-                        'base_amount' => $netAmount,
-                        'vat_amount' => $vatAmount,
+                        'base_amount' => $isCreditNote ? Money::negate($netAmount) : $netAmount,
+                        'vat_amount' => $isCreditNote ? Money::negate($vatAmount) : $vatAmount,
                         'type' => VatEntryType::Output,
                     ]);
                 }
@@ -188,6 +201,38 @@ class InvoiceAccountingService
     }
 
     /**
+     * @param  iterable<int, InvoiceLine>  $invoiceLines
+     * @return array{netAmount: numeric-string, vatAmount: numeric-string}
+     */
+    private function calculateGroupTotals(iterable $invoiceLines): array
+    {
+        $netAmount = '0';
+        $vatAmount = '0';
+
+        foreach ($invoiceLines as $line) {
+            if ($line->type === InvoiceLineType::Text) {
+                continue;
+            }
+
+            $lineAmount = Money::absoluteAmount((string) $line->amount);
+            $lineVatAmount = Money::absoluteAmount((string) ($line->vat_amount ?? '0'));
+
+            if ($line->type === InvoiceLineType::Discount) {
+                $netAmount = Money::subtract($netAmount, $lineAmount);
+                $vatAmount = Money::subtract($vatAmount, $lineVatAmount);
+            } else {
+                $netAmount = Money::add($netAmount, $lineAmount);
+                $vatAmount = Money::add($vatAmount, $lineVatAmount);
+            }
+        }
+
+        return [
+            'netAmount' => $netAmount,
+            'vatAmount' => $vatAmount,
+        ];
+    }
+
+    /**
      * Record a payment for an invoice with full payment tracking.
      *
      * Creates an InvoicePayment record and posts to ledger:
@@ -209,16 +254,83 @@ class InvoiceAccountingService
             $bankAccount = $this->ledgerQuery->resolveAccount($orgId, $bankAccountCode);
             $accountsReceivable = $this->ledgerQuery->resolveAccount($orgId, AccountCode::ACCOUNTS_RECEIVABLE);
 
-            $paymentRef = $data->reference ?? 'PAY-'.$invoice->number.'-'.($invoice->payments()->count() + 1);
+            $invoice->loadMissing('organization');
+            $ledgerCurrency = strtoupper((string) ($invoice->organization->currency ?: 'CHF'));
+            $documentCurrency = strtoupper((string) ($invoice->currency ?: $ledgerCurrency));
+            $receivableAmount = $data->amount;
+            $ledgerAmount = $data->amount;
+            $fxNote = '';
 
+            if ($documentCurrency !== $ledgerCurrency) {
+                $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
+                $invoice->load('journalEntry.lines', 'payments.journalEntry.lines');
+                $amountDue = $invoice->amountDue();
+                if (! Money::isPositive($data->amount) || Money::compare($data->amount, $amountDue) > 0) {
+                    throw new InvalidPaymentException('Payment must be positive and cannot exceed the invoice balance.');
+                }
+                if ($invoice->journalEntry === null) {
+                    throw new InvalidPaymentException('Cannot settle a foreign invoice without its original ledger entry.');
+                }
+
+                $remainingReceivable = '0.00';
+                $hasReceivable = false;
+                foreach ($invoice->journalEntry->lines as $line) {
+                    if ((string) $line->account_id === (string) $accountsReceivable->id) {
+                        $hasReceivable = true;
+                        $remainingReceivable = Money::add($remainingReceivable, Money::subtract($line->debit, $line->credit));
+                    }
+                }
+                if (! $hasReceivable) {
+                    throw new InvalidPaymentException('Cannot settle a foreign invoice without its original receivable posting.');
+                }
+                foreach ($invoice->payments as $payment) {
+                    if ($payment->journalEntry === null) {
+                        throw new InvalidPaymentException('Cannot settle a foreign invoice with a payment missing its ledger entry.');
+                    }
+                    foreach ($payment->journalEntry->lines as $line) {
+                        if ((string) $line->account_id === (string) $accountsReceivable->id) {
+                            $remainingReceivable = Money::subtract($remainingReceivable, Money::subtract($line->credit, $line->debit));
+                        }
+                    }
+                }
+                $receivableAmount = Money::compare($data->amount, $amountDue) === 0
+                    ? $remainingReceivable
+                    : Money::divideRounded(Money::multiply($remainingReceivable, $data->amount), $amountDue);
+
+                try {
+                    $converted = $this->currencies->convert($orgId, $documentCurrency, $ledgerCurrency, $data->amount, $data->paymentDate);
+                } catch (\DomainException $exception) {
+                    throw new InvalidPaymentException($exception->getMessage(), previous: $exception);
+                }
+                $ledgerAmount = $converted['amount'];
+                $fxNote = sprintf(' [%s %s @ %s]', $data->amount, $documentCurrency, $converted['rate']);
+            }
+
+            $lines = [
+                new JournalLineData(accountId: (string) $bankAccount->id, debit: $ledgerAmount, credit: '0', description: 'Bank deposit'),
+                new JournalLineData(accountId: (string) $accountsReceivable->id, debit: '0', credit: $receivableAmount, description: 'Clear receivable'),
+            ];
+            $difference = Money::subtract($ledgerAmount, $receivableAmount);
+            if (! Money::isZero($difference)) {
+                try {
+                    $financialExpenses = $this->ledgerQuery->resolveAccount($orgId, '6900');
+                } catch (ModelNotFoundException $exception) {
+                    throw new InvalidPaymentException('Add financial expenses account 6900 before recording a payment with an exchange difference.', previous: $exception);
+                }
+                $lines[] = new JournalLineData(
+                    accountId: (string) $financialExpenses->id,
+                    debit: Money::isNegative($difference) ? Money::absoluteAmount($difference) : '0',
+                    credit: Money::isPositive($difference) ? $difference : '0',
+                    description: 'Realized exchange difference',
+                );
+            }
+
+            $paymentRef = $data->reference ?? 'PAY-'.$invoice->number.'-'.($invoice->payments()->count() + 1);
             $journalEntry = $this->ledgerService->postEntry($orgId, new JournalEntryData(
                 date: $data->paymentDate,
                 reference: $paymentRef,
-                description: "Payment received for {$invoice->number}",
-                lines: [
-                    new JournalLineData(accountId: (string) $bankAccount->id, debit: $data->amount, credit: '0', description: 'Bank deposit'),
-                    new JournalLineData(accountId: (string) $accountsReceivable->id, debit: '0', credit: $data->amount, description: 'Clear receivable'),
-                ],
+                description: "Payment received for {$invoice->number}{$fxNote}",
+                lines: $lines,
             ));
 
             $payment = InvoicePayment::create([
@@ -237,6 +349,68 @@ class InvoiceAccountingService
             }
 
             return $payment->load('journalEntry');
+        });
+    }
+
+    /**
+     * Correct a payment date by reversing and reposting its ledger entry.
+     */
+    public function updatePaymentDate(Invoice $invoice, InvoicePayment $payment, string $paymentDate): InvoicePayment
+    {
+        if ($payment->invoice_id !== $invoice->id || $payment->organization_id !== $invoice->organization_id) {
+            throw new \DomainException('The payment does not belong to this invoice.');
+        }
+
+        $payment->loadMissing('journalEntry.lines');
+
+        if ($payment->journalEntry === null) {
+            throw new \DomainException('Cannot correct a payment without a journal entry.');
+        }
+
+        $oldDate = $payment->payment_date->toDateString();
+        if ($oldDate === $paymentDate) {
+            return $payment->fresh(['journalEntry']);
+        }
+
+        $this->vatPeriodLocks->assertPeriodUnlocked($payment->organization_id, $oldDate, $oldDate);
+        $this->vatPeriodLocks->assertPeriodUnlocked($payment->organization_id, $paymentDate, $paymentDate);
+
+        return DB::transaction(function () use ($invoice, $payment, $paymentDate, $oldDate): InvoicePayment {
+            $original = $payment->journalEntry;
+
+            if ($original->archived_at !== null) {
+                throw new \DomainException('Archived payment entries cannot be corrected.');
+            }
+
+            $reversal = $this->ledgerService->reverseEntry(
+                $original,
+                "Correction of payment date for {$invoice->number}",
+                'payment_date_correction',
+                $oldDate,
+            );
+            $this->ledgerService->postDraft($reversal);
+
+            $replacement = $this->ledgerService->postEntry(
+                $payment->organization_id,
+                new JournalEntryData(
+                    date: $paymentDate,
+                    reference: 'PAYDATE-'.$payment->id.'-'.Str::lower(Str::replace('-', '', Str::uuid()->toString())),
+                    description: "Payment received for {$invoice->number} (date corrected)",
+                    lines: $original->lines->map(fn ($line) => new JournalLineData(
+                        accountId: (string) $line->account_id,
+                        debit: (string) $line->debit,
+                        credit: (string) $line->credit,
+                        description: $line->description,
+                    ))->all(),
+                ),
+            );
+
+            $payment->update([
+                'journal_entry_id' => $replacement->id,
+                'payment_date' => $paymentDate,
+            ]);
+
+            return $payment->fresh(['journalEntry']);
         });
     }
 }

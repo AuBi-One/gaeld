@@ -130,14 +130,15 @@ class InvoicePdfRenderer
 
         // Customer info — placed in the right-hand Swiss SN 010130 / DIN 5008
         // address window; the sender remains on the left.
-        $customer = $invoice->customer;
-        $customerDetails = $invoice->customer_snapshot;
-        if ($customerDetails === null && $customer !== null) {
-            $customerDetails = $customer->toInvoiceSnapshot($invoice->contactPerson);
-        }
+        $customerDetails = $invoice->customerDetailsForDocument();
 
         if ($customerDetails !== null) {
             $tcpdf->SetXY(InvoicePdfStyle::CUSTOMER_X, InvoicePdfStyle::CUSTOMER_INFO_Y);
+            if (filled($customerDetails['salutation'] ?? null)) {
+                $tcpdf->SetFont('Helvetica', '', 9);
+                $tcpdf->Cell(InvoicePdfStyle::CUSTOMER_WIDTH, 4, $customerDetails['salutation'], 0, 1, 'L');
+                $tcpdf->SetX(InvoicePdfStyle::CUSTOMER_X);
+            }
             $tcpdf->SetFont('Helvetica', 'B', 10);
             $tcpdf->Cell(InvoicePdfStyle::CUSTOMER_WIDTH, 5, $customerDetails['name'], 0, 1, 'L');
 
@@ -151,7 +152,10 @@ class InvoicePdfRenderer
             $customerAddress = array_filter([
                 $customerDetails['address'],
                 trim(($customerDetails['postal_code'] ?? '').' '.($customerDetails['city'] ?? '')),
-                $customerDetails['country'],
+                // Contacts from before v3.8.27 have no country name: show a foreign country's code.
+                ($customerDetails['country_name'] ?? '') !== ''
+                    ? $customerDetails['country_name']
+                    : ($customerDetails['country'] !== 'CH' ? $customerDetails['country'] : null),
             ]);
             foreach ($customerAddress as $line) {
                 $tcpdf->SetX(InvoicePdfStyle::CUSTOMER_X);
@@ -180,8 +184,8 @@ class InvoicePdfRenderer
         $tcpdf->SetTextColor(...InvoicePdfStyle::COLOR_GRAY);
 
         $metaLines = [];
-        $metaLines[] = $this->t('pdf_date').': '.($invoice->issue_date->format('d.m.Y') ?? '');
-        $metaLines[] = $this->t('pdf_due_date').': '.($invoice->due_date->format('d.m.Y') ?? '');
+        $metaLines[] = $this->t('pdf_date').': '.$invoice->issue_date->format('d.m.Y');
+        $metaLines[] = $this->t('pdf_due_date').': '.($invoice->due_date?->format('d.m.Y') ?? '');
         $paymentTerms = PaymentTerms::label($invoice->payment_terms, $this->locale);
         if ($paymentTerms !== null) {
             $metaLines[] = $this->t('pdf_payment_terms').': '.$paymentTerms;

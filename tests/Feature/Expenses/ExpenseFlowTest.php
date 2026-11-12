@@ -6,6 +6,7 @@ use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Expenses\Actions\ApproveExpenseAction;
+use App\Domains\Expenses\Actions\CancelExpenseAction;
 use App\Domains\Expenses\Actions\CreateExpenseAction;
 use App\Domains\Expenses\Actions\DeleteExpenseAction;
 use App\Domains\Expenses\Actions\PostExpenseAction;
@@ -13,6 +14,7 @@ use App\Domains\Expenses\DTOs\CreateExpenseData;
 use App\Domains\Expenses\Enums\ExpenseStatus;
 use App\Domains\Expenses\Exceptions\InvalidExpenseStateException;
 use App\Domains\Expenses\Models\Expense;
+use App\Domains\Expenses\Models\ExpenseCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery\MockInterface;
 use Tests\TestCase;
@@ -94,6 +96,33 @@ class ExpenseFlowTest extends TestCase
         // Verify ledger entries
         $lines = $expense->journalEntry->lines;
         $this->assertCount(2, $lines);
+    }
+
+    public function test_pending_expense_can_be_posted_directly(): void
+    {
+        $expense = $this->createExpense();
+
+        $expense = app(PostExpenseAction::class)->execute($expense, '6530');
+
+        $this->assertEquals(ExpenseStatus::Posted, $expense->status);
+        $this->assertNotNull($expense->journal_entry_id);
+    }
+
+    public function test_posted_expense_can_be_cancelled_with_a_reversal(): void
+    {
+        $expense = $this->createExpense();
+        $expense = app(PostExpenseAction::class)->execute($expense, '6530');
+
+        $expense = app(CancelExpenseAction::class)->execute($expense);
+
+        $this->assertEquals(ExpenseStatus::Cancelled, $expense->status);
+        $this->assertTrue($expense->journalEntry->isBalanced());
+        $this->assertDatabaseHas('journal_entries', [
+            'organization_id' => $this->org->id,
+            'reference' => 'REV-EXP-'.$expense->id,
+            'is_posted' => true,
+            'type' => 'expense_cancellation',
+        ]);
     }
 
     public function test_complete_expense_flow(): void
@@ -195,6 +224,86 @@ class ExpenseFlowTest extends TestCase
         $this->expectExceptionMessage('already posted');
 
         $postAction->execute($expense->fresh(), '6530');
+    }
+
+    public function test_web_update_allows_a_partial_payload(): void
+    {
+        $expense = $this->createExpense([
+            'description' => 'Original description',
+        ]);
+
+        $response = $this->actAsOrg()->put(route('expenses.update', $expense), [
+            'description' => 'Updated description',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $response->assertRedirect(route('expenses.show', $expense));
+        $this->assertSame('Updated description', $expense->refresh()->description);
+        $this->assertSame('Software and Subscriptions', $expense->category);
+        $this->assertSame('700.00', $expense->amount);
+    }
+
+    public function test_category_default_account_is_applied_when_creating_an_expense(): void
+    {
+        $account = Account::create([
+            'organization_id' => $this->org->id,
+            'code' => '4000',
+            'name' => 'Cost of Materials',
+            'type' => AccountType::Expense,
+            'is_active' => true,
+        ]);
+        ExpenseCategory::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Goods Purchased for Resale',
+            'default_expense_account_id' => $account->id,
+        ]);
+
+        $response = $this->actAsOrg()->post('/expenses', [
+            'category' => 'Goods Purchased for Resale',
+            'amount' => '120.00',
+            'date' => '2026-03-16',
+            'currency' => 'CHF',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('expenses', [
+            'category' => 'Goods Purchased for Resale',
+            'expense_account_code' => '4000',
+        ]);
+
+        $expense = Expense::query()->where('category', 'Goods Purchased for Resale')->latest()->firstOrFail();
+        $this->assertNotNull($expense->expense_category_id);
+        $this->assertSame((int) $account->id, (int) $expense->expense_account_id);
+    }
+
+    public function test_explicit_expense_account_overrides_category_default(): void
+    {
+        $defaultAccount = Account::create([
+            'organization_id' => $this->org->id,
+            'code' => '4000',
+            'name' => 'Cost of Materials',
+            'type' => AccountType::Expense,
+            'is_active' => true,
+        ]);
+        ExpenseCategory::create([
+            'organization_id' => $this->org->id,
+            'name' => 'Goods Purchased for Resale',
+            'default_expense_account_id' => $defaultAccount->id,
+        ]);
+
+        $response = $this->actAsOrg()->post('/expenses', [
+            'category' => 'Goods Purchased for Resale',
+            'amount' => '120.00',
+            'date' => '2026-03-16',
+            'currency' => 'CHF',
+            'expense_account_code' => '6530',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('expenses', [
+            'category' => 'Goods Purchased for Resale',
+            'expense_account_code' => '6530',
+        ]);
     }
 
     public function test_destroy_uses_generic_flash_error_when_exception_message_is_empty(): void

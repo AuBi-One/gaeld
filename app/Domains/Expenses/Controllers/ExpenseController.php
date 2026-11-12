@@ -15,6 +15,7 @@ use App\Domains\Expenses\DTOs\UpdateExpenseData;
 use App\Domains\Expenses\Enums\ExpenseStatus;
 use App\Domains\Expenses\Exceptions\InvalidExpenseStateException;
 use App\Domains\Expenses\Models\Expense;
+use App\Domains\Expenses\Models\ExpenseCategory;
 use App\Domains\Expenses\Models\ReceiptScan;
 use App\Domains\Expenses\Notifications\ExpenseSubmittedNotification;
 use App\Domains\Expenses\Queries\ExpenseCategoryQuery;
@@ -112,6 +113,8 @@ class ExpenseController extends Controller
     public function store(StoreExpenseRequest $request, CreateExpenseAction $action, CurrentOrganization $currentOrg): RedirectResponse
     {
         $validated = $request->validated();
+        $selfService = $request->user()->hasPermissionTo(Permission::ExpensesViewOwn)
+            && ! $request->user()->hasPermissionTo(Permission::ExpensesView);
         $newReceiptPath = null;
 
         if ($request->hasFile('receipt')) {
@@ -139,6 +142,7 @@ class ExpenseController extends Controller
         }
         $validated['organization_id'] = $currentOrg->id();
         $validated['user_id'] = $request->user()->id;
+        $validated = $this->applyDefaultExpenseAccount($validated, $currentOrg->id(), ! $selfService);
 
         try {
             $expense = $action->execute(CreateExpenseData::fromArray($validated));
@@ -179,13 +183,13 @@ class ExpenseController extends Controller
             && ! $request->user()->hasPermissionTo(Permission::ExpensesView);
 
         $expenseData = $ownOnly
-            ? $expense->load('vatRate')->makeHidden([
+            ? $expense->load(['vatRate', 'expenseCategory'])->makeHidden([
                 'journal_entry_id',
                 'expense_account_code',
                 'bank_account_code',
                 'supplier_id',
             ])
-            : $expense->load(['vatRate', 'supplier', 'journalEntry.lines.account']);
+            : $expense->load(['vatRate', 'supplier', 'expenseCategory', 'expenseAccount', 'journalEntry.lines.account']);
 
         return Inertia::render('Expenses/Show', [
             'expense' => $expenseData,
@@ -193,6 +197,7 @@ class ExpenseController extends Controller
             'canUpdate' => $request->user()->can('update', $expense),
             'canDelete' => $request->user()->can('delete', $expense),
             'canApprove' => $request->user()->can('approve', $expense),
+            'canCancel' => $request->user()->can('cancel', $expense),
         ]);
     }
 
@@ -213,7 +218,19 @@ class ExpenseController extends Controller
 
     public function update(UpdateExpenseRequest $request, Expense $expense, UpdateExpenseAction $action): RedirectResponse
     {
-        $validated = $request->validated();
+        $validated = array_merge([
+            'category' => $expense->category,
+            'amount' => $expense->amount,
+            'amount_basis' => 'net',
+            'date' => $expense->date->toDateString(),
+            'expense_account_code' => $expense->expense_account_code,
+            'bank_account_code' => $expense->bank_account_code,
+        ], $request->validated());
+        $validated = $this->applyDefaultExpenseAccount(
+            $validated,
+            $expense->organization_id,
+            $request->user()->hasPermissionTo(Permission::ExpensesView),
+        );
         $newReceiptPath = null;
 
         if ($request->hasFile('receipt')) {
@@ -254,6 +271,38 @@ class ExpenseController extends Controller
 
         return redirect()->route('expenses.show', $expense)
             ->with('success', __('app.expense_updated'));
+    }
+
+    /**
+     * Apply a category's active, organization-scoped default account only when
+     * the request did not explicitly provide an expense account.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function applyDefaultExpenseAccount(array $validated, string $organizationId, bool $canAssignAccount): array
+    {
+        if (! $canAssignAccount || filled($validated['expense_account_code'] ?? null)) {
+            return $validated;
+        }
+
+        $category = ExpenseCategory::withoutGlobalScopes()
+            ->where('organization_id', $organizationId)
+            ->where('name', $validated['category'] ?? '')
+            ->with(['defaultExpenseAccount' => function ($query) use ($organizationId): void {
+                $query->where('organization_id', $organizationId)
+                    ->where('is_active', true)
+                    ->where('type', AccountType::Expense);
+            }])
+            ->first();
+
+        $defaultAccountCode = $category?->defaultExpenseAccount?->code;
+
+        if ($defaultAccountCode !== null) {
+            $validated['expense_account_code'] = $defaultAccountCode;
+        }
+
+        return $validated;
     }
 
     public function destroy(Expense $expense, DeleteExpenseAction $action): RedirectResponse

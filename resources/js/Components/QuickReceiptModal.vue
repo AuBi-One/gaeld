@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import Modal from '@/Components/UI/Modal.vue'
 import Button from '@/Components/UI/Button.vue'
 import FormInput from '@/Components/UI/FormInput.vue'
@@ -16,7 +16,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-const { t } = useTranslations()
+const { t, expenseCategoryLabel } = useTranslations()
 
 // Stages: capture → scanning → review
 const stage = ref('capture') // 'capture' | 'scanning' | 'review'
@@ -33,9 +33,11 @@ const ocrConfidence = ref(null)
 const ocrHasData = ref(false)
 const scanElapsed = ref(0)
 const scanTimer = ref(null)
+const organizationCategories = ref([])
 const form = ref({
   category: '',
   amount: '',
+  amount_basis: 'gross',
   date: new Date().toISOString().slice(0, 10),
   vendor: '',
   description: '',
@@ -45,16 +47,27 @@ const form = ref({
 
 const categoryOptions = computed(() => [
   { value: '', label: t('select_category') },
-  { value: 'Office Supplies', label: t('cat_office_supplies') },
-  { value: 'Travel', label: t('cat_travel') },
-  { value: 'Software', label: t('cat_software') },
-  { value: 'Professional Services', label: t('cat_professional_services') },
-  { value: 'Marketing', label: t('cat_marketing') },
-  { value: 'Rent', label: t('cat_rent') },
-  { value: 'Utilities', label: t('cat_utilities') },
-  { value: 'Insurance', label: t('cat_insurance') },
-  { value: 'Other', label: t('cat_other') },
+  ...organizationCategories.value.map(category => ({ value: category.name, label: expenseCategoryLabel(category.name) })),
 ])
+
+watch(() => props.open, (open) => {
+  if (open) loadCategories()
+}, { immediate: true })
+
+async function loadCategories() {
+  try {
+    const response = await fetch('/settings/expense-categories', {
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+    })
+
+    if (response.ok) {
+      organizationCategories.value = await response.json()
+    }
+  } catch {
+    organizationCategories.value = []
+  }
+}
 
 function onFileSelected(file) {
   if (!file) return
@@ -116,7 +129,7 @@ async function pollForResults(scanId) {
   // obvious and editable instead of silently defaulting on submit.
   function enterReviewStage() {
     if (!form.value.category) {
-      form.value.category = 'Other'
+      form.value.category = organizationCategories.value[0]?.name ?? ''
     }
     stage.value = 'review'
   }
@@ -174,6 +187,7 @@ function createExpense() {
   const formData = new FormData()
   formData.append('category', form.value.category)
   formData.append('amount', form.value.amount)
+  formData.append('amount_basis', 'gross')
   formData.append('date', form.value.date)
   formData.append('vendor', form.value.vendor)
   formData.append('description', form.value.description)
@@ -214,6 +228,7 @@ function resetAndClose() {
   form.value = {
     category: '',
     amount: '',
+    amount_basis: 'gross',
     date: new Date().toISOString().slice(0, 10),
     vendor: '',
     description: '',

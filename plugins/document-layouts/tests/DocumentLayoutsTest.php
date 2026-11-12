@@ -7,6 +7,7 @@ require_once __DIR__.'/DocumentLayoutsTestCase.php';
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Models\ContactPerson;
 use App\Domains\Invoicing\Actions\GenerateQrInvoicePdfAction;
 use App\Domains\Invoicing\Enums\InvoiceLineType;
 use App\Domains\Invoicing\Models\Invoice;
@@ -15,6 +16,7 @@ use App\Domains\Payroll\Models\DeductionRateSet;
 use App\Domains\Payroll\Models\Employee;
 use App\Domains\Payroll\Models\SalarySlip;
 use App\Support\Pdf\PdfLayouts;
+use Plugins\DocumentLayouts\Layouts\WordModelInvoiceLayout;
 use Plugins\DocumentLayouts\Layouts\WordModelSalarySlipLayout;
 use Plugins\DocumentLayouts\Support\Format;
 use Plugins\DocumentLayouts\Support\Letterhead;
@@ -57,6 +59,20 @@ class DocumentLayoutsTest extends DocumentLayoutsTestCase
         $this->assertSame(2, $this->pageCount($pdf));
         $this->assertStringContainsString('Carlito', $pdf, 'The layout embeds Carlito');
         $this->assertStringContainsString('Helvetica', $pdf, 'The payment part keeps its standard font');
+    }
+
+    public function test_the_invoice_recipient_shows_salutation_attention_person_and_country_name(): void
+    {
+        $invoice = $this->invoice(lines: 1);
+        $invoice->customer->update(['salutation' => 'Madame', 'country_name' => 'Suisse']);
+        $person = ContactPerson::query()->create(['contactable_type' => Contact::class, 'contactable_id' => $invoice->customer_id, 'first_name' => 'Jean', 'last_name' => 'Dupont']);
+        $invoice->update(['contact_person_id' => $person->id, 'customer_snapshot' => null]);
+
+        $this->assertSame(['Madame', 'Client SA', 'Jean Dupont', 'Rue 2', '1003 Lausanne', 'Suisse'], WordModelInvoiceLayout::recipientLines($invoice->fresh()));
+
+        // A snapshot wins over the live contact; without a country name, a foreign code is printed.
+        $invoice->update(['customer_snapshot' => ['name' => 'Client SA', 'attention' => null, 'email' => null, 'address' => 'Hauptstrasse 3', 'postal_code' => '79539', 'city' => 'Lörrach', 'country' => 'DE', 'vat_number' => null]]);
+        $this->assertSame(['Client SA', 'Hauptstrasse 3', '79539 Lörrach', 'DE'], WordModelInvoiceLayout::recipientLines($invoice->fresh()));
     }
 
     public function test_a_long_invoice_continues_on_further_pages_before_the_qr_bill_page(): void

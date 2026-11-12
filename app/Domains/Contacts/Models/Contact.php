@@ -28,12 +28,14 @@ use Laravel\Scout\Searchable;
  * @property string $organization_id
  * @property ContactType|null $type
  * @property string $name
+ * @property string|null $salutation
  * @property string|null $email
  * @property string|null $phone
  * @property string|null $address
  * @property string|null $city
  * @property string|null $postal_code
  * @property string|null $country
+ * @property string|null $country_name
  * @property string|null $vat_number
  * @property string|null $iban
  * @property string|null $bic
@@ -63,12 +65,14 @@ class Contact extends Model
         'organization_id',
         'type',
         'name',
+        'salutation',
         'email',
         'phone',
         'address',
         'city',
         'postal_code',
         'country',
+        'country_name',
         'vat_number',
         'iban',
         'bic',
@@ -119,18 +123,20 @@ class Contact extends Model
     }
 
     /**
-     * @return array{name: string, attention: string|null, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, vat_number: string|null}
+     * @return array{name: string, attention: string|null, salutation: string|null, email: string|null, address: string|null, postal_code: string|null, city: string|null, country: string, country_name: string|null, vat_number: string|null}
      */
     public function toInvoiceSnapshot(?ContactPerson $person = null): array
     {
         return [
             'name' => $this->name,
             'attention' => $person?->full_name,
+            'salutation' => $this->salutation,
             'email' => $this->email,
             'address' => $this->address,
             'postal_code' => $this->postal_code,
             'city' => $this->city,
             'country' => $this->country ?? 'CH',
+            'country_name' => $this->country_name,
             'vat_number' => $this->vat_number,
         ];
     }

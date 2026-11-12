@@ -2,6 +2,8 @@
 
 namespace App\Domains\Organizations\Services;
 
+use App\Domains\Accounting\Enums\AccountType;
+use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Services\ChartTemplateService;
 use App\Domains\Expenses\Models\ExpenseCategory;
 use App\Domains\Organizations\Models\Organization;
@@ -42,17 +44,34 @@ class OrganizationSetupService
 
     private function ensureDefaultExpenseCategories(Organization $organization): void
     {
+        $resaleAccountId = Account::withoutGlobalScopes()
+            ->where('organization_id', $organization->id)
+            ->where('code', ExpenseCategory::RESALE_ACCOUNT_CODE)
+            ->where('type', AccountType::Expense)
+            ->where('is_active', true)
+            ->value('id');
+
         foreach (ExpenseCategory::DEFAULT_CATEGORIES as $sortOrder => $name) {
-            ExpenseCategory::withoutGlobalScopes()->firstOrCreate(
+            $category = ExpenseCategory::withoutGlobalScopes()->firstOrCreate(
                 [
                     'organization_id' => $organization->id,
                     'name' => $name,
                 ],
                 [
+                    'code' => ExpenseCategory::systemCodeFor($name),
+                    'translation_key' => ExpenseCategory::systemCodeFor($name)
+                        ? 'cat_'.ExpenseCategory::systemCodeFor($name)
+                        : null,
                     'is_default' => true,
+                    'is_active' => true,
+                    'is_system' => ExpenseCategory::systemCodeFor($name) !== null,
                     'sort_order' => $sortOrder,
                 ],
             );
+
+            if ($name === ExpenseCategory::RESALE_CATEGORY && $resaleAccountId !== null && $category->default_expense_account_id === null) {
+                $category->update(['default_expense_account_id' => $resaleAccountId]);
+            }
         }
     }
 }

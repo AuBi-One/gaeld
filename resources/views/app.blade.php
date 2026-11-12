@@ -29,24 +29,34 @@
         </script>
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
-        @vite('resources/js/cookieConsent.js')
-        @include('partials.google-analytics')
+        {{-- Without analytics only strictly necessary cookies are set, so no consent banner is needed. --}}
+        @if(config('services.google.gtm_id'))
+            @vite('resources/js/cookieConsent.js')
+            @include('partials.google-analytics')
+        @endif
         @inertiaHead
 
-        {{-- Register PWA service worker --}}
+        {{-- Remove service-worker registrations left by older releases. --}}
         <script nonce="{{ app('csp-nonce') }}">
           if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function () {
-              navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+            navigator.serviceWorker.getRegistrations().then(function (registrations) {
+              registrations.forEach(function (registration) {
+                registration.unregister();
+              });
+            });
+          }
+          if ('caches' in window) {
+            caches.keys().then(function (keys) {
+              return Promise.all(keys.filter(function (key) {
+                return key.indexOf('gaeld-shell-') === 0;
+              }).map(function (key) {
+                return caches.delete(key);
+              }));
             });
           }
         </script>
     </head>
     <body>
-        @if(config('services.google.gtm_id'))
-        <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ config('services.google.gtm_id') }}"
-        height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-        @endif
         @inertia
     </body>
 </html>

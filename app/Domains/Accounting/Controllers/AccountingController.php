@@ -9,6 +9,7 @@ use App\Domains\Accounting\Exceptions\AlreadyPostedException;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
+use App\Domains\Accounting\Queries\AccountQuery;
 use App\Domains\Accounting\Queries\JournalEntryQuery;
 use App\Domains\Accounting\Requests\StoreJournalEntryRequest;
 use App\Domains\Accounting\Services\JournalEntryReferences;
@@ -72,6 +73,7 @@ class AccountingController extends Controller
 
         return Inertia::render('Accounting/ChartOfAccounts', [
             'accounts' => $accounts,
+            'parentAccounts' => AccountQuery::forSelect(),
             'query' => ['search' => $request->input('search', '')],
             'can' => [
                 'create' => $user->can('create', Account::class),

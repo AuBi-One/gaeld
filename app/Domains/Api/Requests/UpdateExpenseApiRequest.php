@@ -9,6 +9,11 @@ use Illuminate\Validation\Rule;
 
 class UpdateExpenseApiRequest extends FormRequest
 {
+    public function authorize(): bool
+    {
+        return $this->user()?->can('update', $this->route('expense')) ?? false;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -17,7 +22,7 @@ class UpdateExpenseApiRequest extends FormRequest
         $org = app(CurrentOrganization::class);
         $orgId = $org->isBound() ? $org->id() : 0;
 
-        return array_merge(ExpenseSharedValidationRules::update(), [
+        return array_merge(ExpenseSharedValidationRules::update((string) $orgId), [
             'vat_rate_id' => [
                 'nullable',
                 'uuid',

@@ -82,6 +82,7 @@ final class TokenPermissionMap
                     Permission::InvoicingCreate->value,
                     Permission::InvoicingEdit->value,
                     Permission::InvoicingDelete->value,
+                    Permission::InvoicingSendReminder->value,
                 ],
                 'expenses:read' => [Permission::ExpensesView->value],
                 'expenses:write' => [
@@ -143,7 +144,7 @@ final class TokenPermissionMap
                 'finalize' => Permission::InvoicingFinalize,
                 'recordPayment' => Permission::InvoicingRecordPayment,
                 'send' => Permission::InvoicingEdit,
-                'manageReminders' => Permission::InvoicingEdit,
+                'sendReminder' => Permission::InvoicingSendReminder,
                 'cancel' => Permission::InvoicingEdit,
                 'creditNote' => Permission::InvoicingCreate,
             ],
@@ -154,6 +155,7 @@ final class TokenPermissionMap
                 'update' => Permission::ExpensesEdit,
                 'delete' => Permission::ExpensesDelete,
                 'approve' => Permission::ExpensesApprove,
+                'cancel' => Permission::ExpensesEdit,
             ],
             Account::class => [
                 'viewAny' => Permission::AccountingView,
@@ -171,6 +173,7 @@ final class TokenPermissionMap
             BankAccount::class => [
                 'viewAny' => Permission::BankingView,
                 'view' => Permission::BankingView,
+                'create' => Permission::BankingCreate,
                 'import' => Permission::BankingImport,
             ],
             Organization::class => [

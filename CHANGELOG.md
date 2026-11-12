@@ -5,6 +5,334 @@ All notable changes to Gäld are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.28] - 2026-10-20
+
+### Fixed
+- Reconcile expenses whose bank transaction has no description, using its
+  reference or ID in the accounting description.
+- Convert foreign-currency invoices, credit notes, and expenses into the
+  organization currency, with explicit errors when exchange rates are missing.
+- Preserve booked receivables during foreign invoice settlement, clear rounding
+  remainders on final payments, and post realized exchange differences.
+- Reject ambiguous cross-currency bank matching instead of silently treating
+  the bank amount as a document-currency amount.
+- Display invoice values in their document currency and journal values in the
+  organization currency. Exchange-rate management is available in CE.
+- Exclude test suites and intentional hostile-upload fixtures from release
+  archives while retaining them in Git checkouts; audit tar and zip packaging.
+- Align the staging QA runner with invoice email/reminder actions.
+
+### Dependencies and security
+- Integrate the pending Autoprefixer, Zod, Playwright, Inertia Vue, Vite, and
+  ParaTest updates, including compatible locked transitive updates.
+- Patch Symfony HTTP Foundation and YAML advisories found during release audit.
+
+### Upgrade notes
+- Existing ledger entries remain unchanged. Foreign invoice settlement requires
+  payment-date rates and account `6900` when an exchange difference exists.
+- Automatic bank reconciliation supports matching document/bank/ledger
+  currencies; foreign settlements must be recorded separately.
+- Impact Accounting remains excluded from this release.
+
+## [3.8.27] - 2026-10-08
+
+### Fixed
+- **Invoice customer details:** preserve archived customer snapshots and allow
+  authorized users to explicitly refresh the details on one invoice, with an
+  audit trail and no change to its financial entries.
+- **Contact addresses:** support optional salutations and freely entered full
+  country names in forms, API payloads, and invoice PDFs. Swiss QR data keeps
+  its ISO country code.
+
+### Security
+- Update Laravel to `13.30.0`, Commonmark to `2.10.2`, Flysystem to `3.35.3`,
+  brace-expansion to `5.0.12`, and source-map-js to `1.2.2`.
+- Enforce Composer and pnpm security audits in public CI and install the frozen
+  JavaScript dependency lockfile.
+
+### Validation
+- Full CE suites: 1,566 passed and 26 conditional tests skipped.
+- EE `v2.9.31`: 123 passed and one private registry-consumer test skipped.
+- Clean CE acceptance: 25 passed, with standalone frontend build and source and
+  built-artifact boundary audits passing.
+- Composer and pnpm audits, PHPStan, Pint, API contract parsing, and edition
+  compatibility checks passed.
+
+## [3.8.26] - 2026-09-30
+
+### Fixed
+- **Nullable invoice due dates:** prevent sent or overdue invoices without a
+  due date from crashing authorization, API, reporting, banking, PDF, email,
+  and accounting export flows.
+- **Invoice finalization:** reject drafts without a due date before posting
+  them as sent invoices.
+
+### Validation
+- Focused nullable due-date regression suite: 46 passed, 163 assertions.
+- PHPStan, Pint, and `git diff --check` passed.
+- Production audit found one existing sent invoice without a due date; no
+  automatic business-data backfill was applied.
+
+## [3.8.25] - 2026-09-23
+
+### Changed
+- **Expense categories:** add stable category codes, localized labels, and
+  organization-scoped category/account references.
+- **Account mapping:** resolve the active expense account from the selected
+  category while preserving legacy category names and account codes.
+- **Recurring expenses and API:** propagate structured category/account
+  references without changing existing payload semantics.
+
+### Fixed
+- **Expense UX:** show the suggested expense account alongside the category in
+  entry, detail, and organization settings views.
+- **Data migration:** backfill safe category and account matches for existing
+  expenses without rewriting historical text or ledger entries.
+
+### Validation
+- Focused Expenses/API tests: 52 passed, 211 assertions.
+- PHPStan, Pint, and frontend production build passed.
+- Staging deployment target: CE `v3.8.25` with EE `v2.9.31`.
+
+## [3.8.24] - 2026-09-23
+
+### Fixed
+- **Expense category labels:** translate the standard resale category as
+  « Achats de marchandises destinées à la revente » in French, while keeping
+  the canonical stored value and account mapping unchanged.
+- **Expense surfaces:** apply the localized category label consistently in
+  ordinary expenses, recurring expenses, Quick Receipt, lists, and details.
+
+### Validation
+- Frontend production build passed.
+- Staging deployment target: CE `v3.8.24` with EE `v2.9.31`.
+
+## [3.8.23] - 2026-09-23
+
+### Fixed
+- **Invoice payment dates:** allow authorized users to correct an incorrectly
+  entered payment date from the invoice payment history.
+- **Accounting traceability:** reverse the original payment entry and repost it
+  on the corrected date instead of changing the ledger silently.
+- **Period protection:** reject payment-date corrections in closed VAT periods
+  or fiscal years.
+
+### Validation
+- Invoicing suite: 71 passed, 217 assertions.
+- PHPStan, Pint, and frontend build passed.
+- Staging deployment target: CE `v3.8.23` with EE `v2.9.31`.
+
+## [3.8.22] - 2026-09-22
+
+### Changed
+- **Expense entry:** use the paid amount including VAT by default, with an
+  explicit net-amount option. Persisted accounting values remain net amount
+  plus input VAT.
+- **Recurring expenses and receipts:** normalize gross/net input consistently
+  and expose the net, VAT, and gross breakdown.
+- **Expense lifecycle:** allow direct posting for authorized users and add a
+  traceable cancellation flow using a posted ledger reversal.
+
+### Fixed
+- **Expense deletion:** keep unposted expenses deletable by their authorized
+  creator or a responsible user while preserving employee self-service limits.
+- **Expense API:** expose explicit net and gross amounts and document the
+  backward-compatible net default for API clients.
+
+### Validation
+- Full API suite: 1,540 passed, 13 skipped, 5,768 assertions.
+- PHPStan, Pint, focused Expenses/API tests, and frontend build passed.
+- Staging deployment target: CE `v3.8.22` with EE `v2.9.31`.
+
+## [3.8.21] - 2026-09-18
+
+### Fixed
+- **PDF exports:** remove the per-export 120-second execution-time override so
+  large report and archive exports can use the configured worker limit.
+- **CE/EE boundary:** keep community organization pages from resolving EE
+  subscription relations when SaaS mode is disabled.
+- **EE migration compatibility:** pair with EE `v2.9.31`, which supports both
+  the legacy `customers` schema and the merged `contacts` schema.
+
+### Validation
+- Full API suite: 1,531 passed, 13 skipped, 5,738 assertions.
+- Staging acceptance is required before production promotion.
+
+## [3.8.20] - 2026-09-14
+
+### Changed
+- **Account navigation:** keep profile, security, preferences, and sessions in
+  the topbar account menu instead of duplicating them in the sidebar.
+
+### Fixed
+- **Cookie consent:** load the consent banner and Google Tag Manager only when
+  analytics is configured, avoiding an unnecessary consent prompt on
+  self-hosted instances.
+
+## [3.8.19] - 2026-09-13
+
+### Fixed
+- **Invoice API list:** eager-load VAT rates for invoice lines so listing
+  multiple invoices does not trigger lazy-loading failures or N+1 queries.
+
+## [3.8.18] - 2026-09-12
+
+### Fixed
+- **Profile sessions navigation:** separate the Sessions page route from its
+  device-session JSON endpoint so account navigation renders the profile page.
+
+## [3.8.17] - 2026-09-12
+
+### Changed
+- **Account navigation:** move personal profile destinations into a dedicated
+  sidebar submenu and keep organization switching as the sole entry point to
+  the organization list.
+- **Subscription terminology:** use “Subscription” for customer-facing SaaS
+  plan management while preserving billing terminology for accounting and
+  SaaS administration.
+
+### Fixed
+- **Form validation:** preserve Laravel validation responses instead of
+  rendering them as generic Inertia 500 errors.
+
+## [3.8.16] - 2026-09-11
+
+### Fixed
+- **Staging smoke tests:** align plan checks with the public capability
+  contract used by the staged application.
+
+## [3.8.15] - 2026-09-11
+
+### Fixed
+- **Error page actions:** simplify service-error actions so retry, sign-out,
+  and navigation do not render as a crowded set of competing buttons.
+
+## [3.8.14] - 2026-09-10
+
+### Changed
+- **Organization context:** introduce a Stripe-style organization switcher
+  with search, roles, active context, organization list, and creation access.
+- **Organization settings:** add a secondary settings navigation and make team
+  and access discoverable from organization administration.
+- **Personal account:** give profile, security, preferences, and sessions
+  canonical destinations instead of anchor-only links.
+
+## [3.8.13] - 2026-09-09
+
+### Fixed
+- **Passkey migration:** use the installed CBOR encoder namespace when
+  converting legacy encrypted P-256 credentials to Laravel Passkeys records.
+
+## [3.8.12] - 2026-09-09
+
+### Changed
+- **Passkeys:** replace the abandoned `laragear/webauthn` integration with
+  the official `laravel/passkeys` package.
+- **Legacy credentials:** convert encrypted Laragear P-256 credentials to
+  Laravel Passkeys CredentialRecord data during migration, failing explicitly
+  when a credential cannot be converted.
+
+## [3.8.11] - 2026-09-09
+
+### Fixed
+- **CI validation environment:** explicitly enable debug mode and the isolated
+  array session backend for PHPUnit so Inertia validation errors are preserved
+  in GitHub Actions without using file-backed sessions.
+
+## [3.8.10] - 2026-09-09
+
+### Fixed
+- **CI session isolation:** force PHPUnit's array session driver even when the
+  environment provides another session backend, keeping validation errors
+  available without relying on file sessions.
+- **Composer audit reporting:** report abandoned packages without hiding
+  security advisories or failing the CI job solely because a package is marked
+  abandoned.
+
+## [3.8.9] - 2026-09-09
+
+### Fixed
+- **CI test database:** use the same `testing` PostgreSQL database for service
+  initialization, migrations, and PHPUnit so feature validation runs against a
+  migrated schema.
+
+## [3.8.8] - 2026-09-09
+
+### Changed
+- **Application navigation:** organize the sidebar around sales, purchases,
+  banking, accounting, reports, payroll, and organization administration.
+- **User menu:** move profile, security, preferences, and sessions into the
+  topbar account menu.
+- **Organization creation:** distinguish the single free organization from
+  additional paid organizations for SaaS owners.
+
+### Fixed
+- **SaaS organization limits:** allow paid plans to create additional
+  organizations while preserving the one-free-organization rule.
+
+## [3.8.7] - 2026-09-08
+
+### Fixed
+- **Sentry source maps:** load Sentry organization, project, and authentication
+  settings from the Vite environment so production builds can upload source
+  maps when the credentials are defined in `.env.production`.
+
+## [3.8.6] - 2026-09-07
+
+### Fixed
+- **CAMT upload validation:** return controlled web validation responses for
+  missing, oversized, unsupported, and MIME-confused uploads across supported
+  PHP runtimes.
+- **CI security tests:** isolate PHPUnit sessions from Redis so upload
+  validation assertions are deterministic in GitHub Actions.
+
+## [3.8.5] - 2026-09-07
+
+### Fixed
+- **Invoice accounting:** exclude text-only lines and subtract flat discount
+  lines when posting revenue and VAT entries, keeping discounted invoices
+  balanced.
+- **Organization limits:** explain Cloud Free organization and member limits
+  in the UI and expose per-organization billing access for owners.
+
+### Changed
+- **Frontend dependencies:** update Autoprefixer, Maska, PostCSS, Zod, and
+  SimpleWebAuthn Browser to the tested Dependabot versions.
+
+## [3.8.4] — 2026-09-06
+
+### Fixed
+- **Invoice line-item form:** keep field labels and readable two-column spacing
+  until very wide screens instead of switching to a cramped desktop grid too
+  early.
+
+## [3.8.3] — 2026-09-06
+
+### Fixed
+- **Authorization boundaries:** aligned recurring invoice and expense workflows
+  with their dedicated organization-scoped policies and requests.
+- **Asynchronous jobs:** made recurring generation, migration imports, exports,
+  and OCR retries idempotent or retry-safe to prevent duplicate side effects.
+- **Invoice PDFs:** constrained custom logo dimensions so portrait logos cannot
+  cover the issuer address.
+- **Signed exports:** restricted accounting downloads to the current
+  organization.
+- **Community Edition smoke validation:** pass edition flags into the Sail
+  container so CE checks cannot accidentally boot the EE plugin.
+
+## [3.8.2] — 2026-09-03
+
+### Added
+- **Minimal integration API:** added the `gaeld:token` command for securely
+  bootstrapping an organization-scoped API token on self-hosted installations.
+- **Bank account API:** added `POST /api/v1/bank-accounts` with organization-
+  scoped active GL account linking, idempotent creation, and the same mixed-use
+  and default-invoicing behavior as the web workflow.
+- **Invoice PDF API:** added `GET /api/v1/invoices/{invoice}/pdf` for
+  token-authenticated Swiss QR-bill PDF downloads with structured errors.
+- **API documentation:** regenerated the OpenAPI and Docusaurus references
+  and refreshed the public roadmap in all supported documentation locales.
+
 ## [3.8.1] — 2026-09-03
 
 ### Changed

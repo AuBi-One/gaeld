@@ -1,5 +1,5 @@
 <script setup>
-import { useForm, router } from '@inertiajs/vue3'
+import { useForm, router, usePage } from '@inertiajs/vue3'
 import { todayLocal } from '@/lib/dates'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
@@ -18,7 +18,7 @@ import FormSelect from '@/Components/UI/FormSelect.vue'
 import { useFormatters } from '@/lib/useFormatters'
 import { useTranslations } from '@/lib/useTranslations'
 import { ref, computed } from 'vue'
-import { Pencil, Trash2, Copy, Download, Paperclip, Ban, FileMinus, Bell, Mail, Eye, X, RotateCcw } from 'lucide-vue-next'
+import { Pencil, Trash2, Copy, Download, Paperclip, Ban, FileMinus, Bell, Mail, Eye, X, RotateCcw, RefreshCw } from 'lucide-vue-next'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import HelpText from '@/Components/HelpText.vue'
 
@@ -26,9 +26,11 @@ const props = defineProps({
   invoice: Object,
   canForceDelete: { type: Boolean, default: false },
   canRecordPayment: { type: Boolean, default: false },
+  canUpdatePayment: { type: Boolean, default: false },
   canSend: { type: Boolean, default: false },
-  canManageReminders: { type: Boolean, default: false },
+  canSendReminder: { type: Boolean, default: false },
   canRevertToDraft: { type: Boolean, default: false },
+  canRefreshCustomerSnapshot: { type: Boolean, default: false },
   justificatifUrl: { type: String, default: null },
   canRemoveJustificatif: { type: Boolean, default: false },
   bankAccounts: { type: Array, default: () => [] },
@@ -42,12 +44,24 @@ const props = defineProps({
 })
 
 const { t } = useTranslations()
+const page = usePage()
 const { formatCurrency, formatDate } = useFormatters()
+const invoiceCurrency = computed(() => props.invoice?.currency || 'CHF')
+const ledgerCurrency = computed(() => page.props.auth?.currentOrganization?.currency || 'CHF')
+function invoiceMoney(amount) {
+  return formatCurrency(amount, invoiceCurrency.value)
+}
+function ledgerMoney(amount) {
+  return formatCurrency(amount, ledgerCurrency.value)
+}
 
 const showPaymentModal = ref(false)
+const paymentToEdit = ref(null)
 const showDeleteDialog = ref(false)
+const showReminderDialog = ref(false)
 const showCancelDialog = ref(false)
 const showRevertToDraftDialog = ref(false)
+const showRefreshCustomerSnapshotDialog = ref(false)
 const showPurgeDialog = ref(false)
 const showJustificatifPreview = ref(false)
 const deleting = ref(false)
@@ -58,6 +72,21 @@ const purging = ref(false)
 const creditNoteForm = useForm({})
 const sendForm = useForm({})
 const reminderForm = useForm({})
+const refreshCustomerSnapshotForm = useForm({})
+
+function requestCustomerSnapshotRefresh() {
+  refreshCustomerSnapshotForm.clearErrors()
+  showRefreshCustomerSnapshotDialog.value = true
+}
+
+function refreshCustomerSnapshot() {
+  refreshCustomerSnapshotForm.post(`/invoices/${props.invoice.id}/refresh-customer-snapshot`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showRefreshCustomerSnapshotDialog.value = false
+    },
+  })
+}
 
 function createCreditNote() {
   creditNoteForm.post(`/invoices/${props.invoice.id}/credit-note`)
@@ -68,21 +97,15 @@ function sendInvoice() {
 }
 
 function sendReminder() {
-  reminderForm.post(`/invoices/${props.invoice.id}/reminder`)
+  reminderForm.post(`/invoices/${props.invoice.id}/reminder`, {
+    onSuccess: () => {
+      showReminderDialog.value = false
+    },
+  })
 }
 
-// Scheduled reminders on/off; shown for invoices that can still be reminded.
-const autoRemindersForm = useForm({ auto_reminders: props.invoice.auto_reminders ?? true })
-const showAutoReminders = computed(() => props.canManageReminders
-  && props.invoice?.type !== 'credit_note'
-  && !['paid', 'cancelled'].includes(props.invoice?.status))
-function toggleAutoReminders(event) {
-  autoRemindersForm.auto_reminders = event.target.checked
-  autoRemindersForm.patch(`/invoices/${props.invoice.id}/auto-reminders`, {
-    preserveScroll: true,
-    // Refused (e.g. no permission any more): show the stored value again.
-    onError: () => { autoRemindersForm.auto_reminders = props.invoice.auto_reminders ?? true },
-  })
+function requestReminder() {
+  showReminderDialog.value = true
 }
 
 const finalizeForm = useForm({})
@@ -93,6 +116,7 @@ const paymentForm = useForm({
   reference: '',
   bank_account_code: '',
 })
+const paymentDateForm = useForm({ payment_date: '' })
 
 const amountDue = computed(() => {
   return Math.max(0, parseFloat(props.invoice?.total || 0) - amountPaid.value)
@@ -122,7 +146,7 @@ function recordPayment() {
   const amount = parseFloat(paymentForm.amount)
 
   if (!Number.isFinite(amount) || amount <= 0 || amount > amountDue.value) {
-    paymentForm.setError('amount', `${t('amount_due')}: ${formatCurrency(amountDue.value)}`)
+    paymentForm.setError('amount', `${t('amount_due')}: ${invoiceMoney(amountDue.value)}`)
     return
   }
 
@@ -142,6 +166,23 @@ function openPaymentModal() {
   paymentForm.bank_account_code = ''
   paymentForm.clearErrors()
   showPaymentModal.value = true
+}
+
+function openPaymentDateModal(payment) {
+  paymentToEdit.value = payment
+  paymentDateForm.payment_date = payment.payment_date?.slice(0, 10) ?? ''
+  paymentDateForm.clearErrors()
+}
+
+function updatePaymentDate() {
+  if (!paymentToEdit.value) return
+
+  paymentDateForm.patch(`/invoices/${props.invoice.id}/payments/${paymentToEdit.value.id}/date`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      paymentToEdit.value = null
+    },
+  })
 }
 
 function duplicate() {
@@ -192,24 +233,25 @@ function executePurge() {
 const lineColumns = computed(() => [
   { key: 'description', label: t('description') },
   { key: 'quantity', label: t('qty'), class: 'text-right', format: (v, row) => row.type === 'discount' && row.discount_type === 'percentage' ? '—' : v },
-  { key: 'unit_price', label: t('unit_price'), class: 'text-right', format: (v, row) => row.type === 'discount' && row.discount_type === 'percentage' ? `${v}%` : formatCurrency(v) },
+  { key: 'unit_price', label: t('unit_price'), class: 'text-right', format: (v, row) => row.type === 'discount' && row.discount_type === 'percentage' ? `${v}%` : invoiceMoney(v) },
   { key: 'vat_rate_id', label: t('vat'), class: 'text-right', format: (v, row) => {
     const vr = row.vat_rate ?? row.vatRate
     if (!vr) return '—'
-    const amount = row.vat_amount != null ? formatCurrency(row.vat_amount) : null
+    const amount = row.vat_amount != null ? invoiceMoney(row.vat_amount) : null
     return amount ? `${vr.rate}% (${amount})` : `${vr.rate}%`
   } },
   { key: 'total', label: t('total'), class: 'text-right', format: (v, row) => {
-    if (row.type === 'discount') return formatCurrency(-Math.abs(parseFloat(row.amount)))
-    return formatCurrency(row.amount)
+    if (row.type === 'discount') return invoiceMoney(-Math.abs(parseFloat(row.amount)))
+    return invoiceMoney(row.amount)
   }},
 ])
 
 const paymentColumns = computed(() => [
   { key: 'payment_date', label: t('date'), format: (v) => formatDate(v) },
-  { key: 'amount', label: t('amount'), class: 'text-right', format: (v) => formatCurrency(v) },
+  { key: 'amount', label: t('amount'), class: 'text-right', format: (v) => invoiceMoney(v) },
   { key: 'payment_method', label: t('payment_method'), format: (v) => paymentMethodOptions.find(o => o.value === v)?.label || v },
   { key: 'reference', label: t('reference') },
+  { key: 'actions', label: '', class: 'text-right w-auto' },
 ])
 
 const statusVariant = {
@@ -259,7 +301,7 @@ const bankAccountOptions = computed(() =>
               {{ t('invoice_tax_treatment_reverse_charge') }}
             </Badge>
             <p class="text-sm text-[hsl(var(--muted-foreground))]">
-              {{ invoice?.customer?.name }} &middot; {{ t('issued') }} {{ formatDate(invoice?.issue_date) }} &middot; {{ t('due') }} {{ formatDate(invoice?.due_date) }}
+              {{ invoice?.customer_snapshot?.name ?? invoice?.customer?.name }} &middot; {{ t('issued') }} {{ formatDate(invoice?.issue_date) }} &middot; {{ t('due') }} {{ formatDate(invoice?.due_date) }}
             </p>
           </div>
         </div>
@@ -310,6 +352,15 @@ const bankAccountOptions = computed(() =>
                 {{ t('duplicate') }}
               </button>
               <button
+                v-if="canRefreshCustomerSnapshot"
+                class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]"
+                :disabled="refreshCustomerSnapshotForm.processing"
+                @click="requestCustomerSnapshotRefresh(); close()"
+              >
+                <RefreshCw class="h-4 w-4 shrink-0" />
+                {{ t('refresh_customer_snapshot') }}
+              </button>
+              <button
                 v-if="canSend"
                 class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]"
                 :disabled="sendForm.processing"
@@ -319,10 +370,10 @@ const bankAccountOptions = computed(() =>
                 {{ t('send_invoice_email') }}
               </button>
               <button
-                v-if="isOverdue && !invoice?.archived_at"
+                v-if="canSendReminder"
                 class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]"
                 :disabled="reminderForm.processing"
-                @click="sendReminder(); close()"
+                @click="requestReminder(); close()"
               >
                 <Bell class="h-4 w-4 shrink-0" />
                 {{ t('send_reminder') }}
@@ -407,26 +458,26 @@ const bankAccountOptions = computed(() =>
             <div class="w-full max-w-xs space-y-2 text-sm">
               <div v-if="parseFloat(invoice?.vat_amount) > 0" class="flex justify-between text-[hsl(var(--muted-foreground))]">
                 <span>{{ t('subtotal') }}</span>
-                <span class="tabular-nums">{{ formatCurrency(invoice?.subtotal) }}</span>
+                <span class="tabular-nums">{{ invoiceMoney(invoice?.subtotal) }}</span>
               </div>
               <div v-if="parseFloat(invoice?.vat_amount) > 0" class="flex justify-between text-[hsl(var(--muted-foreground))]">
                 <span>{{ t('vat_total') }}</span>
-                <span class="tabular-nums">{{ formatCurrency(invoice?.vat_amount) }}</span>
+                <span class="tabular-nums">{{ invoiceMoney(invoice?.vat_amount) }}</span>
               </div>
               <div class="flex justify-between border-t pt-1 font-semibold">
                 <span>{{ t('total') }}</span>
-                <span class="text-xl tabular-nums">{{ formatCurrency(invoice?.total) }}</span>
+                <span class="text-xl tabular-nums">{{ invoiceMoney(invoice?.total) }}</span>
               </div>
               <div v-if="invoice?.payments?.length" class="space-y-2 border-t pt-2">
                 <div class="flex justify-between text-[hsl(var(--muted-foreground))]">
                   <span>{{ t('amount') }}</span>
-                  <span class="tabular-nums">{{ formatCurrency(amountPaid) }}</span>
+                  <span class="tabular-nums">{{ invoiceMoney(amountPaid) }}</span>
                 </div>
                 <div class="h-2 overflow-hidden rounded-full bg-[hsl(var(--muted))]" aria-hidden="true">
                   <div class="h-full rounded-full bg-[hsl(var(--primary))] transition-all" :style="{ width: `${paymentProgress}%` }" />
                 </div>
                 <p class="text-right text-[hsl(var(--muted-foreground))]">
-                  {{ t('amount_due') }} {{ formatCurrency(amountDue) }}
+                  {{ t('amount_due') }} {{ invoiceMoney(amountDue) }}
                 </p>
               </div>
             </div>
@@ -439,10 +490,23 @@ const bankAccountOptions = computed(() =>
         <CardHeader>
           <CardTitle>{{ t('payment_history') }}</CardTitle>
           <CardDescription v-if="invoice?.payments?.length">{{ invoice.payments.length }} {{ t('payments_recorded') }}</CardDescription>
-          <CardDescription v-else>{{ t('amount_due') }} {{ formatCurrency(amountDue) }}</CardDescription>
+          <CardDescription v-else>{{ t('amount_due') }} {{ invoiceMoney(amountDue) }}</CardDescription>
         </CardHeader>
         <CardContent>
-          <DataTable v-if="invoice?.payments?.length" :columns="paymentColumns" :rows="invoice.payments" />
+          <DataTable v-if="invoice?.payments?.length" :columns="paymentColumns" :rows="invoice.payments">
+            <template #cell-actions="{ row }">
+              <Button
+                v-if="canUpdatePayment"
+                variant="ghost"
+                size="icon"
+                :aria-label="t('edit_payment_date')"
+                :title="t('edit_payment_date')"
+                @click.stop="openPaymentDateModal(row)"
+              >
+                <Pencil class="h-4 w-4" />
+              </Button>
+            </template>
+          </DataTable>
           <p v-else class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('no_payments_recorded') }}</p>
         </CardContent>
       </Card>
@@ -457,8 +521,8 @@ const bankAccountOptions = computed(() =>
           <DataTable
             :columns="[
               { key: 'account', label: t('account'), format: (v) => v ? `${v.code} ${v.name}` : '—' },
-              { key: 'debit', label: t('debit'), class: 'text-right', format: (v) => v ? formatCurrency(v) : '' },
-              { key: 'credit', label: t('credit'), class: 'text-right', format: (v) => v ? formatCurrency(v) : '' },
+              { key: 'debit', label: t('debit'), class: 'text-right', format: (v) => v ? ledgerMoney(v) : '' },
+              { key: 'credit', label: t('credit'), class: 'text-right', format: (v) => v ? ledgerMoney(v) : '' },
             ]"
             :rows="invoice.journal_entry.lines ?? []"
           />
@@ -466,7 +530,7 @@ const bankAccountOptions = computed(() =>
       </Card>
 
       <!-- Reminder Info -->
-      <Card v-if="reminderCount > 0 || isOverdue || showAutoReminders">
+      <Card v-if="reminderCount > 0 || isOverdue">
         <CardHeader>
           <CardTitle class="flex items-center gap-2">
             <Bell class="h-4 w-4" />
@@ -476,20 +540,6 @@ const bankAccountOptions = computed(() =>
         <CardContent class="space-y-1 text-sm">
           <p>{{ t('reminders_sent') }}: <span class="font-medium">{{ reminderCount }}</span></p>
           <p v-if="lastRemindedAt">{{ t('last_reminded') }}: <span class="font-medium">{{ formatDate(lastRemindedAt) }}</span></p>
-          <label v-if="showAutoReminders" class="flex cursor-pointer items-start gap-2 pt-2">
-            <input
-              id="auto_reminders"
-              type="checkbox"
-              :checked="autoRemindersForm.auto_reminders"
-              :disabled="autoRemindersForm.processing"
-              class="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
-              @change="toggleAutoReminders"
-            />
-            <span>
-              <span class="block font-medium">{{ t('auto_reminders') }}</span>
-              <span class="block text-xs text-[hsl(var(--muted-foreground))]">{{ t('auto_reminders_desc') }}</span>
-            </span>
-          </label>
         </CardContent>
       </Card>
 
@@ -516,7 +566,7 @@ const bankAccountOptions = computed(() =>
               <a :href="`/invoices/${cn.id}`" class="text-sm text-[hsl(var(--primary))] hover:underline">
                 {{ cn.number }}
               </a>
-              <span class="ml-2 text-sm text-[hsl(var(--muted-foreground))]">{{ formatCurrency(cn.total) }}</span>
+              <span class="ml-2 text-sm text-[hsl(var(--muted-foreground))]">{{ invoiceMoney(cn.total) }}</span>
             </div>
           </div>
         </CardContent>
@@ -569,7 +619,7 @@ const bankAccountOptions = computed(() =>
           min="0.01"
           :max="amountDue"
           step="0.01"
-          :label="`${t('amount')} (${t('due')}: ${formatCurrency(amountDue)})`"
+          :label="`${t('amount')} (${t('due')}: ${invoiceMoney(amountDue)})`"
           :error="paymentForm.errors.amount"
           required
         />
@@ -611,7 +661,56 @@ const bankAccountOptions = computed(() =>
       </form>
     </Modal>
 
+    <Modal :open="!!paymentToEdit" :title="t('edit_payment_date')" @close="paymentToEdit = null">
+      <form class="space-y-6" @submit.prevent="updatePaymentDate">
+        <p class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('edit_payment_date_hint') }}</p>
+        <FormInput
+          id="edit-payment-date"
+          v-model="paymentDateForm.payment_date"
+          type="date"
+          :label="t('payment_date')"
+          :error="paymentDateForm.errors.payment_date"
+          required
+        />
+        <div class="flex justify-end gap-3">
+          <Button type="button" variant="outline" @click="paymentToEdit = null">{{ t('cancel') }}</Button>
+          <Button type="submit" :disabled="paymentDateForm.processing">{{ t('save_changes') }}</Button>
+        </div>
+      </form>
+    </Modal>
+
+    <ConfirmDialog
+      :open="showRefreshCustomerSnapshotDialog"
+      :title="t('refresh_customer_snapshot')"
+      :message="t('refresh_customer_snapshot_confirm', { number: invoice?.number })"
+      :confirm-label="t('refresh_customer_snapshot')"
+      confirm-variant="default"
+      :processing="refreshCustomerSnapshotForm.processing"
+      :errors="refreshCustomerSnapshotForm.errors"
+      @confirm="refreshCustomerSnapshot"
+      @cancel="showRefreshCustomerSnapshotDialog = false"
+    />
+
     <!-- Delete Confirmation -->
+    <ConfirmDialog
+      :open="showReminderDialog"
+      :title="t('send_reminder')"
+      :message="t('send_reminder_confirm', {
+        name: invoice?.customer?.name,
+        email: invoice?.customer?.email,
+        organization: invoice?.organization?.name,
+        number: invoice?.number,
+        amount: invoiceMoney(amountDue),
+        dueDate: formatDate(invoice?.due_date),
+        days: Math.max(0, Math.floor((Date.now() - new Date(invoice?.due_date).getTime()) / 86400000)),
+      })"
+      :confirm-label="t('send_reminder')"
+      :processing="reminderForm.processing"
+      :errors="reminderForm.errors"
+      @confirm="sendReminder"
+      @cancel="showReminderDialog = false"
+    />
+
     <ConfirmDialog
       :open="showDeleteDialog"
       :title="t('delete_invoice')"

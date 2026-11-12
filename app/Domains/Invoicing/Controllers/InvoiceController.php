@@ -190,8 +190,10 @@ class InvoiceController extends Controller
             'invoice' => $invoice->load(['customer', 'lines.vatRate', 'journalEntry.lines.account', 'payments.journalEntry']),
             'canForceDelete' => $request->user()->can('forceDelete', $invoice),
             'canRecordPayment' => $request->user()->can('recordPayment', $invoice),
+            'canUpdatePayment' => $request->user()->can('updatePayment', $invoice),
             'canSend' => $request->user()->can('send', $invoice),
-            'canManageReminders' => $request->user()->can('manageReminders', $invoice),
+            'canSendReminder' => $request->user()->can('sendReminder', $invoice),
+            'canRefreshCustomerSnapshot' => $request->user()->can('refreshCustomerSnapshot', $invoice),
             'justificatifUrl' => $invoice->justificatif_path
                 ? route('invoices.justificatif.download', $invoice)
                 : null,

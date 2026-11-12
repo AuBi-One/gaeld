@@ -3,6 +3,7 @@
 namespace App\Domains\Invoicing\Policies;
 
 use App\Domains\Invoicing\Enums\InvoiceStatus;
+use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Users\Models\User;
@@ -53,6 +54,19 @@ class InvoicePolicy extends BasePolicy
             && $invoice->status->isDeletable();
     }
 
+    public function refreshCustomerSnapshot(User $user, Invoice $invoice): bool
+    {
+        // Drafts only: an issued invoice keeps the PDF stored at finalize (D92); to correct its
+        // address, revert it to draft (the issued PDF stays on the reversed entry) and finalize again.
+        return $invoice->archived_at === null
+            && $invoice->status === InvoiceStatus::Draft
+            && $this->belongsToOrganization($user, $invoice)
+            && $user->hasPermissionTo(Permission::InvoicingEdit)
+            && $invoice->customer()
+                ->where('organization_id', $invoice->organization_id)
+                ->exists();
+    }
+
     public function finalize(User $user, Invoice $invoice): bool
     {
         return $this->belongsToOrganization($user, $invoice)
@@ -94,6 +108,14 @@ class InvoicePolicy extends BasePolicy
             && in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue], true);
     }
 
+    public function updatePayment(User $user, Invoice $invoice): bool
+    {
+        return $invoice->archived_at === null
+            && $this->belongsToOrganization($user, $invoice)
+            && $user->hasPermissionTo(Permission::InvoicingRecordPayment)
+            && in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue, InvoiceStatus::Paid], true);
+    }
+
     public function send(User $user, Invoice $invoice): bool
     {
         if ($invoice->archived_at !== null) {
@@ -105,18 +127,18 @@ class InvoicePolicy extends BasePolicy
             && in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue], true);
     }
 
-    /**
-     * Turn the automatic payment reminders of an invoice on or off: whatever
-     * its status (it matters once sent), as long as it is not archived.
-     */
-    public function manageReminders(User $user, Invoice $invoice): bool
+    public function sendReminder(User $user, Invoice $invoice): bool
     {
         if ($invoice->archived_at !== null) {
             return false;
         }
 
         return $this->belongsToOrganization($user, $invoice)
-            && $user->hasPermissionTo(Permission::InvoicingEdit);
+            && $user->hasPermissionTo(Permission::InvoicingSendReminder)
+            && $invoice->type === InvoiceType::Invoice
+            && $invoice->isOverdue()
+            && filled($invoice->customer?->email)
+            && ! $invoice->isFullyPaid();
     }
 
     public function cancel(User $user, Invoice $invoice): bool
