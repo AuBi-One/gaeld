@@ -8,6 +8,7 @@ use App\Domains\Accounting\DTOs\JournalLineData;
 use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Models\Account;
+use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Services\ChartTemplateService;
@@ -420,6 +421,18 @@ class InvoiceAccountingService
             if (! Money::isPositive($rest)) {
                 throw new InvalidPaymentException(__('app.write_off_nothing_open'));
             }
+            // A credit note already reduced the revenue but not the open amount: writing the rest
+            // off as well would reduce it twice.
+            $hasCreditNote = Invoice::query()->withoutGlobalScopes()
+                ->where('organization_id', $orgId)
+                ->where('related_invoice_id', $invoice->id)
+                ->where('type', InvoiceType::CreditNote)
+                ->whereNotNull('journal_entry_id')
+                ->whereNotIn('status', [InvoiceStatus::Draft, InvoiceStatus::Cancelled])
+                ->exists();
+            if ($hasCreditNote) {
+                throw new InvalidPaymentException(__('app.write_off_has_credit_note'));
+            }
             $invoice->load('lines.vatRate', 'organization');
             $ledgerCurrency = strtoupper((string) ($invoice->organization->currency ?: 'CHF'));
             if (strtoupper((string) ($invoice->currency ?: $ledgerCurrency)) !== $ledgerCurrency) {
@@ -430,9 +443,26 @@ class InvoiceAccountingService
             $revenue = $this->creditedRevenueAccount($orgId, $invoice->journal_entry_id)
                 ?? $this->chartTemplates->ensureRevenueAccount($invoice->organization);
 
+            // Booked like the original posting: VAT off 2200 only if it credited 2200, VAT entries
+            // only for the rates it has VAT entries for (a migrated invoice may have none).
+            $vatOutput = $this->ledgerQuery->resolveAccount($orgId, AccountCode::VAT_OUTPUT);
+            $originalHasVatLines = $invoice->journal_entry_id !== null && TransactionLine::query()
+                ->where('journal_entry_id', $invoice->journal_entry_id)
+                ->where('account_id', $vatOutput->id)
+                ->exists();
+            $originalVatRates = $invoice->journal_entry_id === null ? [] : VatEntry::query()
+                ->where('journal_entry_id', $invoice->journal_entry_id)
+                ->pluck('vat_rate_id')
+                ->map(fn ($id): string => (string) $id)
+                ->all();
+
             $lines = [];
             $vatShares = [];
             foreach ($this->writeOffShares($invoice, $rest) as $share) {
+                if (! $originalHasVatLines) {
+                    $share['net'] = Money::add($share['net'], $share['vat']);
+                    $share['vat'] = '0.00';
+                }
                 $label = $share['name'] !== null ? " ({$share['name']})" : '';
                 if (! Money::isZero($share['net'])) {
                     $lines[] = new JournalLineData(
@@ -444,12 +474,14 @@ class InvoiceAccountingService
                 }
                 if (Money::isPositive($share['vat'])) {
                     $lines[] = new JournalLineData(
-                        accountId: (string) $this->ledgerQuery->resolveAccount($orgId, AccountCode::VAT_OUTPUT)->id,
+                        accountId: (string) $vatOutput->id,
                         debit: $share['vat'],
                         credit: '0',
                         description: "VAT Output — {$share['name']}",
                     );
-                    $vatShares[] = $share;
+                    if (in_array((string) $share['vat_rate_id'], $originalVatRates, true)) {
+                        $vatShares[] = $share;
+                    }
                 }
             }
             $lines[] = new JournalLineData(accountId: (string) $receivable->id, debit: '0', credit: $rest, description: 'Clear receivable');
@@ -572,11 +604,26 @@ class InvoiceAccountingService
         });
     }
 
-    /** Whether a bank line was reconciled with this payment (it is taken back there). */
+    /**
+     * Whether a bank line was reconciled with this payment (it is taken back there). The bank line
+     * points at the payment's entry, or, for a payment whose date was corrected before the line
+     * followed the correction, at its original entry (the one under the payment's reference).
+     */
     public function isFromBankReconciliation(InvoicePayment $payment): bool
     {
-        return $payment->journal_entry_id !== null
-            && BankTransaction::query()->where('journal_entry_id', $payment->journal_entry_id)->exists();
+        $entryIds = array_filter([$payment->journal_entry_id]);
+        if ($payment->payment_method !== PaymentMethod::WriteOff && filled($payment->reference)) {
+            $entryIds = [...$entryIds, ...JournalEntry::query()
+                ->where('organization_id', $payment->organization_id)
+                ->where('reference', $payment->reference)
+                ->pluck('id')
+                ->all()];
+        }
+
+        return $entryIds !== [] && BankTransaction::query()
+            ->where('matched_invoice_id', $payment->invoice_id)
+            ->whereIn('journal_entry_id', $entryIds)
+            ->exists();
     }
 
     /**

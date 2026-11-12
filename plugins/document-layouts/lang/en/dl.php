@@ -13,6 +13,8 @@ return [
     'total' => 'Total',
     'vat' => 'VAT',
     'total_incl_vat' => 'Total incl. VAT',
+    'already_paid' => 'Already paid',
+    'amount_open' => 'Still open',
     'payment_days' => 'Payment within :days days.',
     'due_date' => 'Due date',
     'reference' => 'Reference',

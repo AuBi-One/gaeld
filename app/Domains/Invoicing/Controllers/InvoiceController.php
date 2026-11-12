@@ -4,7 +4,6 @@ namespace App\Domains\Invoicing\Controllers;
 
 use App\Domains\Accounting\Queries\VatRateQuery;
 use App\Domains\Banking\Models\BankAccount;
-use App\Domains\Banking\Models\BankTransaction;
 use App\Domains\Contacts\Queries\ContactQuery;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
 use App\Domains\Invoicing\Actions\DeleteInvoiceAction;
@@ -15,9 +14,11 @@ use App\Domains\Invoicing\DTOs\UpdateInvoiceData;
 use App\Domains\Invoicing\Enums\InvoiceTaxTreatment;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Models\InvoicePayment;
 use App\Domains\Invoicing\Queries\InvoiceQuery;
 use App\Domains\Invoicing\Requests\StoreInvoiceRequest;
 use App\Domains\Invoicing\Requests\UpdateInvoiceRequest;
+use App\Domains\Invoicing\Services\InvoiceAccountingService;
 use App\Domains\Invoicing\Services\InvoiceLineSources;
 use App\Domains\Invoicing\Services\InvoiceNumberGenerator;
 use App\Domains\Organizations\Services\CurrentOrganization;
@@ -181,7 +182,7 @@ class InvoiceController extends Controller
             ->with('success', __('app.invoice_created'));
     }
 
-    public function show(Request $request, Invoice $invoice): Response
+    public function show(Request $request, Invoice $invoice, InvoiceAccountingService $accounting): Response
     {
         $this->authorize('view', $invoice);
 
@@ -194,11 +195,9 @@ class InvoiceController extends Controller
             'canUpdatePayment' => $request->user()->can('updatePayment', $invoice),
             'canCancel' => $request->user()->can('cancel', $invoice),
             // Payments from the bank reconciliation are taken back there, not removed here.
-            'bankLinkedPaymentIds' => BankTransaction::query()
-                ->whereIn('journal_entry_id', $invoice->payments->pluck('journal_entry_id')->filter()->all())
-                ->pluck('journal_entry_id')
-                ->map(fn ($entryId) => $invoice->payments->firstWhere('journal_entry_id', $entryId)?->id)
-                ->filter()
+            'bankLinkedPaymentIds' => $invoice->payments
+                ->filter(fn (InvoicePayment $payment): bool => $accounting->isFromBankReconciliation($payment))
+                ->pluck('id')
                 ->values(),
             'canSend' => $request->user()->can('send', $invoice),
             'canSendReminder' => $request->user()->can('sendReminder', $invoice),

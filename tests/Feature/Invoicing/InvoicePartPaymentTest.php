@@ -7,6 +7,7 @@ use App\Domains\Accounting\Enums\AccountType;
 use App\Domains\Accounting\Enums\VatEntryType;
 use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Models\TransactionLine;
 use App\Domains\Accounting\Models\VatEntry;
 use App\Domains\Accounting\Models\VatRate;
 use App\Domains\Accounting\Services\LedgerQueryService;
@@ -16,6 +17,7 @@ use App\Domains\Banking\Models\BankAccount;
 use App\Domains\Banking\Models\BankTransaction;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Invoicing\Actions\CancelInvoiceAction;
+use App\Domains\Invoicing\Actions\CreateCreditNoteAction;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
 use App\Domains\Invoicing\Actions\FinalizeInvoiceAction;
 use App\Domains\Invoicing\Actions\RemoveInvoicePaymentAction;
@@ -132,6 +134,53 @@ class InvoicePartPaymentTest extends TestCase
         app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Skonto');
     }
 
+    public function test_an_invoice_with_a_credit_note_is_not_written_off(): void
+    {
+        $invoice = $this->finalizedInvoice('INV-WO-CN');
+        $creditNote = app(CreateCreditNoteAction::class)->execute($invoice->fresh());
+        app(FinalizeInvoiceAction::class)->execute($creditNote->fresh());
+
+        try {
+            app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Verlust');
+            $this->fail('The rest was written off after a credit note.');
+        } catch (InvalidPaymentException $e) {
+            $this->assertSame(__('app.write_off_has_credit_note'), $e->getMessage());
+        }
+
+        $this->assertSame('0.00', $this->balance('1100'));
+    }
+
+    public function test_a_migrated_invoice_without_vat_entries_gets_none_on_its_write_off(): void
+    {
+        $invoice = $this->finalizedInvoice('INV-WO-MIG');
+        VatEntry::where('journal_entry_id', $invoice->journal_entry_id)->delete(); // as migrated: 2200 lines, no VAT entries
+        $this->pay($invoice, '1600.00');
+
+        $writeOff = app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Skonto');
+
+        $this->assertSame(0, VatEntry::where('journal_entry_id', $writeOff->journal_entry_id)->count());
+        $this->assertSame('119.89', Money::absoluteAmount($this->balance('2200')));
+        $this->assertSame('0.00', $this->balance('1100'));
+    }
+
+    public function test_without_vat_on_the_original_posting_the_whole_rest_reduces_revenue(): void
+    {
+        $invoice = $this->finalizedInvoice('INV-WO-NOVAT');
+        $vatOutput = Account::where('organization_id', $this->org->id)->where('code', '2200')->value('id');
+        $revenue = Account::where('organization_id', $this->org->id)->where('code', AccountCode::REVENUE)->value('id');
+        // As an imported entry booked gross on revenue, without 2200.
+        VatEntry::where('journal_entry_id', $invoice->journal_entry_id)->delete();
+        TransactionLine::where('journal_entry_id', $invoice->journal_entry_id)->where('account_id', $vatOutput)->delete();
+        TransactionLine::where('journal_entry_id', $invoice->journal_entry_id)->where('account_id', $revenue)->update(['credit' => '1621.50']);
+        $this->pay($invoice, '1600.00');
+
+        $writeOff = app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Skonto');
+
+        $this->assertSame('0.00', $this->balance('2200'));
+        $this->assertSame('1600.00', Money::absoluteAmount($this->balance(AccountCode::REVENUE)));
+        $this->assertTrue($writeOff->journalEntry->isBalanced());
+    }
+
     public function test_a_foreign_currency_invoice_is_not_written_off(): void
     {
         $invoice = $this->finalizedInvoice('INV-WO-EUR');
@@ -236,6 +285,20 @@ class InvoicePartPaymentTest extends TestCase
         $this->assertModelExists($payment);
         $this->actAsOrg()->get(route('invoices.show', $invoice))
             ->assertInertia(fn ($page) => $page->where('bankLinkedPaymentIds', [$payment->id])->where('canCancel', false));
+    }
+
+    public function test_a_bank_line_left_on_the_original_entry_of_a_redated_payment_still_counts(): void
+    {
+        $invoice = $this->finalizedInvoice('INV-RM-OLD');
+        $payment = $this->pay($invoice, '500.00');
+        $line = $this->bankLine($invoice, $payment);
+        $original = $payment->journal_entry_id;
+        app(UpdatePaymentDateAction::class)->execute($invoice->fresh(), $payment, now()->subDay()->toDateString());
+        $line->update(['journal_entry_id' => $original]); // as corrected before the bank line followed
+
+        $this->actAsOrg()->delete(route('invoices.payments.destroy', [$invoice, $payment->fresh()]))
+            ->assertSessionHas('error', __('app.payment_remove_bank_linked'));
+        $this->assertModelExists($payment);
     }
 
     public function test_correcting_the_date_keeps_the_bank_line_on_the_live_entry(): void

@@ -75,6 +75,21 @@ class DocumentLayoutsTest extends DocumentLayoutsTestCase
         $this->assertSame(['Client SA', 'Hauptstrasse 3', '79539 Lörrach', 'DE'], WordModelInvoiceLayout::recipientLines($invoice->fresh()));
     }
 
+    public function test_after_a_part_payment_the_totals_show_what_is_paid_and_open(): void
+    {
+        $invoice = $this->invoice(lines: 1);
+        $this->assertSame([], WordModelInvoiceLayout::paymentRows($invoice));
+
+        $invoice->payments()->create(['organization_id' => $this->org->id, 'amount' => '100.00', 'payment_date' => '2026-06-10', 'payment_method' => 'bank']);
+        $this->assertSame([['already_paid', '-100.00'], ['amount_open', '8.10']], WordModelInvoiceLayout::paymentRows($invoice->fresh()));
+        $this->org->update(['pdf_layouts' => [PdfLayouts::INVOICE => 'word-model']]);
+        $this->assertStringStartsWith('%PDF-', app(GenerateQrInvoicePdfAction::class)->execute($invoice->fresh(), $this->org->fresh(), 'fr'));
+
+        // Settled, the invoice shows its total as issued.
+        $invoice->update(['status' => 'paid']);
+        $this->assertSame([], WordModelInvoiceLayout::paymentRows($invoice->fresh()));
+    }
+
     public function test_a_long_invoice_continues_on_further_pages_before_the_qr_bill_page(): void
     {
         $invoice = $this->invoice(lines: 60);
