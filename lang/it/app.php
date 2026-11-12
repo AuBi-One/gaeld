@@ -2507,6 +2507,7 @@ return [
     'confirm_reverse_journal_entry' => 'Stornare questa registrazione? Verrà creata una bozza di storno da rivedere prima della contabilizzazione.',
     'confirm_delete_journal_entry' => 'Eliminare questa bozza? Questa azione non può essere annullata.',
     'tooltip_reverse_journal_entry' => 'Crea scrittura di storno (le registrazioni contabilizzate sono immutabili)',
+    'journal_reference_reserved_prefix' => 'I riferimenti che iniziano con :prefix sono assegnati da Gäld. Sceglierne un altro.',
     'opening_balances' => 'Saldi di apertura',
     'opening_balances_title' => 'Inserimento saldi di apertura',
     'opening_balances_help' => 'Inserisci i saldi dei conti patrimoniali all\'inizio del tuo primo esercizio in Gäld. Questo ti permette di riprendere la tua contabilità esistente.',

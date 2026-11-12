@@ -10,6 +10,7 @@ use App\Domains\Accounting\Models\Account;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Services\JournalEntryReferences;
 use App\Domains\Accounting\Services\LedgerService;
+use App\Domains\Accounting\Support\SystemReferencePrefixes;
 use Illuminate\Support\Facades\Gate;
 use PHPUnit\Framework\Attributes\Test;
 use Plugins\ExpenseClaims\Models\Claim;
@@ -22,6 +23,13 @@ use Plugins\ExpenseClaims\Models\Person;
  */
 class JournalOwnersTest extends ExpenseClaimsTestCase
 {
+    #[Test]
+    public function the_plugin_reference_prefix_cannot_be_typed_in_the_journal(): void
+    {
+        $this->assertSame('EC-', app(SystemReferencePrefixes::class)->matching('EC-PAY-20260310-AM'));
+        $this->assertNull(app(SystemReferencePrefixes::class)->matching('ECO-1'));
+    }
+
     #[Test]
     public function claim_and_debt_entries_name_their_owner_and_are_locked_in_the_journal(): void
     {

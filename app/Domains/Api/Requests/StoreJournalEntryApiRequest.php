@@ -3,6 +3,7 @@
 namespace App\Domains\Api\Requests;
 
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Rules\NotSystemReference;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Support\Money;
 use Illuminate\Foundation\Http\FormRequest;
@@ -27,7 +28,7 @@ class StoreJournalEntryApiRequest extends FormRequest
 
         return [
             'date' => ['required', 'date_format:Y-m-d'],
-            'reference' => ['nullable', 'string', 'max:100'],
+            'reference' => ['nullable', 'string', 'max:100', new NotSystemReference],
             'description' => ['nullable', 'string', 'max:1000'],
             'status' => ['required', Rule::in(['draft', 'posted'])],
             'lines' => ['required', 'array', 'min:2', 'max:100'],
@@ -41,7 +42,8 @@ class StoreJournalEntryApiRequest extends FormRequest
             ],
             'lines.*.debit' => $amountRule,
             'lines.*.credit' => $amountRule,
-            'lines.*.description' => ['nullable', 'string', 'max:500'],
+            // transaction_lines.description is varchar(255)
+            'lines.*.description' => ['nullable', 'string', 'max:255'],
         ];
     }
 

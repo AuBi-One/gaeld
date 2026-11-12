@@ -21,6 +21,7 @@ use App\Domains\Accounting\Policies\ExchangeRatePolicy;
 use App\Domains\Accounting\Policies\FiscalYearPolicy;
 use App\Domains\Accounting\Policies\TaxDeclarationPolicy;
 use App\Domains\Accounting\Services\JournalEntryReferences;
+use App\Domains\Accounting\Support\SystemReferencePrefixes;
 use App\Domains\Api\Jobs\DispatchWebhookJob;
 use App\Domains\Api\Models\PersonalAccessToken;
 use App\Domains\Assets\Jobs\MonthlyDepreciationJob;
@@ -103,6 +104,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(SourceTaxServiceInterface::class, NullSourceTaxService::class);
         $this->app->singleton(ReimbursementSourceInterface::class, NullReimbursementSource::class);
         $this->app->singleton(PluginNavigation::class);
+        // Reference prefixes of system-generated entries; plugins extend the list.
+        $this->app->singleton(SystemReferencePrefixes::class);
         // Owners of journal entries: such entries are edited or deleted by their feature, not in the journal.
         $this->app->singleton(JournalEntryReferences::class, fn (): JournalEntryReferences => (new JournalEntryReferences)
             ->registerColumn(SalarySlip::class, 'journal_entry_id', fn (SalarySlip $slip): JournalEntryReference => new JournalEntryReference(

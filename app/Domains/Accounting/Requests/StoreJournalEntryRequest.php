@@ -3,6 +3,7 @@
 namespace App\Domains\Accounting\Requests;
 
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Accounting\Rules\NotSystemReference;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
@@ -33,10 +34,16 @@ class StoreJournalEntryRequest extends FormRequest
     public function rules(): array
     {
         $orgId = app(CurrentOrganization::class)->id();
+        $journalEntry = $this->route('journalEntry');
 
         return [
             'date' => ['required', 'date'],
-            'reference' => ['nullable', 'string', 'max:100'],
+            'reference' => [
+                'nullable',
+                'string',
+                'max:100',
+                new NotSystemReference($journalEntry instanceof JournalEntry ? $journalEntry->reference : null),
+            ],
             'description' => ['nullable', 'string', 'max:1000'],
             'is_posted' => ['sometimes', 'boolean'],
             'lines' => ['required', 'array', 'min:2'],
@@ -49,7 +56,8 @@ class StoreJournalEntryRequest extends FormRequest
             ],
             'lines.*.debit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
             'lines.*.credit' => ['required', 'numeric', 'min:0', 'max:99999999999.99'],
-            'lines.*.description' => ['nullable', 'string', 'max:500'],
+            // transaction_lines.description is varchar(255)
+            'lines.*.description' => ['nullable', 'string', 'max:255'],
             'justificatif' => ['nullable', 'file', 'mimes:'.config('uploads.allowed_mimes.document'), 'max:'.config('uploads.max_size.document')],
         ];
     }

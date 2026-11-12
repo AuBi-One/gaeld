@@ -2503,6 +2503,7 @@ return [
     'confirm_reverse_journal_entry' => 'Diese Buchung stornieren? Ein Stornoentwurf wird zur Überprüfung erstellt, bevor Sie ihn verbuchen.',
     'confirm_delete_journal_entry' => 'Diesen Entwurf löschen? Diese Aktion kann nicht rückgängig gemacht werden.',
     'tooltip_reverse_journal_entry' => 'Stornobuchung erstellen (verbuchte Einträge sind unveränderlich)',
+    'journal_reference_reserved_prefix' => 'Referenzen, die mit :prefix beginnen, vergibt Gäld selbst. Bitte eine andere Referenz wählen.',
     'opening_balances' => 'Eröffnungsbilanz',
     'opening_balances_title' => 'Eröffnungsbilanz erfassen',
     'opening_balances_help' => 'Geben Sie die Salden der Bilanzkonten zu Beginn Ihres ersten Geschäftsjahres in Gäld ein. So übernehmen Sie Ihre bestehende Buchhaltung.',

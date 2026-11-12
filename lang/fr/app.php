@@ -2511,6 +2511,7 @@ return [
     'confirm_reverse_journal_entry' => 'Contrepasser cette écriture ? Un brouillon d\'extourne sera créé pour vérification avant validation.',
     'confirm_delete_journal_entry' => 'Supprimer ce brouillon ? Cette action est irréversible.',
     'tooltip_reverse_journal_entry' => 'Créer une écriture d\'extourne (les écritures comptabilisées sont immuables)',
+    'journal_reference_reserved_prefix' => 'Les références commençant par :prefix sont attribuées par Gäld. Veuillez en choisir une autre.',
     'opening_balances' => 'Soldes d\'ouverture',
     'opening_balances_title' => 'Saisie des soldes d\'ouverture',
     'opening_balances_help' => 'Saisissez les soldes des comptes de bilan au début de votre premier exercice dans Gäld. Cela vous permet de reprendre votre comptabilité existante.',

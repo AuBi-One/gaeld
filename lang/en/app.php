@@ -2581,6 +2581,7 @@ return [
     'confirm_reverse_journal_entry' => 'Reverse this journal entry? A draft contra-entry will be created for you to review and post.',
     'confirm_delete_journal_entry' => 'Delete this draft journal entry? This action cannot be undone.',
     'tooltip_reverse_journal_entry' => 'Create a reversing entry (posted entries are immutable)',
+    'journal_reference_reserved_prefix' => 'References starting with :prefix are assigned by Gäld itself. Please choose another reference.',
     'opening_balances' => 'Opening balances',
     'opening_balances_title' => 'Record opening balances',
     'opening_balances_help' => 'Enter the closing balances of your balance-sheet accounts at the start of your first fiscal year in Gäld. This lets you carry over your existing bookkeeping.',
