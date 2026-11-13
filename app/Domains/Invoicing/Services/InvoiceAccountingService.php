@@ -518,6 +518,33 @@ class InvoiceAccountingService
     }
 
     /**
+     * A credit note was cancelled or reverted to draft, so it no longer reduces its invoice. A
+     * paid invoice (the write-off of "nothing left" marks it paid) is open again when its
+     * payments and the remaining credit notes no longer cover it: sent, or overdue past its due
+     * date. Call inside the transaction that withdraws the credit note. Like removing a payment,
+     * this sets the status directly; the enum transitions are not checked.
+     */
+    public function reopenAfterCreditNoteWithdrawn(Invoice $creditNote): void
+    {
+        if ($creditNote->related_invoice_id === null) {
+            return;
+        }
+        $invoice = Invoice::query()->withoutGlobalScopes()
+            ->where('organization_id', $creditNote->organization_id)
+            ->whereKey($creditNote->related_invoice_id)
+            ->lockForUpdate()
+            ->first();
+        if ($invoice === null || $invoice->status !== InvoiceStatus::Paid) {
+            return;
+        }
+
+        if (Money::isPositive(Money::subtract($invoice->amountDue(), $invoice->creditedByCreditNotes()))) {
+            $isOverdue = $invoice->due_date?->isBefore(now()->startOfDay()) ?? false;
+            $invoice->update(['status' => $isOverdue ? InvoiceStatus::Overdue : InvoiceStatus::Sent]);
+        }
+    }
+
+    /**
      * The rest of an invoice split over its VAT rates by their gross amount; the last rate takes
      * what rounding leaves, so the shares add up to the rest.
      *

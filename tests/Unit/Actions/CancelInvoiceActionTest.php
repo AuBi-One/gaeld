@@ -8,6 +8,7 @@ use App\Domains\Invoicing\Actions\CancelInvoiceAction;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Invoicing\Services\InvoiceAccountingService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Mockery;
@@ -24,7 +25,7 @@ class CancelInvoiceActionTest extends TestCase
         parent::setUp();
 
         $this->ledgerService = Mockery::mock(LedgerService::class);
-        $this->action = new CancelInvoiceAction($this->ledgerService);
+        $this->action = new CancelInvoiceAction($this->ledgerService, Mockery::mock(InvoiceAccountingService::class));
     }
 
     public function test_rejects_paid_invoice(): void

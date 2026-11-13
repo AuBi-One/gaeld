@@ -21,6 +21,7 @@ use App\Domains\Invoicing\Actions\CreateCreditNoteAction;
 use App\Domains\Invoicing\Actions\CreateInvoiceAction;
 use App\Domains\Invoicing\Actions\FinalizeInvoiceAction;
 use App\Domains\Invoicing\Actions\RemoveInvoicePaymentAction;
+use App\Domains\Invoicing\Actions\RevertInvoiceToDraftAction;
 use App\Domains\Invoicing\Actions\UpdatePaymentDateAction;
 use App\Domains\Invoicing\Actions\WriteOffInvoiceRemainderAction;
 use App\Domains\Invoicing\DTOs\CreateInvoiceData;
@@ -207,6 +208,20 @@ class InvoicePartPaymentTest extends TestCase
         app(CancelInvoiceAction::class)->execute($creditNote->fresh());
 
         $this->assertSame(InvoiceStatus::Overdue, $invoice->fresh()->status);
+        $this->assertSame('1621.50', $invoice->fresh()->amountDue());
+        $this->assertSame('1621.50', $this->balance('1100'));
+    }
+
+    public function test_reverting_the_full_credit_note_of_a_settled_invoice_to_draft_opens_it_again(): void
+    {
+        $invoice = $this->finalizedInvoice('INV-WO-RCN');
+        $creditNote = app(FinalizeInvoiceAction::class)->execute(app(CreateCreditNoteAction::class)->execute($invoice->fresh())->fresh());
+        app(WriteOffInvoiceRemainderAction::class)->execute($invoice->fresh(), now()->toDateString(), 'Gutschrift');
+        $this->assertSame(InvoiceStatus::Paid, $invoice->fresh()->status);
+
+        app(RevertInvoiceToDraftAction::class)->execute($creditNote->fresh());
+
+        $this->assertSame(InvoiceStatus::Sent, $invoice->fresh()->status);
         $this->assertSame('1621.50', $invoice->fresh()->amountDue());
         $this->assertSame('1621.50', $this->balance('1100'));
     }

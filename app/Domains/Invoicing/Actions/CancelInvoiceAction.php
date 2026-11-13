@@ -7,7 +7,7 @@ use App\Domains\Invoicing\Enums\InvoiceStatus;
 use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
-use App\Support\Money;
+use App\Domains\Invoicing\Services\InvoiceAccountingService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -17,6 +17,7 @@ class CancelInvoiceAction
 {
     public function __construct(
         private LedgerService $ledgerService,
+        private InvoiceAccountingService $accountingService,
     ) {}
 
     public function execute(Invoice $invoice): Invoice
@@ -44,33 +45,11 @@ class CancelInvoiceAction
 
             $invoice->update(['status' => InvoiceStatus::Cancelled]);
 
-            if ($invoice->type === InvoiceType::CreditNote && $invoice->related_invoice_id !== null) {
-                $this->reopenSettledInvoice($invoice);
+            if ($invoice->type === InvoiceType::CreditNote) {
+                $this->accountingService->reopenAfterCreditNoteWithdrawn($invoice);
             }
 
             return $invoice->fresh();
         });
-    }
-
-    /**
-     * A paid invoice whose credit note is cancelled is open again when its payments and the
-     * remaining credit notes no longer cover it (a write-off of "nothing left" marked it paid).
-     * Like removing a payment, this sets the status directly; the enum transitions are not checked.
-     */
-    private function reopenSettledInvoice(Invoice $creditNote): void
-    {
-        $invoice = Invoice::query()->withoutGlobalScopes()
-            ->where('organization_id', $creditNote->organization_id)
-            ->whereKey($creditNote->related_invoice_id)
-            ->lockForUpdate()
-            ->first();
-        if ($invoice === null || $invoice->status !== InvoiceStatus::Paid) {
-            return;
-        }
-
-        if (Money::isPositive(Money::subtract($invoice->amountDue(), $invoice->creditedByCreditNotes()))) {
-            $isOverdue = $invoice->due_date?->isBefore(now()->startOfDay()) ?? false;
-            $invoice->update(['status' => $isOverdue ? InvoiceStatus::Overdue : InvoiceStatus::Sent]);
-        }
     }
 }
