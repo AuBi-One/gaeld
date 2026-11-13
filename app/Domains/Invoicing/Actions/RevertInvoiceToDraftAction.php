@@ -4,6 +4,7 @@ namespace App\Domains\Invoicing\Actions;
 
 use App\Domains\Accounting\Services\LedgerService;
 use App\Domains\Invoicing\Enums\InvoiceStatus;
+use App\Domains\Invoicing\Enums\InvoiceType;
 use App\Domains\Invoicing\Exceptions\InvalidInvoiceStateException;
 use App\Domains\Invoicing\Models\Invoice;
 use App\Domains\Invoicing\Services\InvoiceAccountingService;
@@ -53,6 +54,10 @@ class RevertInvoiceToDraftAction
             }
 
             $invoice->update(['status' => InvoiceStatus::Draft]);
+
+            if ($invoice->type === InvoiceType::CreditNote) {
+                $this->accountingService->reopenAfterCreditNoteWithdrawn($invoice);
+            }
 
             return $invoice->fresh();
         });
