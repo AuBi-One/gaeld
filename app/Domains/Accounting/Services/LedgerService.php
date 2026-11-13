@@ -184,7 +184,7 @@ class LedgerService
                 ->whereKey($journalEntry->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
-            $original->load('lines.account');
+            $original->load(['lines' => fn ($query) => $query->orderBy('id'), 'lines.account']); // the reversal mirrors the original's line order
 
             if (! $original->is_posted) {
                 throw new InvalidEntryDataException('Only posted journal entries can be reversed.');

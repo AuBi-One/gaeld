@@ -38,7 +38,7 @@ final class PrepareJournalCorrectionAction
                 ->whereKey($original->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
-            $locked->load('lines');
+            $locked->load(['lines' => fn ($query) => $query->orderBy('id')]); // copy in the original's line order
 
             $this->eligibility->assertCorrectable($locked);
             $this->assertDateOpen($locked->organization_id, $correctionDate);
