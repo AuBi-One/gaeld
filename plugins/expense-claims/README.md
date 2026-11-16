@@ -10,7 +10,7 @@ towards the person.
 
 | Where | What |
 |---|---|
-| Expenses › Expense claims | list, create/edit drafts, approve (books Dr 6640 · Cr 2210/2260), pay by bank, receipts |
+| Expenses › Expense claims | list, create/edit drafts, approve (books Dr 6640 · Cr 2210/2260), pay by bank, receipts; km lines go from/to a place, a contact with an address (becomes a client place that follows the contact's address) or any address (saved as a place of kind other, reused) |
 | Expenses › Expense balances | unpaid claims and debts per person; convert to a debt record at a closing date; repay a debt by bank |
 | Organisation settings › Expense claims | people (employee link, owner/organ flag, home), places (office, homes, clients) with federal geocoding, km rates, accounts |
 | Payroll › Run payroll | each employee's approved claims and open debts, ticked by default, paid with the salary from their own liability account |
@@ -32,7 +32,8 @@ EXPENSE_CLAIMS_ORS_KEY=               # free key from openrouteservice.org
 EXPENSE_CLAIMS_OSRM_URL=              # when ROUTING=osrm, e.g. a self-hosted server
 ```
 
-Geocoding uses `api3.geo.admin.ch` (no key). Only coordinates are sent to the
+Geocoding uses `api3.geo.admin.ch` (no key): addresses of places, of contacts chosen
+as destinations and typed in the claim form. Only coordinates are sent to the
 routing service. Without routing, km are entered by hand.
 
 Rebuild the frontend after enabling the plugin (`pnpm build`), run migrations.

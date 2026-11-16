@@ -3,6 +3,7 @@
 namespace Plugins\ExpenseClaims\Http\Controllers;
 
 use App\Domains\Accounting\Models\JournalEntry;
+use App\Domains\Contacts\Models\Contact;
 use App\Domains\Organizations\Enums\Permission;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,13 +21,14 @@ use Plugins\ExpenseClaims\Models\Place;
 use Plugins\ExpenseClaims\Models\Setting;
 use Plugins\ExpenseClaims\Models\VehicleRate;
 use Plugins\ExpenseClaims\Services\Claims;
+use Plugins\ExpenseClaims\Services\Destinations;
 use Plugins\ExpenseClaims\Services\Distances;
 use Plugins\ExpenseClaims\Services\Rates;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ClaimController extends PluginController
 {
-    public function __construct(private Claims $claims, private Distances $distances) {}
+    public function __construct(private Claims $claims, private Distances $distances, private Destinations $destinations) {}
 
     /** The user's own claims and balances (§8.2). */
     public function index(Request $request): Response
@@ -170,15 +172,37 @@ class ClaimController extends PluginController
     public function distance(Request $request): JsonResponse
     {
         $this->authorizeCreate();
-        $data = $request->validate(['from' => ['required', 'uuid'], 'to' => ['required', 'uuid', 'different:from']]);
-        $from = Place::query()->whereKey($data['from'])->firstOrFail();
-        $to = Place::query()->whereKey($data['to'])->firstOrFail();
+        $data = $request->validate(['from' => ['required', 'string', $this->destinationRule()], 'to' => ['required', 'string', 'different:from', $this->destinationRule()]]);
+        $from = $this->destinations->resolve($this->orgId(), $data['from']);
+        $to = $this->destinations->resolve($this->orgId(), $data['to']);
+        if ($from === null || $to === null || $from->is($to)) {
+            return response()->json(['message' => __('expense-claims::ec.distance_missing_coordinates')], 422);
+        }
 
         try {
             return response()->json(['km' => $this->distances->km($from, $to)]);
         } catch (\DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+    }
+
+    /** Address search (geo.admin) for an "other address" destination; anyone who may create claims. */
+    public function searchAddress(Request $request): JsonResponse
+    {
+        $this->authorizeCreate();
+        $query = $request->validate(['q' => ['required', 'string', 'min:3', 'max:200']])['q'];
+
+        return response()->json(['results' => $this->distances->search($query)]);
+    }
+
+    /** Any address as a destination: a place of kind `other`, reused for the same address. */
+    public function storeAddress(Request $request): JsonResponse
+    {
+        $this->authorizeCreate();
+        $address = $request->validate(['address' => ['required', 'string', 'min:3', 'max:255']])['address'];
+        $place = $this->destinations->forAddress($this->orgId(), $address);
+
+        return response()->json(['place' => $place->only(['id', 'kind', 'label', 'city', 'lat', 'lon'])]);
     }
 
     public function attach(Request $request, Claim $claim): RedirectResponse
@@ -220,14 +244,33 @@ class ClaimController extends PluginController
             'lines.*.description' => ['nullable', 'string', 'max:255'],
             'lines.*.amount' => ['exclude_if:lines.*.type,km', 'required', 'numeric', 'decimal:0,2', 'gt:0'],
             'lines.*.km' => ['exclude_unless:lines.*.type,km', 'required', 'numeric', 'gt:0', 'max:5000'],
-            'lines.*.from_place_id' => ['nullable', 'uuid', Rule::exists('ec_places', 'id')->where('organization_id', $this->orgId())],
-            'lines.*.to_place_id' => ['nullable', 'uuid', Rule::exists('ec_places', 'id')->where('organization_id', $this->orgId())],
+            'lines.*.from_place_id' => ['nullable', 'string', $this->destinationRule()],
+            'lines.*.to_place_id' => ['nullable', 'string', $this->destinationRule()],
             'lines.*.round_trip' => ['boolean'],
             'lines.*.vehicle_type' => ['nullable', 'string', 'max:20'],
             'lines.*.km_override_reason' => ['nullable', 'string', 'max:255'],
         ]);
 
+        // A contact chosen as destination becomes (or reuses) its client place.
+        foreach ($data['lines'] as $i => $line) {
+            foreach (['from_place_id', 'to_place_id'] as $field) {
+                if (isset($line[$field])) {
+                    $data['lines'][$i][$field] = $this->destinations->resolve($this->orgId(), (string) $line[$field])?->id;
+                }
+            }
+        }
+
         return $data;
+    }
+
+    /** A place of the organisation or one of its contacts (`contact:<id>`). */
+    private function destinationRule(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            if (! $this->destinations->exists($this->orgId(), $value)) {
+                $fail(__('validation.exists', ['attribute' => $attribute]));
+            }
+        };
     }
 
     /**
@@ -239,16 +282,27 @@ class ClaimController extends PluginController
         $manage = $this->canManage();
         $people = Person::query()->orderBy('name')->when(! $manage, fn ($q) => $q->whereKey($own))->get(['id', 'name', 'home_place_id']);
         $ownHome = $people->firstWhere('id', $own)?->home_place_id;
+        $places = Place::query()->ordered()
+            // Other people's homes are only shown to managers.
+            ->when(! $manage, fn ($q) => $q->where(fn ($q) => $q->where('kind', '!=', 'home')->orWhere('id', $ownHome)))
+            ->get(['id', 'kind', 'label', 'city', 'lat', 'lon', 'contact_id']);
+        // A contact with a client place is offered once, under the contacts, by that place.
+        $contactPlaces = $places->where('kind', 'client')->whereNotNull('contact_id')->unique('contact_id')->keyBy('contact_id');
+        $contacts = $this->destinations->contacts($this->orgId())->map(fn (Contact $c): array => [
+            'value' => $contactPlaces->get($c->id)->id ?? Destinations::CONTACT_PREFIX.$c->id,
+            'name' => $c->name,
+            'city' => $c->city,
+        ]);
+        $offered = $contacts->pluck('value')->all();
 
         return [
             'claim' => $claim ? $this->present($claim) : null,
             'people' => $people,
             'defaultPersonId' => $own,
             'canChoosePerson' => $manage,
-            // Other people's homes are only shown to managers.
-            'places' => Place::query()->ordered()
-                ->when(! $manage, fn ($q) => $q->where(fn ($q) => $q->where('kind', '!=', 'home')->orWhere('id', $ownHome)))
-                ->get(['id', 'kind', 'label', 'city', 'lat', 'lon']),
+            'places' => $places->reject(fn (Place $p): bool => in_array($p->id, $offered, true))
+                ->map(fn (Place $p): array => $p->only(['id', 'kind', 'label', 'city', 'lat', 'lon']))->values(),
+            'contacts' => $contacts->values(),
             'rates' => $this->rates()->get(['vehicle_type', 'valid_from', 'valid_to', 'rate_per_km']),
             'routingEnabled' => $this->distances->isConfigured(),
         ];

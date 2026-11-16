@@ -11,6 +11,8 @@ Route::middleware(['web', 'auth', 'verified', 'org', 'org-2fa', 'subscription'])
         Route::get('/create', [ClaimController::class, 'create'])->name('create');
         Route::post('/', [ClaimController::class, 'store'])->name('store');
         Route::get('/distance', [ClaimController::class, 'distance'])->middleware('throttle:30,1')->name('distance');
+        Route::get('/address-search', [ClaimController::class, 'searchAddress'])->middleware('throttle:60,1')->name('address-search');
+        Route::post('/addresses', [ClaimController::class, 'storeAddress'])->middleware('throttle:30,1')->name('addresses.store');
         Route::get('/{claim}', [ClaimController::class, 'show'])->whereUuid('claim')->name('show');
         Route::get('/{claim}/edit', [ClaimController::class, 'edit'])->whereUuid('claim')->name('edit');
         Route::put('/{claim}', [ClaimController::class, 'update'])->whereUuid('claim')->name('update');

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useForm } from '@inertiajs/vue3'
+import axios from 'axios'
 import AppLayout from '@/Components/AppLayout.vue'
 import Card from '@/Components/UI/Card.vue'
 import CardHeader from '@/Components/UI/CardHeader.vue'
@@ -9,11 +10,12 @@ import CardContent from '@/Components/UI/CardContent.vue'
 import Button from '@/Components/UI/Button.vue'
 import FormInput from '@/Components/UI/FormInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
+import SearchableSelect from '@/Components/UI/SearchableSelect.vue'
 import FormTextarea from '@/Components/UI/FormTextarea.vue'
 import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
-import { AlertTriangle, MapPin, Plus, Trash2 } from 'lucide-vue-next'
+import { AlertTriangle, MapPin, Plus, Search, Trash2, X } from 'lucide-vue-next'
 
 const { t } = useTranslations()
 const { formatCurrency } = useFormatters()
@@ -22,6 +24,8 @@ const props = defineProps({
   claim: { type: Object, default: null },
   people: { type: Array, default: () => [] },
   places: { type: Array, default: () => [] },
+  // Contacts with an address: value is their client place id, or `contact:<id>` until first used.
+  contacts: { type: Array, default: () => [] },
   rates: { type: Array, default: () => [] },
   routingEnabled: { type: Boolean, default: false },
   defaultPersonId: { type: String, default: null },
@@ -59,7 +63,14 @@ const form = useForm({
 
 const personOptions = computed(() => props.people.map(p => ({ value: p.id, label: p.name })))
 const typeOptions = computed(() => lineTypes.map(v => ({ value: v, label: t(`ec_type_${v}`) })))
-const placeOptions = computed(() => props.places.map(p => ({ value: p.id, label: `${p.label}${p.city ? ` (${p.city})` : ''} — ${t(`ec_kind_${p.kind}`)}` })))
+// Places saved from "other address" during this visit, added after the props.
+const addedPlaces = ref([])
+const OTHER_ADDRESS = '__other__'
+const placeOptions = computed(() => [
+  ...[...props.places, ...addedPlaces.value].map(p => ({ value: p.id, label: `${p.label}${p.city ? ` (${p.city})` : ''} — ${t(`ec_kind_${p.kind}`)}`, group: t('ec_group_places') })),
+  ...props.contacts.map(c => ({ value: c.value, label: `${c.name}${c.city ? ` (${c.city})` : ''}`, group: t('ec_group_contacts') })),
+  { value: OTHER_ADDRESS, label: t('ec_other_address'), group: t('ec_group_other') },
+])
 const person = computed(() => props.people.find(p => p.id === form.person_id))
 
 function rateFor(line) {
@@ -116,6 +127,67 @@ async function lookUp(index) {
 
 function placesChanged(line) {
   line.km_lookup = null
+}
+
+// "Other address": an inline search; the chosen (or typed) address is saved as a place.
+const addressFor = ref(null) // { index, field }
+const addressQuery = ref('')
+const addressResults = ref([])
+const addressSearching = ref(false)
+const addressSaving = ref(false)
+const addressError = ref('')
+
+function destinationChosen(line, index, field, value) {
+  if (value === OTHER_ADDRESS) {
+    addressFor.value = { index, field }
+    addressQuery.value = ''
+    addressResults.value = []
+    addressError.value = ''
+    return
+  }
+  line[field] = value ?? ''
+  placesChanged(line)
+}
+
+async function searchAddress() {
+  if (addressQuery.value.trim().length < 3) return
+  addressSearching.value = true
+  addressError.value = ''
+  try {
+    const { data } = await axios.get('/expense-claims/address-search', { params: { q: addressQuery.value } })
+    addressResults.value = data.results ?? []
+    if (!addressResults.value.length) addressError.value = t('ec_address_none_found')
+  } catch {
+    addressError.value = t('ec_address_search_failed')
+  } finally {
+    addressSearching.value = false
+  }
+}
+
+async function useAddress(text) {
+  const target = addressFor.value
+  if (!target || text.trim().length < 3) return
+  addressSaving.value = true
+  addressError.value = ''
+  try {
+    const { data } = await axios.post('/expense-claims/addresses', { address: text })
+    if (![...props.places, ...addedPlaces.value].some(p => p.id === data.place.id)) addedPlaces.value.push(data.place)
+    const line = form.lines[target.index]
+    if (line) {
+      line[target.field] = data.place.id
+      placesChanged(line)
+    }
+    addressFor.value = null
+  } catch (error) {
+    addressError.value = error.response?.data?.errors?.address?.[0] ?? error.response?.data?.message ?? t('ec_address_search_failed')
+  } finally {
+    addressSaving.value = false
+  }
+}
+
+function removeLine(index) {
+  form.lines.splice(index, 1)
+  addressFor.value = null
 }
 
 function roundTripChanged(line) {
@@ -196,15 +268,55 @@ const lineError = (index, field) => form.errors[`lines.${index}.${field}`]
             <div class="grid gap-3 sm:grid-cols-[12rem_1fr_auto] sm:items-end">
               <FormSelect v-model="line.type" :id="`ec-line-${index}-type`" :label="t('type')" :options="typeOptions" />
               <FormInput v-model="line.description" :id="`ec-line-${index}-description`" :label="t('ec_description')" :error="lineError(index, 'description')" />
-              <Button type="button" variant="ghost" size="icon" :title="t('ec_remove_line')" :disabled="form.lines.length === 1" @click="form.lines.splice(index, 1)">
+              <Button type="button" variant="ghost" size="icon" :title="t('ec_remove_line')" :disabled="form.lines.length === 1" @click="removeLine(index)">
                 <Trash2 class="h-4 w-4" />
               </Button>
             </div>
 
             <template v-if="line.type === 'km'">
               <div class="grid gap-3 sm:grid-cols-2">
-                <FormSelect v-model="line.from_place_id" :id="`ec-line-${index}-from_place_id`" :label="t('ec_from')" :options="placeOptions" :placeholder="t('ec_from')" :error="lineError(index, 'from_place_id')" @update:model-value="placesChanged(line)" />
-                <FormSelect v-model="line.to_place_id" :id="`ec-line-${index}-to_place_id`" :label="t('ec_to')" :options="placeOptions" :placeholder="t('ec_to')" :error="lineError(index, 'to_place_id')" @update:model-value="placesChanged(line)" />
+                <SearchableSelect
+                  v-for="field in ['from_place_id', 'to_place_id']"
+                  :key="field"
+                  :model-value="line[field]"
+                  :id="`ec-line-${index}-${field}`"
+                  :label="t(field === 'from_place_id' ? 'ec_from' : 'ec_to')"
+                  :options="placeOptions"
+                  group-key="group"
+                  force-searchable
+                  :placeholder="t(field === 'from_place_id' ? 'ec_from' : 'ec_to')"
+                  :search-placeholder="t('ec_search_destination')"
+                  :empty-text="t('ec_no_destination')"
+                  :error="lineError(index, field)"
+                  @update:model-value="value => destinationChosen(line, index, field, value)"
+                />
+              </div>
+              <div v-if="addressFor?.index === index" class="space-y-2 rounded-md border border-[hsl(var(--border))] p-3">
+                <div class="flex items-center justify-between text-sm font-medium">
+                  <span>{{ t(addressFor.field === 'from_place_id' ? 'ec_from' : 'ec_to') }} — {{ t('ec_other_address') }}</span>
+                  <Button type="button" variant="ghost" size="icon" :title="t('cancel')" @click="addressFor = null"><X class="h-4 w-4" /></Button>
+                </div>
+                <div class="flex items-end gap-2">
+                  <FormInput v-model="addressQuery" :id="`ec-line-${index}-address`" :label="t('ec_address_search')" class="flex-1" @keydown.enter.prevent="searchAddress" />
+                  <Button type="button" variant="outline" :title="t('ec_address_search')" :loading="addressSearching" @click="searchAddress"><Search class="h-4 w-4" /></Button>
+                </div>
+                <div v-if="addressResults.length" class="max-h-48 space-y-1 overflow-y-auto rounded-md border border-[hsl(var(--border))] p-1">
+                  <button
+                    v-for="(result, i) in addressResults"
+                    :key="i"
+                    type="button"
+                    class="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-[hsl(var(--accent))]"
+                    :disabled="addressSaving"
+                    @click="useAddress(result.label)"
+                  >
+                    {{ result.label }}
+                  </button>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" :loading="addressSaving" :disabled="addressQuery.trim().length < 3" @click="useAddress(addressQuery)">{{ t('ec_use_address_as_typed') }}</Button>
+                  <span class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('ec_address_as_typed_hint') }}</span>
+                </div>
+                <p v-if="addressError" class="text-xs text-[hsl(var(--destructive))]">{{ addressError }}</p>
               </div>
               <div class="grid gap-3 sm:grid-cols-[auto_auto_10rem_1fr] sm:items-end">
                 <label class="flex h-9 items-center gap-2 text-sm">
