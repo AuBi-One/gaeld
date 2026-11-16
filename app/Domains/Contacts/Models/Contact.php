@@ -84,6 +84,16 @@ class Contact extends Model
         'internal_notes',
     ];
 
+    protected static function booted(): void
+    {
+        // A salutation (Monsieur, Madame) belongs to a person, never to an organisation.
+        static::saving(function (Contact $contact): void {
+            if (($contact->type ?? ContactType::Organization) === ContactType::Organization) {
+                $contact->salutation = null;
+            }
+        });
+    }
+
     protected function casts(): array
     {
         return [

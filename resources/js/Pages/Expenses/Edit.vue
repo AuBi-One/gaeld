@@ -384,6 +384,7 @@ const isImage = computed(() => {
     <QuickCreateContactModal
       :open="showCreateSupplier"
       contact-type="supplier"
+      :categories="categories"
       @close="showCreateSupplier = false"
       @created="onSupplierCreated"
     />

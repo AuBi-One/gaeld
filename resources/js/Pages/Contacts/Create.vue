@@ -15,9 +15,15 @@ import IbanHint from '@/Components/IbanHint.vue'
 import BicField from '@/Components/BicField.vue'
 import { useTranslations } from '@/lib/useTranslations'
 import { useUnsavedChanges } from '@/lib/useUnsavedChanges'
-import { countryOptions, currencyOptions } from '@/lib/contactOptions'
+import { countryOptions, currencyOptions, expenseCategoryOptions } from '@/lib/contactOptions'
 
-const { t } = useTranslations()
+const { t, expenseCategoryLabel } = useTranslations()
+
+const props = defineProps({
+  categories: { type: Array, default: () => [] },
+})
+
+const categoryOptions = expenseCategoryOptions(props.categories, expenseCategoryLabel)
 
 const form = useForm({
   type: 'organization',
@@ -108,6 +114,7 @@ const tabs = [
                 :error="form.errors.type"
               />
               <FormInput
+                v-if="form.type === 'individual'"
                 id="salutation"
                 v-model="form.salutation"
                 :label="t('contact_salutation')"
@@ -232,10 +239,11 @@ const tabs = [
                 :error="form.errors.account_holder"
                 class="sm:col-span-2"
               />
-              <FormInput
+              <FormSelect
                 id="default_expense_category"
                 v-model="form.default_expense_category"
                 :label="t('default_expense_category')"
+                :options="categoryOptions"
                 :error="form.errors.default_expense_category"
                 class="sm:col-span-2"
               />

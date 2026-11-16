@@ -554,7 +554,7 @@ return [
     'postal_address' => 'Adresse postale',
     'contact_country' => 'Pays du contact',
     'contact_salutation' => 'Civilité (facultatif)',
-    'contact_salutation_placeholder' => 'Monsieur',
+    'contact_salutation_placeholder' => 'ex. Monsieur',
     'invoice_country_name' => 'Pays sur la facture',
     'invoice_country_name_placeholder' => 'Suisse',
     'invoice_country_name_hint' => 'Saisissez le nom du pays tel qu’il doit apparaître dans l’adresse.',
@@ -1877,13 +1877,11 @@ return [
     'collapse_sidebar' => 'Réduire le menu',
 
     // Contact categories
-    'cat_office' => 'Bureau',
     'cat_utilities' => 'Services publics',
     'cat_software' => 'Logiciels',
     'cat_travel' => 'Voyages',
     'cat_marketing' => 'Marketing',
     'cat_professional_services' => 'Services professionnels',
-    'cat_equipment' => 'Équipement',
     'cat_other' => 'Autre',
 
     // Beta banner & misc

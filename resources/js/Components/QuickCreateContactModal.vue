@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import Modal from '@/Components/UI/Modal.vue'
 import Button from '@/Components/UI/Button.vue'
 import FormInput from '@/Components/UI/FormInput.vue'
@@ -7,7 +7,7 @@ import MaskedInput from '@/Components/UI/MaskedInput.vue'
 import FormSelect from '@/Components/UI/FormSelect.vue'
 import SearchableSelect from '@/Components/UI/SearchableSelect.vue'
 import { useTranslations } from '@/lib/useTranslations'
-import { countryOptions, currencyOptions } from '@/lib/contactOptions'
+import { countryOptions, currencyOptions, expenseCategoryOptions } from '@/lib/contactOptions'
 
 const props = defineProps({
   open: Boolean,
@@ -17,11 +17,12 @@ const props = defineProps({
     required: true,
     validator: v => ['customer', 'supplier'].includes(v),
   },
+  categories: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['close', 'created'])
 
-const { t } = useTranslations()
+const { t, expenseCategoryLabel } = useTranslations()
 
 const contactSubType = ref('organization')
 const salutation = ref('')
@@ -48,17 +49,8 @@ const typeOptions = [
   { value: 'individual', label: t('individual') },
 ]
 
-const categoryOptions = [
-  { value: '', label: '—' },
-  { value: 'office', label: t('cat_office') },
-  { value: 'utilities', label: t('cat_utilities') },
-  { value: 'software', label: t('cat_software') },
-  { value: 'travel', label: t('cat_travel') },
-  { value: 'marketing', label: t('cat_marketing') },
-  { value: 'professional_services', label: t('cat_professional_services') },
-  { value: 'equipment', label: t('cat_equipment') },
-  { value: 'other', label: t('cat_other') },
-]
+// The organisation's expense categories; without them the field is not shown.
+const categoryOptions = computed(() => expenseCategoryOptions(props.categories, expenseCategoryLabel))
 
 watch(() => props.open, (val) => {
   if (val) {
@@ -96,7 +88,7 @@ async function submit() {
 
   const body = {
     type: contactSubType.value,
-    salutation: salutation.value || null,
+    salutation: contactSubType.value === 'individual' ? (salutation.value || null) : null,
     name: name.value,
     email: email.value || null,
     phone: phone.value || null,
@@ -176,6 +168,7 @@ async function submit() {
         :error="errors.type?.[0]"
       />
       <FormInput
+        v-if="contactSubType === 'individual'"
         id="qc-salutation"
         v-model="salutation"
         :label="t('contact_salutation')"
@@ -237,6 +230,7 @@ async function submit() {
           placeholder="CH56 0483 5012 3456 7800 9"
         />
         <FormSelect
+          v-if="categories.length"
           id="qc-default-expense-category"
           v-model="defaultExpenseCategory"
           :label="t('default_category')"

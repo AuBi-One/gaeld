@@ -557,7 +557,7 @@ return [
     'postal_address' => 'Indirizzo postale',
     'contact_country' => 'Paese del contatto',
     'contact_salutation' => 'Titolo (facoltativo)',
-    'contact_salutation_placeholder' => 'Signor',
+    'contact_salutation_placeholder' => 'es. Signor',
     'invoice_country_name' => 'Paese sulla fattura',
     'invoice_country_name_placeholder' => 'Svizzera',
     'invoice_country_name_hint' => 'Inserisci il nome del paese come deve apparire nell’indirizzo.',
@@ -1832,13 +1832,11 @@ return [
     'collapse_sidebar' => 'Comprimi barra laterale',
 
     // Contact categories
-    'cat_office' => 'Ufficio',
     'cat_utilities' => 'Servizi',
     'cat_software' => 'Software',
     'cat_travel' => 'Viaggi',
     'cat_marketing' => 'Marketing',
     'cat_professional_services' => 'Servizi professionali',
-    'cat_equipment' => 'Attrezzature',
     'cat_other' => 'Altro',
 
     // Beta banner & misc

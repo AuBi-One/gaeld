@@ -418,6 +418,7 @@ function onSupplierCreated(supplier) {
       v-if="!selfService"
       :open="showCreateSupplier"
       contact-type="supplier"
+      :categories="categories"
       @close="showCreateSupplier = false"
       @created="onSupplierCreated"
     />

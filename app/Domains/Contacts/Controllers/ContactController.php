@@ -8,6 +8,7 @@ use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Queries\ContactQuery;
 use App\Domains\Contacts\Requests\StoreContactRequest;
 use App\Domains\Contacts\Services\ContactPanels;
+use App\Domains\Expenses\Queries\ExpenseCategoryQuery;
 use App\Http\Controllers\Concerns\HandlesCrudOperations;
 use App\Http\Controllers\Concerns\HandlesFlashErrorResponses;
 use App\Http\Controllers\Controller;
@@ -22,6 +23,18 @@ use Inertia\Response;
 class ContactController extends Controller
 {
     use HandlesCrudOperations, HandlesFlashErrorResponses;
+
+    /** @return array<string, mixed> */
+    protected function createFormProps(): array
+    {
+        return ['categories' => ExpenseCategoryQuery::forSelect()];
+    }
+
+    /** @return array<string, mixed> */
+    protected function editFormProps(mixed $model): array
+    {
+        return ['categories' => ExpenseCategoryQuery::forSelect()];
+    }
 
     public function show(): Response
     {

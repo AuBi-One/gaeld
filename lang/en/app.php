@@ -555,7 +555,7 @@ return [
     'postal_address' => 'Postal address',
     'contact_country' => 'Contact country',
     'contact_salutation' => 'Salutation (optional)',
-    'contact_salutation_placeholder' => 'Mr',
+    'contact_salutation_placeholder' => 'e.g. Mr',
     'invoice_country_name' => 'Country on invoice',
     'invoice_country_name_placeholder' => 'Switzerland',
     'invoice_country_name_hint' => 'Enter the country name as it should appear in the address.',
@@ -1951,13 +1951,11 @@ return [
     'collapse_sidebar' => 'Collapse sidebar',
 
     // Contact categories
-    'cat_office' => 'Office',
     'cat_utilities' => 'Utilities',
     'cat_software' => 'Software',
     'cat_travel' => 'Travel',
     'cat_marketing' => 'Marketing',
     'cat_professional_services' => 'Professional Services',
-    'cat_equipment' => 'Equipment',
     'cat_other' => 'Other',
 
     // Beta banner & misc

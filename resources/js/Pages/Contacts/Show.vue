@@ -14,7 +14,7 @@ import Breadcrumb from '@/Components/UI/Breadcrumb.vue'
 import EmptyState from '@/Components/UI/EmptyState.vue'
 import { useContactPersons } from '@/lib/useContactPersons'
 
-const { t } = useTranslations()
+const { t, expenseCategoryLabel } = useTranslations()
 const { formatCurrency, formatDate } = useFormatters()
 
 const props = defineProps({
@@ -114,7 +114,7 @@ const cp = useContactPersons('contacts', props.contact.uuid, props.contact.conta
           </div>
           <div v-if="contact.default_expense_category">
             <span class="text-[hsl(var(--muted-foreground))]">{{ t('default_category') }}:</span>
-            <span class="ml-2 capitalize">{{ contact.default_expense_category }}</span>
+            <span class="ml-2">{{ expenseCategoryLabel(contact.default_expense_category) }}</span>
           </div>
           <div v-if="contact.internal_notes" class="border-t pt-3">
             <p class="text-[hsl(var(--muted-foreground))] mb-1">{{ t('internal_notes') }}</p>

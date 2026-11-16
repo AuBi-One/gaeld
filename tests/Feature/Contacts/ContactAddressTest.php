@@ -48,6 +48,7 @@ class ContactAddressTest extends TestCase
     {
         $contact = Contact::factory()->for($this->organization)->create([
             'name' => 'Maël Exemple',
+            'type' => 'individual',
             'salutation' => 'Monsieur',
             'country' => 'CH',
             'country_name' => 'Schweiz',
@@ -69,6 +70,7 @@ class ContactAddressTest extends TestCase
     public function test_contact_edit_can_clear_the_country_name_and_salutation(): void
     {
         $contact = Contact::factory()->for($this->organization)->create([
+            'type' => 'individual',
             'salutation' => 'Monsieur',
             'country_name' => 'Suisse',
         ]);
@@ -89,6 +91,7 @@ class ContactAddressTest extends TestCase
     public function test_omitting_the_country_name_and_salutation_preserves_existing_values(): void
     {
         $contact = Contact::factory()->for($this->organization)->create([
+            'type' => 'individual',
             'salutation' => 'Monsieur',
             'country_name' => 'Suisse',
         ]);

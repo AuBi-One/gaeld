@@ -557,7 +557,7 @@ return [
     'postal_address' => 'Postadresse',
     'contact_country' => 'Land des Kontakts',
     'contact_salutation' => 'Anrede (optional)',
-    'contact_salutation_placeholder' => 'Herr',
+    'contact_salutation_placeholder' => 'z. B. Herr',
     'invoice_country_name' => 'Land auf der Rechnung',
     'invoice_country_name_placeholder' => 'Schweiz',
     'invoice_country_name_hint' => 'Geben Sie den Ländernamen so ein, wie er in der Adresse erscheinen soll.',
@@ -1869,13 +1869,11 @@ return [
     'collapse_sidebar' => 'Seitenleiste reduzieren',
 
     // Contact categories
-    'cat_office' => 'Büro',
     'cat_utilities' => 'Versorgung',
     'cat_software' => 'Software',
     'cat_travel' => 'Reisen',
     'cat_marketing' => 'Marketing',
     'cat_professional_services' => 'Dienstleistungen',
-    'cat_equipment' => 'Ausrüstung',
     'cat_other' => 'Sonstiges',
 
     // Beta banner & misc

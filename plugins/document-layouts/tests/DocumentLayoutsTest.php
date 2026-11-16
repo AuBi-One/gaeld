@@ -64,7 +64,7 @@ class DocumentLayoutsTest extends DocumentLayoutsTestCase
     public function test_the_invoice_recipient_shows_salutation_attention_person_and_country_name(): void
     {
         $invoice = $this->invoice(lines: 1);
-        $invoice->customer->update(['salutation' => 'Madame', 'country_name' => 'Suisse']);
+        $invoice->customer->update(['type' => 'individual', 'salutation' => 'Madame', 'country_name' => 'Suisse']);
         $person = ContactPerson::query()->create(['contactable_type' => Contact::class, 'contactable_id' => $invoice->customer_id, 'first_name' => 'Jean', 'last_name' => 'Dupont']);
         $invoice->update(['contact_person_id' => $person->id, 'customer_snapshot' => null]);
 

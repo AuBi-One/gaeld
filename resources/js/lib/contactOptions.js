@@ -93,16 +93,18 @@ export function currencyOptions(t) {
   ]
 }
 
-export function supplierCategoryOptions(t) {
-  return [
+/**
+ * Options for a contact's default expense category: the organisation's categories by
+ * name (the value expenses store), plus the current value when it is not one of them,
+ * so saving the form never drops it.
+ */
+export function expenseCategoryOptions(categories, labelOf, current = '') {
+  const options = [
     { value: '', label: '—' },
-    { value: 'office', label: t('cat_office') },
-    { value: 'utilities', label: t('cat_utilities') },
-    { value: 'software', label: t('cat_software') },
-    { value: 'travel', label: t('cat_travel') },
-    { value: 'marketing', label: t('cat_marketing') },
-    { value: 'professional_services', label: t('cat_professional_services') },
-    { value: 'equipment', label: t('cat_equipment') },
-    { value: 'other', label: t('cat_other') },
+    ...categories.map(c => ({ value: c.name, label: labelOf(c.name) })),
   ]
+  if (current && !categories.some(c => c.name === current)) {
+    options.push({ value: current, label: labelOf(current) })
+  }
+  return options
 }

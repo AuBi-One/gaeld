@@ -174,6 +174,7 @@ class GenerateQrInvoicePdfActionTest extends TestCase
 
         $firstPdf = $action->execute($invoice, $this->org, 'fr');
         $this->customer->update([
+            'type' => 'individual',
             'salutation' => 'Monsieur',
             'name' => 'Maël Exemple',
             'address' => "Rue de l'Exemple 10",
