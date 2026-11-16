@@ -142,6 +142,7 @@ return [
     'not_paid_by_bank' => 'Questa nota non è stata pagata via banca.',
     'km_override_reason_required' => 'La distanza calcolata è di :km km: indicare il motivo di un valore diverso.',
     'distance_missing_coordinates' => 'Entrambi i luoghi richiedono un indirizzo localizzato.',
+    'distance_same_place' => 'Partenza e arrivo sono lo stesso luogo.',
     'distance_lookup_failed' => 'Impossibile calcolare la distanza; inserire i km a mano.',
     'debt_has_repayments' => 'Questo debito ha già rimborsi.',
     'repayment_too_high' => 'L\'importo deve essere positivo e non superare il debito residuo.',

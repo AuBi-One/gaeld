@@ -2,6 +2,7 @@
 
 namespace Plugins\ExpenseClaims\Services;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Plugins\ExpenseClaims\Models\Distance;
 use Plugins\ExpenseClaims\Models\Place;
@@ -15,19 +16,25 @@ use Plugins\ExpenseClaims\Models\Place;
 final class Distances
 {
     /**
-     * Address search (Switzerland) for the place form.
+     * Address search (Switzerland); an unreachable service finds nothing.
      *
      * @return list<array{label: string, lat: float, lon: float}>
      */
-    public function search(string $query): array
+    public function search(string $query, int $timeout = 8): array
     {
-        $response = Http::timeout(8)->get('https://api3.geo.admin.ch/rest/services/ech/SearchServer', [
-            'type' => 'locations',
-            'origins' => 'address',
-            'searchText' => $query,
-            'limit' => 8,
-            'sr' => 4326,
-        ]);
+        try {
+            $response = Http::timeout($timeout)->get('https://api3.geo.admin.ch/rest/services/ech/SearchServer', [
+                'type' => 'locations',
+                'origins' => 'address',
+                'searchText' => $query,
+                'limit' => 8,
+                'sr' => 4326,
+            ]);
+        } catch (ConnectionException $e) {
+            report($e);
+
+            return [];
+        }
 
         if (! $response->ok()) {
             return [];

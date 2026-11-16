@@ -11,10 +11,15 @@ use Plugins\ExpenseClaims\Models\Place;
  * Destinations of a km line: the organisation's places, its contacts with an
  * address (`contact:<id>`, resolved to a client place) and any address
  * (saved as a place of kind `other`). Places made here are reused, never duplicated.
+ * A contact's address is copied once, when its place is created; afterwards the
+ * place is maintained in the settings.
  */
 final class Destinations
 {
     public const CONTACT_PREFIX = 'contact:';
+
+    /** Geocoder timeout on the save path (seconds). */
+    private const TIMEOUT = 4;
 
     public function __construct(private Distances $distances) {}
 
@@ -27,12 +32,12 @@ final class Destinations
     {
         return Contact::query()->where('organization_id', $orgId)
             ->whereNotNull('city')->where('city', '!=', '')
-            ->orderBy('name')->limit(500)
-            ->get(['id', 'name', 'address', 'postal_code', 'city', 'country']);
+            ->orderBy('name')
+            ->get(['id', 'name', 'city']);
     }
 
-    /** A place id or a contact reference of the organisation. */
-    public function exists(string $orgId, mixed $value): bool
+    /** A place id, or (when contacts are allowed) a contact reference, of the organisation. */
+    public function exists(string $orgId, mixed $value, bool $contacts): bool
     {
         if (! is_string($value)) {
             return false;
@@ -40,15 +45,14 @@ final class Destinations
         if (str_starts_with($value, self::CONTACT_PREFIX)) {
             $id = substr($value, strlen(self::CONTACT_PREFIX));
 
-            return ctype_digit($id) && Contact::query()->where('organization_id', $orgId)->whereKey((int) $id)->exists();
+            return $contacts && ctype_digit($id)
+                && Contact::query()->where('organization_id', $orgId)->whereKey((int) $id)->exists();
         }
 
         return Str::isUuid($value) && Place::query()->where('organization_id', $orgId)->whereKey($value)->exists();
     }
 
-    /**
-     * The place for a validated destination; a contact's place follows the contact's current address.
-     */
+    /** The place for a validated destination. */
     public function resolve(string $orgId, ?string $value): ?Place
     {
         if ($value === null || $value === '') {
@@ -61,31 +65,25 @@ final class Destinations
             return $this->forContact($orgId, $contact);
         }
 
-        $place = Place::query()->where('organization_id', $orgId)->whereKey($value)->firstOrFail();
-        if ($place->kind === 'client' && $place->contact_id !== null) {
-            $contact = Contact::query()->where('organization_id', $orgId)->whereKey($place->contact_id)->first();
-            if ($contact !== null) {
-                $this->follow($place, $contact);
-            }
-        }
-
-        return $place;
+        return Place::query()->where('organization_id', $orgId)->whereKey($value)->firstOrFail();
     }
 
-    /** The contact's client place: reused when one exists, else created and geocoded. */
+    /** The contact's client place: reused when one exists, else created from its address and geocoded. */
     public function forContact(string $orgId, Contact $contact): Place
     {
-        $place = Place::query()->where('organization_id', $orgId)->where('kind', 'client')
+        $existing = Place::query()->where('organization_id', $orgId)->where('kind', 'client')
             ->where('contact_id', $contact->id)->ordered()->first();
-        if ($place !== null) {
-            $this->follow($place, $contact);
-
-            return $place;
+        if ($existing !== null) {
+            return $existing;
         }
 
-        $place = new Place(['organization_id' => $orgId, 'kind' => 'client', 'label' => $contact->name, 'contact_id' => $contact->id]);
-        $place->fill($this->contactAddress($contact));
-        $place->fill($this->geocode($place));
+        $blank = fn (?string $v): ?string => $v === null || trim($v) === '' ? null : trim($v);
+        $place = new Place([
+            'organization_id' => $orgId, 'kind' => 'client', 'label' => $contact->name, 'contact_id' => $contact->id,
+            'address' => $blank($contact->address), 'postal_code' => $blank($contact->postal_code),
+            'city' => $blank($contact->city), 'country' => strtoupper($blank($contact->country) ?? 'CH'),
+        ]);
+        $place->fill($this->geocodeContact($place));
         $place->save();
 
         return $place;
@@ -93,23 +91,27 @@ final class Destinations
 
     /**
      * Any address: a geocoder result (chosen in the search) gets its coordinates,
-     * other text is kept as typed without coordinates (km by hand).
+     * other text is kept as typed without coordinates (km by hand). The country
+     * column is not nullable: such a place keeps the default CH.
      */
     public function forAddress(string $orgId, string $text): Place
     {
         $text = trim((string) preg_replace('/\s+/u', ' ', $text));
-        $existing = Place::query()->where('organization_id', $orgId)->where('kind', 'other')
-            ->whereRaw('lower(label) = ?', [mb_strtolower($text)])->first();
-        if ($existing !== null) {
-            return $existing;
+        $place = Place::query()->where('organization_id', $orgId)->where('kind', 'other')
+            ->whereRaw('lower(label) = ?', [mb_strtolower($text)])->first()
+            ?? new Place(['organization_id' => $orgId, 'kind' => 'other', 'label' => $text, 'address' => $text, 'country' => 'CH']);
+        if ($place->exists && $place->hasCoordinates()) {
+            return $place;
         }
 
-        $place = new Place(['organization_id' => $orgId, 'kind' => 'other', 'label' => $text, 'address' => $text, 'country' => 'CH']);
-        $match = collect($this->search($text))->first(fn (array $r): bool => mb_strtolower($r['label']) === mb_strtolower($text));
+        // A new place, or a reused one without coordinates: (re)try the geocoder once.
+        $match = collect($this->search($text))->first(fn (array $r): bool => self::normalize($r['label']) === self::normalize($text));
         if ($match !== null) {
             $place->fill(['lat' => $match['lat'], 'lon' => $match['lon']] + self::splitLabel($match['label']));
         }
-        $place->save();
+        if (! $place->exists || $place->isDirty()) {
+            $place->save();
+        }
 
         return $place;
     }
@@ -126,52 +128,27 @@ final class Destinations
             : [];
     }
 
-    /** Keep a contact's place on the contact's address; a move forgets the cached distances. */
-    private function follow(Place $place, Contact $contact): void
-    {
-        $place->fill($this->contactAddress($contact));
-        if (! $place->isDirty(['address', 'postal_code', 'city', 'country'])) {
-            return;
-        }
-        $place->fill($this->geocode($place));
-        $this->distances->forget($place);
-        $place->save();
-    }
-
     /**
-     * @return array{address: ?string, postal_code: ?string, city: ?string, country: string}
-     */
-    private function contactAddress(Contact $contact): array
-    {
-        $blank = fn (?string $v): ?string => $v === null || trim($v) === '' ? null : trim($v);
-
-        return [
-            'address' => $blank($contact->address),
-            'postal_code' => $blank($contact->postal_code),
-            'city' => $blank($contact->city),
-            'country' => strtoupper($blank($contact->country) ?? 'CH'),
-        ];
-    }
-
-    /**
-     * Coordinates of a Swiss (or Liechtenstein) address: the first result in the
-     * same postal code, else none (the km are then entered by hand).
+     * Coordinates of a contact's Swiss (or Liechtenstein) address, only from a
+     * result that starts with the street and contains the postal code; else
+     * none (the km are then entered by hand).
      *
-     * @return array{lat: ?float, lon: ?float}
+     * @return array{lat?: float, lon?: float}
      */
-    private function geocode(Place $place): array
+    private function geocodeContact(Place $place): array
     {
-        $none = ['lat' => null, 'lon' => null];
-        if (! in_array($place->country, ['CH', 'LI'], true) || $place->city === null) {
-            return $none;
+        if ($place->address === null || $place->city === null || ! in_array($place->country, ['CH', 'LI'], true)) {
+            return [];
         }
+        $street = self::normalize($place->address);
         foreach ($this->search($place->addressLine()) as $result) {
-            if ($place->postal_code === null || str_contains($result['label'], $place->postal_code)) {
+            $label = self::normalize($result['label']);
+            if (str_starts_with($label, $street) && ($place->postal_code === null || str_contains($label, self::normalize($place->postal_code)))) {
                 return ['lat' => $result['lat'], 'lon' => $result['lon']];
             }
         }
 
-        return $none;
+        return [];
     }
 
     /**
@@ -179,15 +156,11 @@ final class Destinations
      */
     private function search(string $query): array
     {
-        if (mb_strlen($query) < 3) {
-            return [];
-        }
-        try {
-            return $this->distances->search($query);
-        } catch (\Throwable $e) {
-            report($e);
+        return mb_strlen($query) < 3 ? [] : $this->distances->search($query, self::TIMEOUT);
+    }
 
-            return [];
-        }
+    private static function normalize(string $text): string
+    {
+        return mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $text)));
     }
 }

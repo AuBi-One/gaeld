@@ -142,6 +142,7 @@ return [
     'not_paid_by_bank' => 'This claim was not paid by bank.',
     'km_override_reason_required' => 'The looked-up distance is :km km: give a reason for a different figure.',
     'distance_missing_coordinates' => 'Both places need a located address.',
+    'distance_same_place' => 'From and to are the same place.',
     'distance_lookup_failed' => 'The distance could not be looked up; enter the km by hand.',
     'debt_has_repayments' => 'This debt record already has repayments.',
     'repayment_too_high' => 'The amount must be positive and not exceed the remaining debt.',

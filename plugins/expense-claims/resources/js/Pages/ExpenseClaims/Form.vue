@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import axios from 'axios'
 import AppLayout from '@/Components/AppLayout.vue'
@@ -24,7 +24,7 @@ const props = defineProps({
   claim: { type: Object, default: null },
   people: { type: Array, default: () => [] },
   places: { type: Array, default: () => [] },
-  // Contacts with an address: value is their client place id, or `contact:<id>` until first used.
+  // Contacts with an address: value is their client place id, or `contact:<id>` (= ref) until first used.
   contacts: { type: Array, default: () => [] },
   rates: { type: Array, default: () => [] },
   routingEnabled: { type: Boolean, default: false },
@@ -128,6 +128,17 @@ async function lookUp(index) {
 function placesChanged(line) {
   line.km_lookup = null
 }
+
+// A contact chosen before its place existed keeps `contact:<id>`; once the place exists
+// (e.g. after a refused save) the option's value is the place id: follow it.
+watch(() => props.contacts, contacts => {
+  const byRef = Object.fromEntries(contacts.map(c => [c.ref, c.value]))
+  for (const line of form.lines) {
+    for (const field of ['from_place_id', 'to_place_id']) {
+      if (byRef[line[field]] && byRef[line[field]] !== line[field]) line[field] = byRef[line[field]]
+    }
+  }
+})
 
 // "Other address": an inline search; the chosen (or typed) address is saved as a place.
 const addressFor = ref(null) // { index, field }

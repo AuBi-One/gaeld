@@ -142,6 +142,7 @@ return [
     'not_paid_by_bank' => 'Diese Abrechnung wurde nicht per Bank bezahlt.',
     'km_override_reason_required' => 'Die ermittelte Distanz beträgt :km km: Grund für eine andere Zahl angeben.',
     'distance_missing_coordinates' => 'Beide Orte brauchen eine lokalisierte Adresse.',
+    'distance_same_place' => 'Start und Ziel sind derselbe Ort.',
     'distance_lookup_failed' => 'Die Distanz konnte nicht ermittelt werden; km von Hand erfassen.',
     'debt_has_repayments' => 'Diese Schuld hat bereits Rückzahlungen.',
     'repayment_too_high' => 'Der Betrag muss positiv sein und darf die Restschuld nicht übersteigen.',

@@ -176,7 +176,7 @@ class ClaimController extends PluginController
         $from = $this->destinations->resolve($this->orgId(), $data['from']);
         $to = $this->destinations->resolve($this->orgId(), $data['to']);
         if ($from === null || $to === null || $from->is($to)) {
-            return response()->json(['message' => __('expense-claims::ec.distance_missing_coordinates')], 422);
+            return response()->json(['message' => __('expense-claims::ec.distance_same_place')], 422);
         }
 
         try {
@@ -251,11 +251,14 @@ class ClaimController extends PluginController
             'lines.*.km_override_reason' => ['nullable', 'string', 'max:255'],
         ]);
 
-        // A contact chosen as destination becomes (or reuses) its client place.
+        // A contact chosen as destination becomes (or reuses) its client place; each value is resolved once.
+        $resolved = [];
         foreach ($data['lines'] as $i => $line) {
             foreach (['from_place_id', 'to_place_id'] as $field) {
                 if (isset($line[$field])) {
-                    $data['lines'][$i][$field] = $this->destinations->resolve($this->orgId(), (string) $line[$field])?->id;
+                    $value = (string) $line[$field];
+                    $resolved[$value] ??= $this->destinations->resolve($this->orgId(), $value)?->id;
+                    $data['lines'][$i][$field] = $resolved[$value];
                 }
             }
         }
@@ -263,11 +266,11 @@ class ClaimController extends PluginController
         return $data;
     }
 
-    /** A place of the organisation or one of its contacts (`contact:<id>`). */
+    /** A place of the organisation or, for those who may see contacts, one of its contacts (`contact:<id>`). */
     private function destinationRule(): \Closure
     {
         return function (string $attribute, mixed $value, \Closure $fail): void {
-            if (! $this->destinations->exists($this->orgId(), $value)) {
+            if (! $this->destinations->exists($this->orgId(), $value, $this->allows(Permission::ContactsView))) {
                 $fail(__('validation.exists', ['attribute' => $attribute]));
             }
         };
@@ -282,14 +285,16 @@ class ClaimController extends PluginController
         $manage = $this->canManage();
         $people = Person::query()->orderBy('name')->when(! $manage, fn ($q) => $q->whereKey($own))->get(['id', 'name', 'home_place_id']);
         $ownHome = $people->firstWhere('id', $own)?->home_place_id;
+        $used = $claim === null ? [] : $claim->lines->flatMap(fn (ClaimLine $l): array => [$l->from_place_id, $l->to_place_id])->filter()->unique()->values()->all();
         $places = Place::query()->ordered()
-            // Other people's homes are only shown to managers.
-            ->when(! $manage, fn ($q) => $q->where(fn ($q) => $q->where('kind', '!=', 'home')->orWhere('id', $ownHome)))
+            // Other people's homes and addresses typed by others are only shown to managers (or when on this claim).
+            ->when(! $manage, fn ($q) => $q->where(fn ($q) => $q->whereNotIn('kind', ['home', 'other'])->orWhere('id', $ownHome)->orWhereIn('id', $used)))
             ->get(['id', 'kind', 'label', 'city', 'lat', 'lon', 'contact_id']);
-        // A contact with a client place is offered once, under the contacts, by that place.
+        // Contacts only for those who may see them; one with a client place is offered once, by that place.
         $contactPlaces = $places->where('kind', 'client')->whereNotNull('contact_id')->unique('contact_id')->keyBy('contact_id');
-        $contacts = $this->destinations->contacts($this->orgId())->map(fn (Contact $c): array => [
+        $contacts = ! $this->allows(Permission::ContactsView) ? collect() : $this->destinations->contacts($this->orgId())->map(fn (Contact $c): array => [
             'value' => $contactPlaces->get($c->id)->id ?? Destinations::CONTACT_PREFIX.$c->id,
+            'ref' => Destinations::CONTACT_PREFIX.$c->id,
             'name' => $c->name,
             'city' => $c->city,
         ]);

@@ -142,6 +142,7 @@ return [
     'not_paid_by_bank' => 'Cette note n\'a pas été payée par la banque.',
     'km_override_reason_required' => 'La distance calculée est de :km km : indiquez le motif d\'un autre chiffre.',
     'distance_missing_coordinates' => 'Les deux lieux doivent avoir une adresse localisée.',
+    'distance_same_place' => 'Départ et arrivée sont le même lieu.',
     'distance_lookup_failed' => 'La distance n\'a pas pu être calculée ; saisissez les km à la main.',
     'debt_has_repayments' => 'Cette dette a déjà des remboursements.',
     'repayment_too_high' => 'Le montant doit être positif et ne pas dépasser le solde de la dette.',
