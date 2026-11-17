@@ -24,7 +24,8 @@ final class Destinations
     public function __construct(private Distances $distances) {}
 
     /**
-     * Contacts offered as destinations: those with a city.
+     * Contacts offered as destinations: those with a city. Only their name and
+     * city are given, so everyone who may enter a claim may pick one.
      *
      * @return Collection<int, Contact>
      */
@@ -36,8 +37,8 @@ final class Destinations
             ->get(['id', 'name', 'city']);
     }
 
-    /** A place id, or (when contacts are allowed) a contact reference, of the organisation. */
-    public function exists(string $orgId, mixed $value, bool $contacts): bool
+    /** A place id or a contact reference of the organisation. */
+    public function exists(string $orgId, mixed $value): bool
     {
         if (! is_string($value)) {
             return false;
@@ -45,8 +46,9 @@ final class Destinations
         if (str_starts_with($value, self::CONTACT_PREFIX)) {
             $id = substr($value, strlen(self::CONTACT_PREFIX));
 
-            return $contacts && ctype_digit($id)
-                && Contact::query()->where('organization_id', $orgId)->whereKey((int) $id)->exists();
+            // Only the contacts offered (those with a city), so ids cannot be probed for other names.
+            return ctype_digit($id) && Contact::query()->where('organization_id', $orgId)->whereKey((int) $id)
+                ->whereNotNull('city')->where('city', '!=', '')->exists();
         }
 
         return Str::isUuid($value) && Place::query()->where('organization_id', $orgId)->whereKey($value)->exists();

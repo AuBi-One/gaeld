@@ -202,7 +202,7 @@ class ClaimController extends PluginController
         $address = $request->validate(['address' => ['required', 'string', 'min:3', 'max:255']])['address'];
         $place = $this->destinations->forAddress($this->orgId(), $address);
 
-        return response()->json(['place' => $place->only(['id', 'kind', 'label', 'city', 'lat', 'lon'])]);
+        return response()->json(['place' => $place->only(['id', 'kind', 'label', 'city'])]);
     }
 
     public function attach(Request $request, Claim $claim): RedirectResponse
@@ -266,11 +266,11 @@ class ClaimController extends PluginController
         return $data;
     }
 
-    /** A place of the organisation or, for those who may see contacts, one of its contacts (`contact:<id>`). */
+    /** A place of the organisation or one of its contacts (`contact:<id>`). */
     private function destinationRule(): \Closure
     {
         return function (string $attribute, mixed $value, \Closure $fail): void {
-            if (! $this->destinations->exists($this->orgId(), $value, $this->allows(Permission::ContactsView))) {
+            if (! $this->destinations->exists($this->orgId(), $value)) {
                 $fail(__('validation.exists', ['attribute' => $attribute]));
             }
         };
@@ -289,10 +289,10 @@ class ClaimController extends PluginController
         $places = Place::query()->ordered()
             // Other people's homes and addresses typed by others are only shown to managers (or when on this claim).
             ->when(! $manage, fn ($q) => $q->where(fn ($q) => $q->whereNotIn('kind', ['home', 'other'])->orWhere('id', $ownHome)->orWhereIn('id', $used)))
-            ->get(['id', 'kind', 'label', 'city', 'lat', 'lon', 'contact_id']);
-        // Contacts only for those who may see them; one with a client place is offered once, by that place.
+            ->get(['id', 'kind', 'label', 'city', 'contact_id']);
+        // Contacts (name and city only) for everyone; one with a client place is offered once, by that place.
         $contactPlaces = $places->where('kind', 'client')->whereNotNull('contact_id')->unique('contact_id')->keyBy('contact_id');
-        $contacts = ! $this->allows(Permission::ContactsView) ? collect() : $this->destinations->contacts($this->orgId())->map(fn (Contact $c): array => [
+        $contacts = $this->destinations->contacts($this->orgId())->map(fn (Contact $c): array => [
             'value' => $contactPlaces->get($c->id)->id ?? Destinations::CONTACT_PREFIX.$c->id,
             'ref' => Destinations::CONTACT_PREFIX.$c->id,
             'name' => $c->name,
@@ -306,7 +306,8 @@ class ClaimController extends PluginController
             'defaultPersonId' => $own,
             'canChoosePerson' => $manage,
             'places' => $places->reject(fn (Place $p): bool => in_array($p->id, $offered, true))
-                ->map(fn (Place $p): array => $p->only(['id', 'kind', 'label', 'city', 'lat', 'lon']))->values(),
+                // No coordinates: a contact's place would give away its street address.
+                ->map(fn (Place $p): array => $p->only(['id', 'kind', 'label', 'city']))->values(),
             'contacts' => $contacts->values(),
             'rates' => $this->rates()->get(['vehicle_type', 'valid_from', 'valid_to', 'rate_per_km']),
             'routingEnabled' => $this->distances->isConfigured(),

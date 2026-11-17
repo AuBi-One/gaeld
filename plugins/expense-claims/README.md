@@ -10,7 +10,7 @@ towards the person.
 
 | Where | What |
 |---|---|
-| Expenses › Expense claims | list, create/edit drafts, approve (books Dr 6640 · Cr 2210/2260), pay by bank, receipts; km lines go from/to a place, a contact with an address, for users who may see contacts (becomes a client place, address copied once, then maintained in the settings) or any address (saved as a place of kind other, reused; shown to non-managers only on the claim that uses it) |
+| Expenses › Expense claims | list, create/edit drafts, approve (books Dr 6640 · Cr 2210/2260), pay by bank, receipts; km lines go from/to a place, a contact with an address (name and city offered to everyone who enters claims; becomes a client place, address copied once, then maintained in the settings) or any address (saved as a place of kind other, reused; shown to non-managers only on the claim that uses it) |
 | Expenses › Expense balances | unpaid claims and debts per person; convert to a debt record at a closing date; repay a debt by bank |
 | Organisation settings › Expense claims | people (employee link, owner/organ flag, home), places (office, homes, clients) with federal geocoding, km rates, accounts |
 | Payroll › Run payroll | each employee's approved claims and open debts, ticked by default, paid with the salary from their own liability account |

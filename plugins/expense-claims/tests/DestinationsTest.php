@@ -159,7 +159,7 @@ class DestinationsTest extends ExpenseClaimsTestCase
 
         // Typed as is (e.g. abroad): kept without coordinates, the km by hand; the country column keeps CH.
         $typed = $this->actAsOrg()->postJson('/expense-claims/addresses', ['address' => '12 rue de Rivoli, Paris'])->assertOk()->json('place');
-        $this->assertNull($typed['lat']);
+        $this->assertFalse(Place::findOrFail($typed['id'])->hasCoordinates());
         $this->actAsOrg()->postJson('/expense-claims/addresses', ['address' => 'ab'])->assertUnprocessable();
 
         $this->actAsOrg()->post('/expense-claims', $this->claimTo($typed['id']))->assertSessionHasNoErrors();
@@ -209,19 +209,28 @@ class DestinationsTest extends ExpenseClaimsTestCase
     }
 
     #[Test]
-    public function an_employee_gets_no_contacts_and_cannot_use_one(): void
+    public function an_employee_without_contacts_access_picks_a_contact_by_name_and_city(): void
     {
         [, $asStaff, $me] = $this->staff();
         Place::create(['organization_id' => $this->org->id, 'kind' => 'home', 'label' => 'Home other']);
         $contact = $this->contact();
 
         $asStaff()->get('/expense-claims/create')->assertOk()
-            ->assertInertia(fn ($page) => $page->where('contacts', [])
-                ->where('places', fn ($places) => collect($places)->pluck('label')->all() === ['Home me']));
-        $asStaff()->post('/expense-claims', $this->claimTo('contact:'.$contact->id, 'X', $me->id))->assertSessionHasErrors('lines.0.to_place_id');
+            ->assertInertia(fn ($page) => $page->where('contacts', [[
+                'value' => 'contact:'.$contact->id, 'ref' => 'contact:'.$contact->id, 'name' => $contact->name, 'city' => $contact->city,
+            ]])->where('places', fn ($places) => collect($places)->pluck('label')->all() === ['Home me']));
+        $asStaff()->post('/expense-claims', $this->claimTo('contact:'.$contact->id, 'X', $me->id))->assertSessionHasNoErrors();
+        $place = Place::where('contact_id', $contact->id)->sole();
+        $asStaff()->get('/expense-claims/create')->assertOk()
+            ->assertInertia(fn ($page) => $page->where('contacts.0.value', $place->id)
+                ->where('places', fn ($places) => collect($places)->every(fn ($p) => array_keys((array) $p) === ['id', 'kind', 'label', 'city'])));
         $asStaff()->getJson('/expense-claims/distance?from=contact:'.$contact->id.'&to='.Place::where('label', 'Home me')->value('id'))
-            ->assertUnprocessable()->assertJsonValidationErrors('from');
-        $this->assertSame(0, Place::where('contact_id', $contact->id)->count());
+            ->assertJsonMissingValidationErrors(['from', 'to']);
+        $asStaff()->get('/contacts/'.$contact->uuid)->assertForbidden();
+
+        // A contact without a city is not offered, and its id is refused.
+        $hidden = $this->contact(city: '');
+        $asStaff()->post('/expense-claims', $this->claimTo('contact:'.$hidden->id, 'Y', $me->id))->assertSessionHasErrors('lines.0.to_place_id');
 
         // "Other address" stays open to them, the settings search does not.
         $asStaff()->getJson('/expense-claims/address-search?q=Rue de Bourg')->assertOk()->assertJsonPath('results.0.label', 'Rue de Bourg 1 1003 Lausanne');
