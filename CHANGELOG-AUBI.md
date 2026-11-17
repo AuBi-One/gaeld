@@ -6,10 +6,10 @@ built on an upstream Gäld release; what upstream changed is in
 
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 A version is dated the day it reached production. Versions not listed
-(3.8.1-aubi.7, 3.8.28-aubi.1, 3.8.28-aubi.3) failed their build and were never released.
-3.8.28-aubi.2 was tested only; its changes reached production with 3.8.28-aubi.4.
+(3.8.1-aubi.7, 3.8.28-aubi.1, 3.8.28-aubi.3, 3.8.28-aubi.4) failed their build and were never released.
+3.8.28-aubi.2 was tested only; its changes reached production with 3.8.28-aubi.5.
 
-## [3.8.28-aubi.4] - Unreleased (on test)
+## [3.8.28-aubi.5] - Unreleased (on test)
 
 Based on Gäld 3.8.28. Includes everything listed under 3.8.28-aubi.2.
 
@@ -34,7 +34,7 @@ Based on Gäld 3.8.28. Includes everything listed under 3.8.28-aubi.2.
   category name.
 - Migrated invoices showed their import date as the last reminder sent.
 
-## [3.8.28-aubi.2] - Not released (included in 3.8.28-aubi.4)
+## [3.8.28-aubi.2] - Not released (included in 3.8.28-aubi.5)
 
 Based on Gäld 3.8.28.
 
