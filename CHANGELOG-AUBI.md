@@ -7,8 +7,33 @@ built on an upstream Gäld release; what upstream changed is in
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 A version is dated the day it reached production. Versions not listed
 (3.8.1-aubi.7, 3.8.28-aubi.1) failed their build and were never released.
+3.8.28-aubi.2 was tested only; its changes reached production with 3.8.28-aubi.3.
 
-## [3.8.28-aubi.2] - Unreleased (on test)
+## [3.8.28-aubi.3] - Unreleased (on test)
+
+Based on Gäld 3.8.28. Includes everything listed under 3.8.28-aubi.2.
+
+### Added
+- Expense claims: a trip can go from or to any contact with an address, or to
+  any other address (searched in the Swiss address directory, or typed as is).
+  A contact used this way becomes a client place; correct its address under
+  Settings > Expense claims. Everyone who enters claims sees contacts by name
+  and city, also without access to Contacts.
+- Addresses typed by an employee are offered again to that employee; managers
+  see all of them.
+
+### Changed
+- Contacts: the default expense category is chosen from the list of expense
+  categories.
+- Contacts: the salutation is only asked for a person; an organisation has none.
+
+### Fixed
+- A contact created from an expense ("new supplier") stored the category as a
+  code, which the contact form did not recognise; such codes are replaced by the
+  category name.
+- Migrated invoices showed their import date as the last reminder sent.
+
+## [3.8.28-aubi.2] - Not released (included in 3.8.28-aubi.3)
 
 Based on Gäld 3.8.28.
 
