@@ -31,8 +31,8 @@ const deductionRateCodeOptions = [
 ]
 
 const statusOptions = [
-  { value: true, label: t('employee_status_active') },
-  { value: false, label: t('employee_status_inactive') },
+  { value: 'active', label: t('employee_status_active') },
+  { value: 'inactive', label: t('employee_status_inactive') },
 ]
 const sourceTaxCantons = ['AG', 'AI', 'AR', 'BE', 'BL', 'BS', 'FR', 'GE', 'GL', 'GR', 'JU', 'LU', 'NE', 'NW', 'OW', 'SG', 'SH', 'SO', 'SZ', 'TG', 'TI', 'UR', 'VD', 'VS', 'ZG', 'ZH']
 const sourceTaxTariffs = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
@@ -50,7 +50,7 @@ const form = useForm({
   entry_date: dateInputValue(props.employee.entry_date),
   exit_date: dateInputValue(props.employee.exit_date),
   gross_salary: props.employee.gross_salary ?? '',
-  is_active: props.employee.is_active ?? true,
+  status: (props.employee.is_active ?? true) ? 'active' : 'inactive',
   is_source_tax_subject: props.employee.is_source_tax_subject ?? false,
   source_tax_canton: props.employee.source_tax_canton ?? '',
   source_tax_tariff: props.employee.source_tax_tariff ?? '',
@@ -65,7 +65,9 @@ const form = useForm({
 })
 
 function submit() {
-  form.put(`/payroll/employees/${props.employee.id}`)
+  // The select holds 'active'/'inactive' (it hands back strings); the server expects a boolean.
+  form.transform(({ status, ...data }) => ({ ...data, is_active: status === 'active' }))
+    .put(`/payroll/employees/${props.employee.id}`)
 }
 </script>
 
@@ -170,7 +172,7 @@ function submit() {
             />
             <FormSelect
               id="status"
-              v-model="form.is_active"
+              v-model="form.status"
               :label="t('status')"
               :options="statusOptions"
               :error="form.errors.is_active"
