@@ -235,9 +235,44 @@ class PayrollFlowTest extends TestCase
     }
 
     #[Test]
+    public function it_sends_no_salary_slip_email_after_posting_unless_the_organisation_chose_to(): void
+    {
+        Mail::fake();
+        $this->employee->update(['email' => 'max@example.com']);
+        $slip = app(PayrollCalculator::class)->calculate($this->employee, 3, 2026);
+        $slip->save();
+
+        $this->actingAs($this->user)
+            ->withSession(['current_organization_id' => $this->org->id])
+            ->postJson(route('payroll.salarySlips.post', $slip))
+            ->assertOk();
+
+        Mail::assertNothingSent();
+        $this->assertNull($slip->refresh()->email_sent_at);
+
+        // The setting is saved from Settings > General.
+        $this->actingAs($this->user)->withSession(['current_organization_id' => $this->org->id])
+            ->put('/settings/general', ['name' => $this->org->name, 'currency' => 'CHF', 'locale' => 'fr', 'payroll_email_slips' => true])
+            ->assertSessionHasNoErrors();
+        $this->assertTrue($this->org->refresh()->payroll_email_slips);
+
+        // A save without the field (e.g. an older form) leaves it as it is.
+        $this->actingAs($this->user)->withSession(['current_organization_id' => $this->org->id])
+            ->put('/settings/general', ['name' => $this->org->name, 'currency' => 'CHF', 'locale' => 'fr'])
+            ->assertSessionHasNoErrors();
+        $this->assertTrue($this->org->refresh()->payroll_email_slips);
+
+        // A job queued while the e-mails were on does not send once they are off.
+        $this->org->update(['payroll_email_slips' => false]);
+        (new SendSalarySlipEmailJob((string) $slip->id, (string) $slip->organization_id))->handle();
+        Mail::assertNothingSent();
+    }
+
+    #[Test]
     public function it_sends_one_salary_slip_email_after_posting(): void
     {
         Mail::fake();
+        $this->org->update(['payroll_email_slips' => true]);
         $this->employee->update(['email' => 'max@example.com']);
 
         $slip = app(PayrollCalculator::class)->calculate($this->employee, 3, 2026);
@@ -261,6 +296,7 @@ class PayrollFlowTest extends TestCase
     public function it_does_not_send_a_salary_slip_email_twice(): void
     {
         Mail::fake();
+        $this->org->update(['payroll_email_slips' => true]);
         $this->employee->update(['email' => 'max@example.com']);
 
         $slip = app(PayrollCalculator::class)->calculate($this->employee, 3, 2026);
@@ -279,6 +315,7 @@ class PayrollFlowTest extends TestCase
     public function it_uses_the_posting_snapshot_for_the_salary_slip_email(): void
     {
         Mail::fake();
+        $this->org->update(['payroll_email_slips' => true]);
         $this->employee->update(['email' => 'max@example.com']);
 
         $slip = app(PayrollCalculator::class)->calculate($this->employee, 3, 2026);
@@ -324,6 +361,7 @@ class PayrollFlowTest extends TestCase
     public function it_does_not_email_a_salary_slip_that_is_no_longer_posted(): void
     {
         Mail::fake();
+        $this->org->update(['payroll_email_slips' => true]);
         $this->employee->update(['email' => 'max@example.com']);
         $slip = app(PayrollCalculator::class)->calculate($this->employee, 3, 2026);
         $slip->save();
@@ -450,6 +488,7 @@ class PayrollFlowTest extends TestCase
     public function it_builds_an_annual_certificate_from_posted_slips_only(): void
     {
         Mail::fake();
+        $this->org->update(['payroll_email_slips' => true]);
 
         $postedSlip = app(PayrollCalculator::class)->calculate($this->employee, 3, 2026);
         $postedSlip->save();
@@ -469,6 +508,7 @@ class PayrollFlowTest extends TestCase
     public function it_keeps_reimbursements_separate_from_annual_salary_net(): void
     {
         Mail::fake();
+        $this->org->update(['payroll_email_slips' => true]);
 
         $slip = app(PayrollCalculator::class)->calculate(
             $this->employee,
@@ -490,6 +530,7 @@ class PayrollFlowTest extends TestCase
     public function it_downloads_the_annual_salary_certificate_as_a_pdf(): void
     {
         Mail::fake();
+        $this->org->update(['payroll_email_slips' => true]);
 
         $slip = app(PayrollCalculator::class)->calculate($this->employee, 3, 2026);
         $slip->save();

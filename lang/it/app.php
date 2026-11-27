@@ -2710,4 +2710,6 @@ return [
     'salary_slip_in_payment_file' => 'Questo salario è in un file di pagamento. Se la banca non l\'ha eseguito, rimetterlo prima nella lista (Banca › Pagamenti da emettere); se è stato pagato, correggere con una nuova registrazione.',
     'payments_salary_chf_only' => 'I salari si pagano da un conto in CHF.',
     'payments_salary_reopen_confirm' => 'Rimettere questo salario nella lista? Solo se la banca non l\'ha pagato, altrimenti sarebbe pagato due volte.',
+    'payroll_email_slips' => 'Inviare i cedolini per e-mail alla contabilizzazione',
+    'payroll_email_slips_desc' => 'Ogni dipendente con un indirizzo e-mail riceve il cedolino in PDF. Disattivato: inviate voi i cedolini.',
 ];

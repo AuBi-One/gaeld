@@ -2714,4 +2714,6 @@ return [
     'salary_slip_in_payment_file' => 'Ce salaire est dans un fichier de paiement. Si la banque ne l\'a pas exécuté, remettez-le d\'abord dans la liste (Banque › Paiements à émettre) ; s\'il a été payé, corrigez par une nouvelle écriture.',
     'payments_salary_chf_only' => 'Les salaires sont payés depuis un compte en CHF.',
     'payments_salary_reopen_confirm' => 'Remettre ce salaire dans la liste ? Seulement si la banque ne l\'a pas payé, sinon il serait payé deux fois.',
+    'payroll_email_slips' => 'Envoyer les fiches de salaire par e-mail à la comptabilisation',
+    'payroll_email_slips_desc' => 'Chaque employé avec une adresse e-mail reçoit sa fiche en PDF. Désactivé : vous envoyez les fiches vous-même.',
 ];

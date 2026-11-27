@@ -191,7 +191,10 @@ class PostPayrollAction
         });
 
         $postedSlip = $slip->fresh();
-        $this->sendEmail->execute($postedSlip);
+        // Only when the organisation chose to (Settings > General); otherwise slips are sent by hand.
+        if ($organization?->payroll_email_slips) {
+            $this->sendEmail->execute($postedSlip);
+        }
 
         return $postedSlip;
     }

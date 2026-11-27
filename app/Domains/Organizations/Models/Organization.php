@@ -55,6 +55,7 @@ use Illuminate\Support\Carbon;
  * @property bool $require_two_factor
  * @property int|null $default_payment_terms_days
  * @property int|null $payroll_payday
+ * @property bool $payroll_email_slips
  * @property int $invoice_number_step
  * @property Carbon|null $suspended_at
  * @property string|null $suspended_reason
@@ -87,6 +88,7 @@ class Organization extends Model
         'require_two_factor',
         'default_payment_terms_days',
         'payroll_payday',
+        'payroll_email_slips',
         'default_invoice_notes',
         'invoice_number_step',
         'logo_path',
@@ -110,6 +112,7 @@ class Organization extends Model
             'require_two_factor' => 'boolean',
             'default_payment_terms_days' => 'integer',
             'payroll_payday' => 'integer',
+            'payroll_email_slips' => 'boolean',
             'invoice_number_step' => 'integer',
             'closed_fiscal_years' => 'array',
             'enabled_modules' => 'array',

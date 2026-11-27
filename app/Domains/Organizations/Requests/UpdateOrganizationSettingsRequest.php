@@ -36,6 +36,7 @@ class UpdateOrganizationSettingsRequest extends FormRequest
             'require_two_factor' => 'sometimes|boolean',
             'default_payment_terms_days' => 'sometimes|integer|min:0|max:365',
             'payroll_payday' => 'sometimes|nullable|integer|min:1|max:31',
+            'payroll_email_slips' => 'sometimes|boolean',
             'fiscal_year_start' => ['nullable', 'string', 'regex:/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/'],
         ];
     }

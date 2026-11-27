@@ -45,6 +45,8 @@ readonly class UpdateOrganizationData
         public bool $requireTwoFactor = false,
         public ?int $payrollPayday = null,
         public bool $payrollPaydayGiven = false,
+        // E-mail each salary slip to the employee when it is posted (absent: left unchanged).
+        public ?bool $payrollEmailSlips = null,
     ) {}
 
     /**
@@ -76,6 +78,7 @@ readonly class UpdateOrganizationData
             requireTwoFactor: (bool) ($data['require_two_factor'] ?? false),
             payrollPayday: isset($data['payroll_payday']) ? (int) $data['payroll_payday'] : null,
             payrollPaydayGiven: array_key_exists('payroll_payday', $data),
+            payrollEmailSlips: array_key_exists('payroll_email_slips', $data) ? (bool) $data['payroll_email_slips'] : null,
         );
     }
 
@@ -107,6 +110,7 @@ readonly class UpdateOrganizationData
             'default_payment_terms_days' => $this->defaultPaymentTermsDays,
             'business_type' => $this->businessType?->value,
             'require_two_factor' => $this->requireTwoFactor,
-        ] + ($this->payrollPaydayGiven ? ['payroll_payday' => $this->payrollPayday] : []) + $address;
+        ] + ($this->payrollPaydayGiven ? ['payroll_payday' => $this->payrollPayday] : [])
+            + ($this->payrollEmailSlips !== null ? ['payroll_email_slips' => $this->payrollEmailSlips] : []) + $address;
     }
 }

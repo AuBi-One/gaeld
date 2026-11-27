@@ -103,6 +103,7 @@ const generalForm = useForm({
   require_two_factor: props.organization.require_two_factor || false,
   default_payment_terms_days: props.organization.default_payment_terms_days ?? 30,
   payroll_payday: props.organization.payroll_payday ?? '',
+  payroll_email_slips: props.organization.payroll_email_slips ?? false,
 })
 
 const fiscalYearRequestForm = useForm({
@@ -608,6 +609,19 @@ const businessTypeOptions = [
                     :error="generalForm.errors.payroll_payday"
                   />
                   <p class="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{{ t('payroll_default_payday_hint') }}</p>
+                </div>
+              </div>
+
+              <div v-if="featureFlags.payroll" class="flex items-center gap-3">
+                <input
+                  id="payroll_email_slips"
+                  v-model="generalForm.payroll_email_slips"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-[hsl(var(--input))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--ring))]"
+                >
+                <div>
+                  <label for="payroll_email_slips" class="text-sm font-medium">{{ t('payroll_email_slips') }}</label>
+                  <p class="text-xs text-[hsl(var(--muted-foreground))]">{{ t('payroll_email_slips_desc') }}</p>
                 </div>
               </div>
 

@@ -41,7 +41,8 @@ class SendSalarySlipEmailJob implements ShouldBeUnique, ShouldQueue
             ->where('organization_id', $this->organizationId)
             ->findOrFail($this->salarySlipId);
 
-        if ($slip->email_sent_at !== null || ! $slip->isPosted()) {
+        // Also re-checked here: a job queued before the organisation turned the e-mails off must not send.
+        if ($slip->email_sent_at !== null || ! $slip->isPosted() || ! $slip->organization?->payroll_email_slips) {
             return;
         }
 

@@ -2706,4 +2706,6 @@ return [
     'salary_slip_in_payment_file' => 'Dieser Lohn ist in einer Zahlungsdatei. Wurde er von der Bank nicht ausgeführt, setzen Sie ihn zuerst wieder in die Liste (Bank › Auszuführende Zahlungen); wurde er bezahlt, korrigieren Sie mit einer neuen Buchung.',
     'payments_salary_chf_only' => 'Löhne werden von einem CHF-Konto bezahlt.',
     'payments_salary_reopen_confirm' => 'Diesen Lohn wieder in die Liste setzen? Nur wenn die Bank ihn nicht bezahlt hat, sonst wird er doppelt bezahlt.',
+    'payroll_email_slips' => 'Lohnabrechnungen beim Verbuchen per E-Mail senden',
+    'payroll_email_slips_desc' => 'Jeder Mitarbeitende mit E-Mail-Adresse erhält seine Abrechnung als PDF. Deaktiviert: Sie versenden die Abrechnungen selbst.',
 ];

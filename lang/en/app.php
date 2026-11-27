@@ -2765,4 +2765,6 @@ return [
     'salary_slip_in_payment_file' => 'This salary is in a payment file. If the bank did not execute it, put it back on the list first (Bank › Payments to send); if it was paid, correct it with a new entry.',
     'payments_salary_chf_only' => 'Salaries are paid from a CHF account.',
     'payments_salary_reopen_confirm' => 'Put this salary back on the list? Only if the bank did not pay it, or it would be paid twice.',
+    'payroll_email_slips' => 'E-mail salary slips when they are posted',
+    'payroll_email_slips_desc' => 'Each employee with an e-mail address receives the slip as a PDF. Off: you send the slips yourself.',
 ];
