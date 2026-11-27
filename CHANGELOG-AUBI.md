@@ -9,6 +9,14 @@ A version is dated the day it reached production. Versions not listed
 (3.8.1-aubi.7, 3.8.28-aubi.1, 3.8.28-aubi.3, 3.8.28-aubi.4) failed their build and were never released.
 3.8.28-aubi.2 was tested only; its changes reached production with 3.8.28-aubi.5.
 
+## [3.8.28-aubi.6] - Unreleased (on test)
+
+Based on Gäld 3.8.28.
+
+### Fixed
+- Settings > Expenses listed the default categories by internal names such as
+  `cat_office_supplies`; they show their names in each user's language again.
+
 ## [3.8.28-aubi.5] - 2026-11-17
 
 Based on Gäld 3.8.28. Includes everything listed under 3.8.28-aubi.2.
