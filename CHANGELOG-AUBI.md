@@ -24,6 +24,7 @@ Based on Gäld 3.8.28.
   is the one after the last salary slip (else the current month), and the preview names the
   period, e.g. "Aperçu – novembre 2026".
 - Salary slip PDFs are named like `Salaire_2026-11-30_David_Robson.pdf`.
+- Security updates of the web framework components and the passkey libraries.
 
 ### Fixed
 - An employee could not be set to "Inactif".
