@@ -60,7 +60,7 @@ class SalarySlipReadyMail extends Mailable
         return [
             Attachment::fromData(
                 fn (): string => $pdf,
-                "salary-slip-{$employeeData['last_name']}-{$slip->period_year}-{$slip->period_month}.pdf",
+                $slip->documentFilename(),
             )->withMime('application/pdf'),
         ];
     }

@@ -12,7 +12,9 @@ import { useTranslations } from '@/lib/useTranslations'
 import { useFormatters } from '@/lib/useFormatters'
 import { useClosedFiscalYear } from '@/lib/useClosedFiscalYear'
 import ClosedYearBanner from '@/Components/UI/ClosedYearBanner.vue'
-import { Check, ChevronRight } from 'lucide-vue-next'
+import { Check, ChevronRight, Download } from 'lucide-vue-next'
+import { postDownload } from '@/lib/postDownload'
+import FormInput from '@/Components/UI/FormInput.vue'
 
 const { t } = useTranslations()
 const { intlMonthName, formatCurrency, formatDate } = useFormatters()
@@ -27,6 +29,8 @@ const props = defineProps({
   reimbursementItems: { type: Object, default: () => ({}) },
   // The month after the last salary slip, else the current month: { month, year }.
   defaultPeriod: { type: Object, default: null },
+  // Accounts the salary payment file can be paid from (empty: the user may not see bank accounts).
+  bankAccounts: { type: Array, default: () => [] },
 })
 
 // Items dated after the salary month are not offered (they cannot be paid with it).
@@ -35,8 +39,28 @@ function itemsFor(employeeId) {
   return (props.reimbursementItems?.[employeeId] ?? []).filter(item => !item.date || item.date <= end)
 }
 
-// Step state: 1=Select, 2=Preview, 3=Generate, 4=Post
+// Step state: 1=Select, 2=Preview, 3=Generate, 4=Post, 5=Pay (posted: payment file)
 const step = ref(1)
+const payBankAccountId = ref(props.bankAccounts[0]?.id ?? '')
+const payExecutionDate = ref('')
+const payDownloaded = ref(false)
+const bankAccountOptions = computed(() => props.bankAccounts.map(ba => ({ value: ba.id, label: `${ba.name} — ${ba.iban}` })))
+// On reaching the pay step: the payday of the run (else the month's last day), never in the past.
+watch(step, value => {
+  if (value !== 5) return
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const payday = postingDate.value || periodEnd.value
+  payExecutionDate.value = payday > today ? payday : today
+})
+function downloadPaymentFile() {
+  postDownload('/payments/outgoing/salaries/download', {
+    bank_account_id: payBankAccountId.value,
+    execution_date: payExecutionDate.value,
+    salary_slip_ids: generatedSlipIds.value,
+  })
+  payDownloaded.value = true
+}
 const selectedEmployeeIds = ref([])
 const adjustments = ref(Object.fromEntries(
   props.employees.map(employee => [employee.id, {
@@ -147,6 +171,7 @@ const steps = computed(() => [
   { n: 2, label: t('payroll_step_preview') },
   { n: 3, label: t('payroll_step_generate') },
   { n: 4, label: t('payroll_step_post') },
+  { n: 5, label: t('payroll_step_pay') },
 ])
 
 function toggleEmployee(id) {
@@ -291,7 +316,7 @@ async function postSlips() {
         return
       }
     }
-    step.value = 4
+    step.value = 5
   } catch {
     errorMessage.value = t('payroll_post_error')
   } finally {
@@ -528,17 +553,31 @@ async function postSlips() {
       </CardContent>
     </Card>
 
-    <!-- Step 4: Done -->
+    <!-- Step 5: Posted — pay -->
     <Card v-else>
-      <CardContent class="py-12 text-center">
-        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
-          <Check class="h-8 w-8 text-green-600 dark:text-green-400" />
+      <CardHeader>
+        <CardTitle>{{ t('payroll_step_pay') }} – {{ periodLabel }}</CardTitle>
+      </CardHeader>
+      <CardContent class="space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
+            <Check class="h-5 w-5 text-green-600 dark:text-green-400" />
+          </div>
+          <p class="text-sm">{{ t('payroll_pay_desc') }}</p>
         </div>
-        <h2 class="mb-2 text-xl font-bold">{{ t('payroll_done') }}</h2>
-        <p class="mb-6 text-sm text-[hsl(var(--muted-foreground))]">{{ t('payroll_done_desc') }}</p>
-        <div class="flex justify-center gap-3">
-          <Button as="a" href="/payroll/salary-slips">{{ t('view_salary_slips') }}</Button>
-          <Button variant="outline" @click="step = 1; selectedEmployeeIds = []; generatedSlipIds = []">
+        <p v-if="!bankAccounts.length" class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('payroll_pay_no_bank') }}</p>
+        <div v-else class="grid gap-4 sm:grid-cols-2">
+          <FormSelect id="pay_bank_account_id" v-model="payBankAccountId" :label="t('debtor_account')" :options="bankAccountOptions" />
+          <FormInput id="pay_execution_date" v-model="payExecutionDate" type="date" :label="t('execution_date')" />
+        </div>
+        <p v-if="payDownloaded" class="rounded bg-green-50 p-2 text-sm text-green-800 dark:bg-green-950 dark:text-green-200">{{ t('payroll_pay_downloaded') }}</p>
+        <div class="flex flex-wrap gap-3">
+          <Button v-if="bankAccounts.length" :disabled="payDownloaded || !payExecutionDate" @click="downloadPaymentFile">
+            <Download class="mr-2 h-4 w-4" />
+            {{ t('download_salary_file') }}
+          </Button>
+          <Button variant="outline" as="a" href="/payroll/salary-slips">{{ t('view_salary_slips') }}</Button>
+          <Button variant="outline" @click="step = 1; selectedEmployeeIds = []; generatedSlipIds = []; payDownloaded = false">
             {{ t('run_another') }}
           </Button>
         </div>

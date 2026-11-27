@@ -2,6 +2,8 @@
 
 namespace App\Domains\Payroll\Controllers;
 
+use App\Domains\Banking\Models\BankAccount;
+use App\Domains\Organizations\Enums\Permission;
 use App\Domains\Organizations\Services\CurrentOrganization;
 use App\Domains\Payroll\Actions\GeneratePayrollRunAction;
 use App\Domains\Payroll\Contracts\ReimbursementSourceInterface;
@@ -58,6 +60,10 @@ class PayrollRunController extends Controller
             'employees' => $employees,
             'fiscalYears' => $fiscalYears,
             'defaultPeriod' => ['month' => $next->month, 'year' => $next->year],
+            // For the last step, the salary payment file.
+            'bankAccounts' => $request->user()?->can('viewAny', BankAccount::class) && $request->user()->hasPermissionTo(Permission::PayrollEdit)
+                ? BankAccount::query()->where('is_active', true)->where('currency', 'CHF')->whereNotNull('iban')->orderBy('name')->get(['id', 'name', 'iban', 'currency'])
+                : [],
             'defaultPayday' => $currentOrg->get()->payroll_payday,
             'withholdingTaxEnabled' => FeatureFlag::enabledForOrg('withholding_tax', $currentOrg->get()),
             'reimbursementItems' => $employees

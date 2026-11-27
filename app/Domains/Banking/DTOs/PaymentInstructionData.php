@@ -4,6 +4,7 @@ namespace App\Domains\Banking\DTOs;
 
 use App\Domains\Expenses\Models\Expense;
 use App\Domains\Invoicing\Models\Invoice;
+use App\Domains\Payroll\Models\SalarySlip;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -32,6 +33,8 @@ readonly class PaymentInstructionData
         public ?string $creditorPostalCode = null,
         public ?string $creditorTown = null,
         public ?string $creditorCountry = null,
+        // ISO 20022 category purpose (SALA for salaries: the bank books the batch as one confidential sum).
+        public ?string $categoryPurpose = null,
     ) {}
 
     /**
@@ -78,6 +81,36 @@ readonly class PaymentInstructionData
             creditorPostalCode: $supplier->postal_code,
             creditorTown: $supplier->city,
             creditorCountry: $supplier->country,
+        );
+    }
+
+    /**
+     * The net pay of a posted salary slip, to the employee's current IBAN and address.
+     */
+    public static function fromSalarySlip(SalarySlip $slip, Carbon $executionDate, string $remittance): self
+    {
+        $employee = $slip->payeeData();
+        $iban = $employee['iban'];
+        if (! $iban) {
+            throw new \InvalidArgumentException("Salary slip {$slip->id} has no employee IBAN.");
+        }
+
+        return new self(
+            endToEndId: self::generateEndToEndId((string) $slip->id),
+            creditorName: $employee['name'],
+            creditorIban: self::normalizeIban($iban),
+            amount: number_format((float) $slip->net_salary, 2, '.', ''),
+            currency: 'CHF',
+            executionDate: $executionDate,
+            structuredReference: null,
+            unstructuredRemittance: $remittance,
+            sourceType: 'salary_slip',
+            sourceId: (string) $slip->id,
+            creditorStreet: $employee['address'],
+            creditorPostalCode: $employee['postal_code'],
+            creditorTown: $employee['city'],
+            creditorCountry: $employee['country'],
+            categoryPurpose: 'SALA',
         );
     }
 

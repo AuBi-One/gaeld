@@ -20,6 +20,8 @@ Route::post('/banking/{bankAccount}/transactions', [BankingController::class, 'r
 // Outbound payments — pain.001 generation (CE), bLink push (EE)
 Route::get('/payments/outgoing', [PaymentInitiationController::class, 'index'])->name('payments.outgoing.index');
 Route::post('/payments/outgoing/download', [PaymentInitiationController::class, 'download'])->name('payments.outgoing.download');
+Route::post('/payments/outgoing/salaries/download', [PaymentInitiationController::class, 'downloadSalaries'])->name('payments.outgoing.salaries.download');
+Route::post('/payments/outgoing/salaries/{slip}/reopen', [PaymentInitiationController::class, 'reopenSalary'])->name('payments.outgoing.salaries.reopen');
 
 // Manual reconciliation + CAMT import (CE)
 Route::get('/reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation.index');

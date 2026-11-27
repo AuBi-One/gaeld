@@ -306,7 +306,7 @@ class PayrollFlowTest extends TestCase
             ->get(route('payroll.salarySlips.pdf', $slip));
 
         $response->assertOk();
-        $this->assertStringContainsString('salary-slip-Muster-2026-3.pdf', (string) $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('Salary_2026-03-31_Max_Muster.pdf', (string) $response->headers->get('content-disposition'));
         $this->assertArrayNotHasKey('employee_snapshot', $slip->fresh()->toArray());
     }
 

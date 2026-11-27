@@ -248,7 +248,7 @@ class SalarySlipController extends Controller
 
         $employeeData = $slip->employeeDocumentData();
         $slip->loadMissing('organization');
-        $filename = "salary-slip-{$employeeData['last_name']}-{$slip->period_year}-{$slip->period_month}.pdf";
+        $filename = $slip->documentFilename();
         $disposition = $request->boolean('inline') ? HeaderUtils::DISPOSITION_INLINE : HeaderUtils::DISPOSITION_ATTACHMENT;
 
         $layout = $layouts->salarySlip($slip->organization);

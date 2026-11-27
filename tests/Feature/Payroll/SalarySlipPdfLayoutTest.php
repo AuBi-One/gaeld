@@ -75,7 +75,7 @@ class SalarySlipPdfLayoutTest extends TestCase
 
         $response->assertOk();
         $this->assertSame('application/pdf', $response->headers->get('content-type'));
-        $this->assertStringContainsString('salary-slip-Muster-2026-3.pdf', (string) $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('Salary_2026-03-31_Max_Muster.pdf', (string) $response->headers->get('content-disposition'));
         $this->assertSame('%PDF-test-layout 3/2026 '.$this->org->id, $response->getContent());
     }
 
@@ -88,7 +88,7 @@ class SalarySlipPdfLayoutTest extends TestCase
 
         $this->assertCount(1, $attachments);
         $this->assertTrue($attachments[0]->isEquivalent(
-            Attachment::fromData(fn (): string => '%PDF-test-layout 3/2026 '.$this->org->id, 'salary-slip-Muster-2026-3.pdf')->withMime('application/pdf'),
+            Attachment::fromData(fn (): string => '%PDF-test-layout 3/2026 '.$this->org->id, 'Salary_2026-03-31_Max_Muster.pdf')->withMime('application/pdf'),
         ));
     }
 }

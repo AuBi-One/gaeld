@@ -26,8 +26,17 @@ class UnpostPayrollAction
         if (! $slip->isPosted()) {
             throw new \DomainException('Only a posted salary slip can be unposted.');
         }
+        // The net pay is in a bank payment file: unposting (then deleting or changing) the slip would
+        // pay it again or leave the difference unpaid.
+        if ($slip->payment_file_at !== null) {
+            throw new \DomainException(__('app.salary_slip_in_payment_file'));
+        }
 
         DB::transaction(function () use ($slip): void {
+            // Re-checked under the row lock the salary payment file takes, so the two cannot cross.
+            if (SalarySlip::query()->whereKey($slip->id)->lockForUpdate()->value('payment_file_at') !== null) {
+                throw new \DomainException(__('app.salary_slip_in_payment_file'));
+            }
             if ($slip->journal_entry_id) {
                 $slip->loadMissing('journalEntry.lines');
                 if ($slip->journalEntry->is_posted) {

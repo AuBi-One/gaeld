@@ -144,13 +144,15 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
 
         // SPS: optional, "if used, SLEV" for SEPA (type S); the SIX examples leave it out, and BCV
         // rejected domestic files that carried it together with the other deviations.
-        if ($pmtTpInf !== null) {
+        // Only for SEPA, not for any PmtTpInf (a SALA category purpose alone also creates one).
+        $sepa = $this->isSepaBatch($debtor, $instructions, $currency);
+        if ($sepa) {
             $pmtInf->appendChild($this->textElement($dom, 'ChrgBr', 'SLEV'));
         }
 
         // ── Credit Transfer Transactions ──
         foreach ($instructions as $instr) {
-            $pmtInf->appendChild($this->buildTransaction($dom, $instr, $pmtTpInf !== null));
+            $pmtInf->appendChild($this->buildTransaction($dom, $instr, $sepa));
         }
 
         return $dom->saveXML() ?: '';
@@ -369,28 +371,51 @@ class FilePain001Provider implements PaymentInitiationProviderInterface
         array $instructions,
         string $currency,
     ): ?\DOMElement {
-        if ($currency !== 'EUR') {
+        // One payment block carries one category purpose (e.g. SALA): never mix salaries with other payments.
+        $purposes = array_values(array_unique(array_map(fn (PaymentInstructionData $i) => $i->categoryPurpose, $instructions)));
+        if (count($purposes) > 1) {
+            throw new \InvalidArgumentException('All instructions in a batch must share the same category purpose.');
+        }
+        $purpose = $purposes[0] ?? null;
+        $sepa = $this->isSepaBatch($debtor, $instructions, $currency);
+
+        if (! $sepa && $purpose === null) {
             return null;
         }
 
-        if (! $this->isSwissIban($debtor->iban ?? '')) {
-            return null;
+        $pmtTpInf = $dom->createElement('PmtTpInf');
+        if ($sepa) {
+            $svcLvl = $dom->createElement('SvcLvl');
+            $svcLvl->appendChild($this->textElement($dom, 'Cd', 'SEPA'));
+            $pmtTpInf->appendChild($svcLvl);
+        }
+        if ($purpose !== null) {
+            $ctgyPurp = $dom->createElement('CtgyPurp');
+            $ctgyPurp->appendChild($this->textElement($dom, 'Cd', $purpose));
+            $pmtTpInf->appendChild($ctgyPurp);
+        }
+
+        return $pmtTpInf;
+    }
+
+    /**
+     * @param  PaymentInstructionData[]  $instructions
+     */
+    private function isSepaBatch(BankAccount $debtor, array $instructions, string $currency): bool
+    {
+        if ($currency !== 'EUR' || ! $this->isSwissIban($debtor->iban ?? '')) {
+            return false;
         }
 
         // Every creditor must sit in the SEPA zone outside CH/LI: a EUR payment to a CH/LI IBAN is
         // domestic (type D, where a QR reference is allowed; type S forbids it).
         foreach ($instructions as $instr) {
             if ($this->isSwissIban($instr->creditorIban) || ! $this->isSepaCountry($this->ibanCountry($instr->creditorIban))) {
-                return null;
+                return false;
             }
         }
 
-        $pmtTpInf = $dom->createElement('PmtTpInf');
-        $svcLvl = $dom->createElement('SvcLvl');
-        $svcLvl->appendChild($this->textElement($dom, 'Cd', 'SEPA'));
-        $pmtTpInf->appendChild($svcLvl);
-
-        return $pmtTpInf;
+        return true;
     }
 
     private function isSepaCountry(string $cc): bool

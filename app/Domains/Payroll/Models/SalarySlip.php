@@ -27,6 +27,8 @@ use Illuminate\Support\Facades\Crypt;
  * @property int $period_month
  * @property int $period_year
  * @property Carbon|null $posting_date
+ * @property Carbon|null $payment_file_at
+ * @property string|null $payment_file_ref
  * @property string $gross_salary
  * @property string $net_salary
  * @property string|null $journal_entry_id
@@ -75,6 +77,7 @@ class SalarySlip extends Model
     protected function casts(): array
     {
         return [
+            'payment_file_at' => 'datetime',
             'period_month' => 'integer',
             'period_year' => 'integer',
             'posting_date' => 'date:Y-m-d',
@@ -230,6 +233,44 @@ class SalarySlip extends Model
         }
 
         return array_values($rows);
+    }
+
+    /**
+     * Who the net pay goes to: the names the slip shows, the IBAN and address the employee record
+     * has now (a corrected IBAN counts), else those the slip shows.
+     *
+     * @return array{name: string, iban: string|null, address: string|null, postal_code: string|null, city: string|null, country: string|null}
+     */
+    public function payeeData(): array
+    {
+        $document = $this->employeeDocumentData();
+        $current = $this->documentEmployee();
+        $pick = fn (string $key): ?string => filled($current->{$key}) ? trim((string) $current->{$key}) : ($document[$key] ?? null);
+        $hasCurrentAddress = filled($current->city);
+
+        return [
+            'name' => trim($document['first_name'].' '.$document['last_name']),
+            'iban' => $pick('iban'),
+            // The address as a whole, never half of each.
+            'address' => $hasCurrentAddress ? $current->address : $document['address'],
+            'postal_code' => $hasCurrentAddress ? $current->postal_code : $document['postal_code'],
+            'city' => $hasCurrentAddress ? $current->city : $document['city'],
+            'country' => $hasCurrentAddress ? $current->country : $document['country'],
+        ];
+    }
+
+    /**
+     * Download name: Salaire_2026-11-30_David_Robson.pdf, the word in the organisation's language,
+     * the payday (else the month's last day), then the employee's names.
+     */
+    public function documentFilename(): string
+    {
+        $employee = $this->employeeDocumentData();
+        $locale = $this->organization?->locale ?: app()->getLocale();
+        $payday = ($this->posting_date ?? Carbon::createFromDate($this->period_year, $this->period_month, 1)->endOfMonth())->toDateString();
+        $part = fn (string $value): string => trim((string) preg_replace('~[\s/\\\\:*?"<>|]+~u', '-', $value), '-');
+
+        return implode('_', [__('app.salary_file_word', [], $locale), $payday, $part($employee['first_name']), $part($employee['last_name'])]).'.pdf';
     }
 
     /**
