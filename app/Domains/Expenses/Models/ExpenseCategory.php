@@ -82,9 +82,12 @@ class ExpenseCategory extends Model
 
     public function displayName(): string
     {
-        return $this->translation_key !== null
-            ? __($this->translation_key)
-            : $this->name;
+        if ($this->translation_key === null) {
+            return $this->name;
+        }
+
+        // Keys such as cat_travel live in lang/*/app.php; a bare key would come back untranslated.
+        return __(str_contains($this->translation_key, '.') ? $this->translation_key : 'app.'.$this->translation_key);
     }
 
     /**

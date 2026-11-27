@@ -16,18 +16,16 @@ class ExpenseCategoryQuery
     {
         $orgId = app(CurrentOrganization::class)->id();
 
+        // The label follows each user's language, so it is set after the cache, not inside it.
         return Cache::tags(["org:{$orgId}:reference"])->remember(
-            "expense_categories_select:{$orgId}",
+            "expense_categories_select:v2:{$orgId}",
             3600,
             fn () => ExpenseCategory::active()
                 ->with('defaultExpenseAccount')
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(['id', 'name', 'code', 'translation_key', 'is_active', 'is_system', 'default_expense_account_id'])
-                ->each(function (ExpenseCategory $category): void {
-                    $category->setAttribute('label', $category->displayName());
-                })
-        );
+        )->each(fn (ExpenseCategory $category) => $category->setAttribute('label', $category->displayName()));
     }
 
     /**
@@ -38,15 +36,12 @@ class ExpenseCategoryQuery
         $orgId = app(CurrentOrganization::class)->id();
 
         return Cache::tags(["org:{$orgId}:reference"])->remember(
-            "expense_categories_all:{$orgId}",
+            "expense_categories_all:v2:{$orgId}",
             3600,
             fn () => ExpenseCategory::with('defaultExpenseAccount')
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get()
-                ->each(function (ExpenseCategory $category): void {
-                    $category->setAttribute('label', $category->displayName());
-                })
-        );
+        )->each(fn (ExpenseCategory $category) => $category->setAttribute('label', $category->displayName()));
     }
 }
