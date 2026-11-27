@@ -7,9 +7,11 @@ use App\Domains\Payroll\Actions\GeneratePayrollRunAction;
 use App\Domains\Payroll\Contracts\ReimbursementSourceInterface;
 use App\Domains\Payroll\Controllers\Concerns\EnsuresPayrollWritable;
 use App\Domains\Payroll\Models\Employee;
+use App\Domains\Payroll\Models\SalarySlip;
 use App\Domains\Payroll\Requests\PayrollAdjustmentRules;
 use App\Http\Controllers\Controller;
 use App\Support\FeatureFlag;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -37,12 +39,25 @@ class PayrollRunController extends Controller
             ->orderBy('last_name')
             ->get();
 
+        // Next month to pay: the one after the latest salary slip, else the current month. Slips more
+        // than a month ahead (a typo such as 2099) are not looked at; one over a year old says nothing.
+        $horizon = now()->year * 12 + now()->month + 1;
+        $last = SalarySlip::query()
+            ->whereRaw('period_year * 12 + period_month <= ?', [$horizon])
+            ->orderByDesc('period_year')->orderByDesc('period_month')
+            ->first(['period_year', 'period_month']);
+        $next = $last !== null ? Carbon::create($last->period_year, $last->period_month, 1)->addMonth() : null;
+        if ($next === null || $next->lt(now()->startOfMonth()->subMonths(12))) {
+            $next = now()->startOfMonth();
+        }
+
         $currentYear = now()->year;
-        $fiscalYears = range($currentYear, $currentYear - 4);
+        $fiscalYears = range(max($currentYear, $next->year), $currentYear - 4);
 
         return Inertia::render('Payroll/Run', [
             'employees' => $employees,
             'fiscalYears' => $fiscalYears,
+            'defaultPeriod' => ['month' => $next->month, 'year' => $next->year],
             'defaultPayday' => $currentOrg->get()->payroll_payday,
             'withholdingTaxEnabled' => FeatureFlag::enabledForOrg('withholding_tax', $currentOrg->get()),
             'reimbursementItems' => $employees

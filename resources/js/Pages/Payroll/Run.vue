@@ -25,6 +25,8 @@ const props = defineProps({
   withholdingTaxEnabled: { type: Boolean, default: false },
   // { [employeeId]: [{ id, date, label, amount }] } from the reimbursement source
   reimbursementItems: { type: Object, default: () => ({}) },
+  // The month after the last salary slip, else the current month: { month, year }.
+  defaultPeriod: { type: Object, default: null },
 })
 
 // Items dated after the salary month are not offered (they cannot be paid with it).
@@ -69,17 +71,10 @@ function selectedItemsTotal(employeeId) {
     .filter(item => selected.includes(item.id))
     .reduce((sum, item) => sum + Number(item.amount), 0)
 }
-const month = ref(String(((new Date().getMonth() + 11) % 12) + 1))
-const year = ref(
-  // Default to last month's year (handles January → previous year).
-  (() => {
-    const now = new Date()
-    const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
-    return props.fiscalYears.length
-      ? String(props.fiscalYears.includes(lastMonthYear) ? lastMonthYear : props.fiscalYears[0])
-      : String(lastMonthYear)
-  })()
-)
+const month = ref(String(props.defaultPeriod?.month ?? new Date().getMonth() + 1))
+const year = ref(String(props.defaultPeriod?.year ?? new Date().getFullYear()))
+const periodLabel = computed(() => `${intlMonthName(Number(month.value) - 1)} ${year.value}`)
+
 // Last day of the selected month, YYYY-MM-DD
 const periodEnd = computed(() => {
   const last = new Date(Date.UTC(Number(year.value), Number(month.value), 0))
@@ -471,7 +466,7 @@ async function postSlips() {
     <!-- Step 2: Preview -->
     <Card v-else-if="step === 2">
       <CardHeader>
-        <CardTitle>{{ t('payroll_step_preview') }}</CardTitle>
+        <CardTitle>{{ t('payroll_step_preview') }} – {{ periodLabel }}</CardTitle>
       </CardHeader>
       <CardContent>
         <div class="overflow-x-auto">
@@ -516,7 +511,7 @@ async function postSlips() {
     <!-- Step 3: Generated — ready to post -->
     <Card v-else-if="step === 3">
       <CardHeader>
-        <CardTitle>{{ t('payroll_slips_generated') }}</CardTitle>
+        <CardTitle>{{ t('payroll_slips_generated') }} – {{ periodLabel }}</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <p class="text-sm text-[hsl(var(--muted-foreground))]">

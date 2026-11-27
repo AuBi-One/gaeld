@@ -246,7 +246,7 @@ function baseNavigation() {
     // ── Payroll ──
     { type: 'group', label: 'nav_payroll' },
     ...(features.value.payroll ? [
-      { key: 'payroll', href: '/payroll/employees', icon: Briefcase, children: [
+      { key: 'payroll', href: can('payroll.create') ? '/payroll/run' : '/payroll/employees', icon: Briefcase, children: [
         { key: 'employees', href: '/payroll/employees' },
         { key: 'salary_slips', href: '/payroll/salary-slips' },
         ...(can('payroll.create') ? [
