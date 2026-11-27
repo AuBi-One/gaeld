@@ -13,7 +13,13 @@ A version is dated the day it reached production. Versions not listed
 
 Based on Gäld 3.8.28.
 
+### Changed
+- Payroll: "Salaires" in the menu opens "Calculer les salaires"; the month proposed
+  is the one after the last salary slip (else the current month), and the preview names the
+  period, e.g. "Aperçu – novembre 2026".
+
 ### Fixed
+- An employee could not be set to "Inactif".
 - Settings > Expenses listed the default categories by internal names such as
   `cat_office_supplies`; they show their names in each user's language again.
 
