@@ -9,6 +9,13 @@ A version is dated the day it reached production. Versions not listed
 (3.8.1-aubi.7, 3.8.28-aubi.1, 3.8.28-aubi.3, 3.8.28-aubi.4) failed their build and were never released.
 3.8.28-aubi.2 was tested only; its changes reached production with 3.8.28-aubi.5.
 
+## [Unreleased]
+
+### Changed
+- Payroll: salary slips are no longer e-mailed to employees when posted. To send them
+  automatically, tick "Envoyer les fiches de salaire par e-mail à la comptabilisation"
+  under Paramètres > Général.
+
 ## [3.8.28-aubi.6] - 2026-11-27
 
 Based on Gäld 3.8.28.
