@@ -13,10 +13,17 @@ A version is dated the day it reached production. Versions not listed
 
 Based on Gäld 3.8.28.
 
+### Added
+- Payroll: after posting, a "Payer" step downloads the salary payment file for
+  e-banking; unpaid salaries are also listed under Banque > Paiements à émettre. The
+  file is separate from supplier payments and marked as salaries, so the bank books
+  it as one amount. A salary can be put back on the list if the bank rejects the file.
+
 ### Changed
 - Payroll: "Salaires" in the menu opens "Calculer les salaires"; the month proposed
   is the one after the last salary slip (else the current month), and the preview names the
   period, e.g. "Aperçu – novembre 2026".
+- Salary slip PDFs are named like `Salaire_2026-11-30_David_Robson.pdf`.
 
 ### Fixed
 - An employee could not be set to "Inactif".
